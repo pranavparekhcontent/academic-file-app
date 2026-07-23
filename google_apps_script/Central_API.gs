@@ -1570,19 +1570,42 @@ function getSyllabusPointsFromLink(url, code) {
     headerRowIdx = 0;
   }
   
-  var points = [];
-  var seenMap = {};
-  var startRow = headerRowIdx + 1;
-  var headerVal = String(data[headerRowIdx][colIdx]).trim().toLowerCase();
-  
-  for (var r = startRow; r < data.length; r++) {
-    var val = String(data[r][colIdx]).trim();
-    var lowerVal = val.toLowerCase();
-    if (val && lowerVal !== headerVal && !seenMap[lowerVal]) {
-      seenMap[lowerVal] = true;
-      points.push(val);
+  function extractFromCol(targetCol) {
+    var pts = [];
+    var seen = {};
+    var hVal = String(data[headerRowIdx][targetCol] || '').trim().toLowerCase();
+    for (var r = headerRowIdx + 1; r < data.length; r++) {
+      if (!data[r] || targetCol >= data[r].length) continue;
+      var val = String(data[r][targetCol]).trim();
+      var lowerVal = val.toLowerCase();
+      if (val && lowerVal !== hVal && !seen[lowerVal]) {
+        seen[lowerVal] = true;
+        pts.push(val);
+      }
+    }
+    return pts;
+  }
+
+  var points = extractFromCol(colIdx);
+
+  // If extracted points are mostly pure numbers (e.g. 1 to 45), colIdx picked the Lecture No column by mistake!
+  var numberCount = points.filter(function(p) {
+    return !isNaN(parseInt(p, 10)) && String(parseInt(p, 10)) === p.trim();
+  }).length;
+
+  if (points.length > 0 && numberCount > points.length * 0.5) {
+    for (var nextC = colIdx + 1; nextC < Math.min(colIdx + 4, data[headerRowIdx].length); nextC++) {
+      var altPoints = extractFromCol(nextC);
+      var altNumCount = altPoints.filter(function(p) {
+        return !isNaN(parseInt(p, 10)) && String(parseInt(p, 10)) === p.trim();
+      }).length;
+      if (altPoints.length > 0 && altNumCount <= altPoints.length * 0.5) {
+        points = altPoints;
+        break;
+      }
     }
   }
+
   return points;
 }
 
