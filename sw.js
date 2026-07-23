@@ -3,22 +3,23 @@
  * Cache-first for app shell, network-first for API
  */
 
-const CACHE_NAME = 'acad-file-v2';
+const CACHE_NAME = 'acad-file-v3';
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/app.html',
-  '/css/app.css',
-  '/js/api.js',
-  '/js/app.js',
-  '/manifest.json',
-  '/appstart/config.js',
-  '/appstart/license.js',
-  '/appstart/keystore.js',
-  '/appstart/translator.js',
-  '/appstart/schema.js',
-  '/appstart/appstart.js',
-  '/appstart/appstart.css'
+  './',
+  './index.html',
+  './app.html',
+  './css/app.css',
+  './js/firebase-config.js',
+  './js/api.js',
+  './js/app.js',
+  './manifest.json',
+  './appstart/config.js',
+  './appstart/license.js',
+  './appstart/keystore.js',
+  './appstart/translator.js',
+  './appstart/schema.js',
+  './appstart/appstart.js',
+  './appstart/appstart.css'
 ];
 
 // Install — cache app shell
@@ -71,10 +72,10 @@ self.addEventListener('fetch', event => {
 
   // App shell → cache-first, fallback to network
   event.respondWith(
-    caches.match(event.request).then(cached => {
+    caches.match(event.request, { ignoreSearch: true }).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        if (response.ok && event.request.method === 'GET') {
+        if (response.ok && event.request.method === 'GET' && !url.protocol.startsWith('chrome-extension')) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
@@ -83,7 +84,7 @@ self.addEventListener('fetch', event => {
     }).catch(() => {
       // Fallback for navigation
       if (event.request.mode === 'navigate') {
-        return caches.match('/app.html') || caches.match('/index.html');
+        return caches.match('./app.html') || caches.match('app.html') || caches.match('./index.html');
       }
     })
   );
