@@ -1654,9 +1654,19 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   // Format any recognised date value as dd/mm/yyyy. Unparseable input is
-  // returned unchanged so hand-typed notes survive.
+  // returned unchanged so hand-typed notes survive. Handles comma-separated dates.
   function formatDisplayDate(dateStr) {
     if (!dateStr) return '';
+    
+    const parts = String(dateStr).split(',');
+    if (parts.length > 1) {
+      return parts.map(p => {
+        const d = parseToDate(p);
+        if (!d) return String(p).trim();
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      }).join(', ');
+    }
+    
     const d = parseToDate(dateStr);
     if (!d) return String(dateStr).trim();
     const day = String(d.getDate()).padStart(2, '0');

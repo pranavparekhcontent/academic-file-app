@@ -1289,27 +1289,48 @@ function syncTeachingPlan(code, teacher, sheetId) {
                     : 5;
 
   try {
-    for (var i = 0; i < topics.length; i++) {
-      var t = topics[i];
-      if (t.executedDate) continue;
+    for (var j = 0; j < attendanceLogs.length; j++) {
+      var log = attendanceLogs[j];
+      var dateStr = log.date;
+      var cleanLogTopic = cleanStr(log.topic);
       
-      var cleanSyllabus = cleanStr(t.syllabus);
-      for (var j = 0; j < attendanceLogs.length; j++) {
-        var cleanLogTopic = cleanStr(attendanceLogs[j].topic);
+      var emptyMatch = null;
+      var appendMatch = null;
+      
+      for (var i = 0; i < topics.length; i++) {
+        var t = topics[i];
+        var cleanSyllabus = cleanStr(t.syllabus);
         if (cleanSyllabus.indexOf(cleanLogTopic) !== -1 || cleanLogTopic.indexOf(cleanSyllabus) !== -1) {
-          // Parse dateIso back into a true Date object so Google Sheets formats it nicely
-          var dateStr = attendanceLogs[j].date;
+          if (t.executedDate && String(t.executedDate).indexOf(dateStr) !== -1) {
+            emptyMatch = null;
+            appendMatch = null;
+            break; // Already contains this date, skip
+          }
+          if (!t.executedDate && !emptyMatch) {
+            emptyMatch = t;
+          }
+          if (t.executedDate && !appendMatch) {
+            appendMatch = t;
+          }
+        }
+      }
+      
+      var target = emptyMatch || appendMatch;
+      if (target) {
+        if (!target.executedDate) {
+          target.executedDate = dateStr;
           var dateParts = dateStr.split('-');
           if (dateParts.length === 3) {
             var dateObj = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10));
-            ws.getRange(t.rowIndex, executedCol).setValue(dateObj);
+            ws.getRange(target.rowIndex, executedCol).setValue(dateObj);
           } else {
-            ws.getRange(t.rowIndex, executedCol).setValue(dateStr);
+            ws.getRange(target.rowIndex, executedCol).setValue(dateStr);
           }
-          t.executedDate = dateStr;
-          updated++;
-          break;
+        } else {
+          target.executedDate = String(target.executedDate).trim() + ", " + dateStr;
+          ws.getRange(target.rowIndex, executedCol).setValue(target.executedDate);
         }
+        updated++;
       }
     }
     
@@ -1548,15 +1569,19 @@ function getSyllabusPointsFromLink(url, code) {
   }
   
   var points = [];
+  var seenMap = {};
   var startRow = headerRowIdx + 1;
   var headerVal = String(data[headerRowIdx][colIdx]).trim().toLowerCase();
   
   for (var r = startRow; r < data.length; r++) {
     var val = String(data[r][colIdx]).trim();
-    if (val && val.toLowerCase() !== headerVal) {
+    var lowerVal = val.toLowerCase();
+    if (val && lowerVal !== headerVal && !seenMap[lowerVal]) {
+      seenMap[lowerVal] = true;
       points.push(val);
     }
   }
+  return points;
 }
 
 // ══════════════════════════════════════
