@@ -7,6 +7,7 @@ const CACHE_NAME = 'acad-file-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/app.html',
   '/css/app.css',
   '/js/api.js',
   '/js/app.js',
@@ -82,7 +83,7 @@ self.addEventListener('fetch', event => {
     }).catch(() => {
       // Fallback for navigation
       if (event.request.mode === 'navigate') {
-        return caches.match('/index.html');
+        return caches.match('/app.html') || caches.match('/index.html');
       }
     })
   );
