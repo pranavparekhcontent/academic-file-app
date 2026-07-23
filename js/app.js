@@ -801,6 +801,29 @@ const App = (() => {
     switchView(state.currentView);
   }
 
+  function _deduplicateTopics(topics) {
+    if (!Array.isArray(topics)) return [];
+    const seenMap = new Map();
+    topics.forEach(t => {
+      const lNo = String(t.lectureNo || '').trim().toLowerCase();
+      const syl = String(t.syllabus || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const key = `${lNo}_${syl}`;
+
+      if (!seenMap.has(key)) {
+        seenMap.set(key, { ...t });
+      } else {
+        const existing = seenMap.get(key);
+        if (!existing.executedDate && t.executedDate) {
+          existing.executedDate = t.executedDate;
+        }
+        if (!existing.remark && t.remark) {
+          existing.remark = t.remark;
+        }
+      }
+    });
+    return Array.from(seenMap.values());
+  }
+
   // ─── SYNC LOGIC ─────────────────────────────────────────
   async function triggerSyncAllViews() {
     if (!state.activeCode) return;
@@ -809,10 +832,11 @@ const App = (() => {
       // Trigger auto-sync matching algorithm with Smart Attendance
       const syncRes = await API.syncTeachingPlan(state.activeCode, state.facultyName);
       if (syncRes.success && syncRes.topics && syncRes.topics.length > 0) {
+        const cleanTopics = _deduplicateTopics(syncRes.topics);
         state.metadata = { ...state.metadata, ...(syncRes.metadata || {}) };
-        state.teachingPlan.all = syncRes.topics;
-        state.teachingPlan.theory = syncRes.topics;
-        state.teachingPlan.practical = syncRes.topics;
+        state.teachingPlan.all = cleanTopics;
+        state.teachingPlan.theory = cleanTopics;
+        state.teachingPlan.practical = cleanTopics;
       } else {
         // Sheet for subject not present in spreadsheet or has no topics — clear state completely!
         state.teachingPlan = { all: [], theory: [], practical: [] };

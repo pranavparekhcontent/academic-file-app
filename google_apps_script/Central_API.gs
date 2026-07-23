@@ -1092,6 +1092,26 @@ function getTeachingPlan(code, teacher, sheetId) {
     });
   }
 
+  // Deduplicate topics (merge duplicate lecture rows if sheet has repeated tables)
+  var uniqueTopics = [];
+  var seenKeys = {};
+  for (var k = 0; k < topics.length; k++) {
+    var top = topics[k];
+    var key = String(top.lectureNo).trim().toLowerCase() + '_' + String(top.syllabus).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!seenKeys[key]) {
+      seenKeys[key] = top;
+      uniqueTopics.push(top);
+    } else {
+      if (!seenKeys[key].executedDate && top.executedDate) {
+        seenKeys[key].executedDate = top.executedDate;
+      }
+      if (!seenKeys[key].remark && top.remark) {
+        seenKeys[key].remark = top.remark;
+      }
+    }
+  }
+  topics = uniqueTopics;
+
   var conductedCount = topics.filter(function(t) { return t.executedDate !== ''; }).length;
   var percent = topics.length > 0 ? Math.round((conductedCount / topics.length) * 100) : 0;
   var parsedSubjectCodeInfo = _parseSubjectCode(code, '', subject);
