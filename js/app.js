@@ -964,7 +964,9 @@ const App = (() => {
     });
 
     const totalTopics = filteredTopics.length;
-    const reqTopics = state.metadata.totalLectures || 45;
+    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
+      ? state.metadata.totalLectures
+      : filteredTopics.length;
 
     // Calculate coverage based on ORIGINAL syllabus topics only (first N topics = totalLectures)
     const originalTopics = filteredTopics.slice(0, reqTopics);
@@ -1361,6 +1363,15 @@ const App = (() => {
       return;
     }
 
+    const allTopics = state.teachingPlan.all || [];
+    const filteredTopics = allTopics.filter(t => {
+      const lNo = String(t.lectureNo).toLowerCase();
+      return !lNo.startsWith('t') && !lNo.includes('tut');
+    });
+    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
+      ? state.metadata.totalLectures
+      : filteredTopics.length;
+
     const meta = {
       mgmt: state.metadata.managementName || 'Sinhgad Technical Education Society',
       college: state.metadata.collegeName || 'RMD Institute of Pharmaceutical Education & Research',
@@ -1371,7 +1382,7 @@ const App = (() => {
       courseYear: `${state.activeSubject.program || ''} ${state.activeSubject.year || ''}`.trim(),
       faculty: state.facultyName,
       unit: isPracticalSubject(state.activeSubject) ? 'Practical' : 'Lecture',
-      topics: state.teachingPlan.all || []
+      topics: filteredTopics.slice(0, reqTopics)
     };
 
     const documentXml = buildTeachingPlanDocx(meta);
@@ -1567,7 +1578,9 @@ const App = (() => {
       const lNo = String(t.lectureNo).toLowerCase();
       return !lNo.startsWith('t') && !lNo.includes('tut');
     });
-    const reqTopics = state.metadata.totalLectures || 45;
+    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
+      ? state.metadata.totalLectures
+      : filteredTopics.length;
     const originalTopics = filteredTopics.slice(0, reqTopics);
     const conducted = originalTopics.filter(t => t.executedDate).length;
     const progressPct = reqTopics > 0 ? Math.round((conducted / reqTopics) * 100) : 0;
