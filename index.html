@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en" style="background-color: #080a10;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>VibeMantra Academic File App</title>
+
+  <meta name="description" content="VibeMantra Academic File App is a progressive web app for college course file compiling, auto syllabus declaration, CO-PO mapping, sessional attainment reports and learner classification.">
+  <meta name="author" content="Pranav Parekh">
+  <meta name="theme-color" content="#080a10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/favicon.png" type="image/png">
+  <link rel="shortcut icon" href="icons/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  
+  <!-- Phosphor Icons CSS (Deferred to prevent rendering delay) -->
+  <script src="https://unpkg.com/@phosphor-icons/web" defer></script>
+
+  <!-- AppStart Engine CSS -->
+  <link rel="stylesheet" href="./appstart/appstart.css">
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body style="background-color: #080a10; color: #e8eaf6;">
+
+<div id="app">
+
+  <!-- ═══════════ SETUP / CONFIGURATION SCREEN ═══════════ -->
+  <div id="screen-setup" class="login-bg" style="display: none;">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="icon-wrap"><img src="icons/app-logo.png" alt="VibeMantra Logo" class="app-logo-img"></div>
+        <h3 class="login-brand-heading">
+          <span class="brand-title-frosted">VibeMantra</span>
+          <span class="brand-subtitle">Academic File App</span>
+        </h3>
+        <p>Configure database connections</p>
+      </div>
+
+      <div style="background: var(--accent-light); border-radius: var(--radius-sm); padding: 12px; font-size: 11px; color: var(--text-main); line-height: 1.4;">
+        <strong>Notice:</strong> Paste the Google Sheets URL and Apps Script central endpoint to sync syllabus and logs.
+      </div>
+
+      <div class="form-group">
+        <label>Google Apps Script API Endpoint</label>
+        <input type="text" id="setup-api-url" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+
+      <div class="form-group">
+        <label>College Master spreadsheet ID or URL</label>
+        <input type="text" id="setup-sheet-id" placeholder="Paste master config sheet URL or ID">
+      </div>
+
+      <button class="btn btn-primary btn-full" onclick="App.saveSetup()">
+        Save Configuration & Load
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════ LOGIN SCREEN ═══════════ -->
+  <div id="screen-login" class="login-bg" style="display: none;">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="icon-wrap"><img src="icons/app-logo.png" alt="VibeMantra Logo" class="app-logo-img"></div>
+        <h3 class="login-brand-heading">
+          <span class="brand-title-frosted">VibeMantra</span>
+          <span class="brand-subtitle">Academic File App</span>
+        </h3>
+        <p id="login-subtitle">Loading institutional config...</p>
+      </div>
+
+      <div class="form-group">
+        <label>Select Faculty</label>
+        <div class="faculty-select-wrapper" id="custom-faculty-wrapper">
+          <div class="custom-glass-trigger" id="custom-faculty-trigger" onclick="App.toggleCustomFacultyDropdown(event)">
+            <i class="ph ph-user-circle trigger-icon"></i>
+            <span class="trigger-text" id="custom-faculty-label">Select Faculty</span>
+            <i class="ph ph-caret-down trigger-arrow"></i>
+          </div>
+          <select id="login-teacher-select" style="display: none;">
+            <option value="">Select Faculty</option>
+          </select>
+          <div class="custom-glass-dropdown-menu" id="custom-faculty-menu" style="display: none;">
+            <!-- Rendered 3D glass faculty options -->
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Personal PIN Code</label>
+        <input type="password" id="login-pin" placeholder="Enter your pin" maxlength="10"
+               onkeydown="if(event.key==='Enter') App.doLogin()">
+      </div>
+
+      <button class="btn btn-primary btn-full" onclick="App.doLogin()">
+        Access Academic Workspace
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ═══════════ MAIN DESKTOP PORTAL VIEW ═══════════ -->
+  <div id="screen-portal" style="display: none; width: 100%;">
+    
+    <!-- ── Left Floating Neumorphic Navigation Sidebar ── -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <div class="logo-icon-circle">
+            <img src="icons/app-logo.png" alt="VibeMantra Logo" class="app-logo-img">
+          </div>
+          <div class="logo-text">
+            <h2 class="brand-title-frosted">VibeMantra</h2>
+            <span class="brand-subtitle">Academic File App</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        
+        <a id="nav-dashboard" class="nav-item active" onclick="App.switchView('dashboard')">
+          <div class="nav-icon-box"><i class="ph ph-squares-four"></i></div>
+          <span class="nav-text">Index</span>
+          <i class="ph ph-caret-right nav-arrow"></i>
+        </a>
+
+        <a id="nav-academic-schedule" class="nav-item" onclick="App.switchView('academic-schedule')">
+          <div class="nav-icon-box"><i class="ph ph-calendar-blank"></i></div>
+          <span class="nav-text">Academic Calendars & Timetable</span>
+          <span class="nav-update-dot" id="nav-schedule-dot" style="display:none;"></span>
+          <i class="ph ph-caret-right nav-arrow"></i>
+        </a>
+
+        <a id="nav-teaching-plan" class="nav-item" onclick="App.switchView('teaching-plan')">
+          <div class="nav-icon-box"><i class="ph ph-book-open-text"></i></div>
+          <span class="nav-text">Syllabus & Teaching Plan</span>
+          <i class="ph ph-caret-right nav-arrow"></i>
+        </a>
+
+        <!-- Hidden hooks for controller backward-compatibility -->
+        <a id="nav-config" style="display:none;"></a>
+        <a id="nav-co-po-mapping" style="display:none;"></a>
+        <a id="nav-sessional-marks" style="display:none;"></a>
+        <a id="nav-interaction" style="display:none;"></a>
+        <a id="nav-learner-summary" style="display:none;"></a>
+      </nav>
+
+      <!-- Sidebar Bottom Profile Card -->
+      <div class="sidebar-profile-card">
+        <div class="avatar" id="faculty-avatar">SG</div>
+        <div class="profile-details">
+          <div class="profile-name" id="faculty-display-name">Dr. Shweta P. Ghode</div>
+        </div>
+        <button class="btn-lock" onclick="App.lockSession()" title="Lock Session (Break / Lecture Mode)">
+          <i class="ph ph-lock"></i>
+        </button>
+        <button class="btn-logout" onclick="App.doLogout()" title="Exit Workspace">
+          <i class="ph ph-power"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Container -->
+    <div class="main-panel">
+      <!-- Sticky Header -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-view-info">
+            <h2 id="portal-view-title">Index</h2>
+          </div>
+          <!-- Subject Dropdown -->
+          <div class="subject-select-wrapper" id="custom-subject-wrapper">
+            <div class="custom-glass-trigger" id="custom-subject-trigger" onclick="App.toggleCustomSubjectDropdown(event)">
+              <i class="ph ph-books trigger-icon"></i>
+              <span class="trigger-text" id="custom-subject-label">Select a subject...</span>
+              <i class="ph ph-caret-down trigger-arrow"></i>
+            </div>
+            <select id="subject-selector" style="display: none;" onchange="App.changeActiveSubject(this.value)">
+              <!-- Loaded dynamically -->
+            </select>
+            <div class="custom-glass-dropdown-menu" id="custom-subject-menu" style="display: none;">
+              <!-- Rendered glass option items -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="topbar-right">
+          <button class="btn btn-primary" onclick="App.startCompilation()">
+            <i class="ph ph-package"></i> Compile Course File
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Scrollable Canvas -->
+      <div class="content-area">
+        
+        <div id="view-dashboard" class="app-view active">
+
+          <!-- College & Academic Year Info Banner -->
+          <div class="workspace-header-banner">
+            <div class="wh-left">
+              <span id="header-mgmt-name" class="management-name">Academic Management</span>
+              <h1 id="header-college-name" class="college-name">Institutional Workspace</h1>
+            </div>
+            <div class="wh-right">
+              <div class="info-pill">
+                <span class="pill-label">Academic Year</span>
+                <span id="header-ay" class="pill-value">--</span>
+              </div>
+          </div>
+          </div>
+
+          <!-- Module Grid -->
+          <div class="dashboard-section-header">
+            <h2 class="section-title">Course File Modules</h2>
+          </div>
+          <div class="folder-stack-container">
+            
+            <!-- Module 1: Academic Calendars & Timetable -->
+            <div class="glass-folder-card accent-blue" onclick="App.switchView('academic-schedule')" style="--i:0;">
+              <div class="gf-card-head">
+                <div class="gf-head-left">
+                  <div class="gf-icon"><i class="ph ph-calendar-blank"></i></div>
+                  <span class="gf-module-label">Module 1</span>
+                </div>
+                <div class="gf-badge" id="badge-calendar">
+                  Synced
+                </div>
+              </div>
+              <h3>Academic Calendars & Timetable</h3>
+              <p>Academic calendar planning, timetable scheduling, and semester date management.</p>
+              <div class="gf-card-foot">
+                <span class="gf-foot-chip" id="card-cal-files">Drive files</span>
+                <span class="gf-foot-status" id="card-cal-status">Auto-synced</span>
+              </div>
+            </div>
+
+            <!-- Module 2: Syllabus & Teaching Plan -->
+            <div class="glass-folder-card accent-purple" onclick="App.switchView('teaching-plan')" style="--i:1;">
+              <div class="gf-card-head">
+                <div class="gf-head-left">
+                  <div class="gf-icon"><i class="ph ph-book-open-text"></i></div>
+                  <span class="gf-module-label">Module 2</span>
+                </div>
+                <div class="gf-pct-badge" id="card-tp-progress-pct">0%</div>
+              </div>
+              <h3>Syllabus & Teaching Plan</h3>
+              <p>Syllabus checks, academic calendar sync, execution logs matching Smart Attendance.</p>
+              <div class="gf-card-foot">
+                <span class="gf-foot-status" id="card-tp-complete-lbl">0% complete</span>
+                <span class="gf-foot-count" id="card-tp-count-lbl">0/45</span>
+              </div>
+              <div class="gf-progress"><div class="gf-bar" id="card-tp-progress-bar" style="width: 0%;"></div></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── VIEW 2: TEACHING PLAN (Design 5: Visual & Gamified Progress) ── -->
+        <div id="view-teaching-plan" class="app-view">
+          <!-- Design 5: Gamified Progress Hero -->
+          <div class="d5-hero">
+            <div class="d5-hero-top">
+              <div class="d5-hero-stats">
+                <div class="d5-hero-label" id="tp-column-title">Syllabus Progress</div>
+                <div class="d5-hero-number">
+                  <span id="tp-metadata-pct">0</span><span class="d5-hero-pct-sign">%</span>
+                </div>
+                <div class="d5-hero-sub" id="tp-hero-sub">0 lectures completed out of 45</div>
+              </div>
+              <div class="d5-hero-actions" style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn btn-primary" onclick="App.triggerManualSync()">
+                  <i class="ph ph-arrows-clockwise"></i> Sync
+                </button>
+                <button class="d5-glass-btn" onclick="App.downloadTeachingPlanDoc()">
+                  <i class="ph ph-file-doc"></i>
+                  <span id="tp-download-btn-text">Download Teaching Plan / Syllabus Completion Report</span>
+                  <span class="d5-glass-btn-ext">.docx</span>
+                </button>
+              </div>
+            </div>
+            <div class="d5-hero-bar">
+              <div class="d5-hero-bar-fill" id="tp-hero-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div class="d5-hero-bar-labels">
+              <span id="tp-hero-covered">0/45</span>
+              <span id="tp-hero-required">45</span>
+            </div>
+          </div>
+
+          <!-- Design 5: Lecture Milestones -->
+          <div class="panel d5-milestone-panel">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title" id="tp-milestone-title">Lecture Milestones</div>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                  Syllabus requirements parsed from the Teaching Plan sheet. Execution dates sync automatically from Smart Attendance topic headers.
+                </p>
+              </div>
+              <div class="form-group" style="margin-bottom:0; min-width: 220px;">
+                <div style="position: relative; display: flex; align-items: center;">
+                  <i class="ph ph-magnifying-glass" style="position: absolute; left: 14px; font-size: 16px; color: var(--text-secondary); pointer-events: none;"></i>
+                  <input type="text" id="tp-search" placeholder="Search syllabus topics..." class="select-cell" style="padding: 10px 18px 10px 40px; min-width: 220px;" onkeyup="App.filterTeachingPlan(this.value)">
+                </div>
+              </div>
+            </div>
+
+            <div class="d5-milestone-list" id="lectures-plan-list">
+              <!-- JS builds milestone rows dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ── VIEW 1: ACADEMIC CALENDAR & TIMETABLE ── -->
+        <div id="view-academic-schedule" class="app-view">
+          <div class="panel">
+            <div class="panel-header" style="align-items: center; justify-content: space-between; gap: 16px;">
+              <div style="flex: 1;">
+                <div class="panel-title">Academic Calendars & Timetable</div>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                  Files synced from your Google Drive folder. Click any file to preview.
+                </p>
+              </div>
+              <button class="btn btn-primary" onclick="App.loadAcademicSchedule()" style="flex-shrink: 0;">
+                <i class="ph ph-arrows-clockwise"></i> Refresh
+              </button>
+            </div>
+
+            <div id="schedule-files-grid" class="schedule-files-grid" style="padding: 24px;">
+              <!-- Dynamically populated by loadAcademicSchedule() -->
+            </div>
+
+          </div>
+
+          <!-- File Preview Modal (embedded preview) -->
+          <div id="file-preview-modal" class="file-preview-modal" style="display: none;">
+            <div class="file-preview-backdrop" onclick="App.closeFilePreview()"></div>
+            <div class="file-preview-content">
+              <div class="file-preview-header">
+                <h3 id="file-preview-title">File Preview</h3>
+                <div style="display: flex; gap: 8px;">
+                  <a id="file-preview-open" href="#" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 8px 16px;">
+                    <i class="ph ph-arrow-square-out"></i> Open in Drive
+                  </a>
+                  <button class="btn-lock" onclick="App.closeFilePreview()" style="width: 36px; height: 36px; border-radius: 50%;">
+                    <i class="ph ph-x"></i>
+                  </button>
+                </div>
+              </div>
+              <iframe id="file-preview-iframe" src="" style="width: 100%; flex: 1; border: none; border-radius: 0 0 var(--radius-xl) var(--radius-xl);"></iframe>
+            </div>
+          </div>
+        </div>
+
+        <!-- Config view removed — sidebar & system thresholds not needed -->
+
+      </div>
+    </div>
+  </div>
+  <!-- /screen-portal -->
+  
+  <!-- Console Compile Overlay (Card 15 loading compiler) -->
+  <div class="console-overlay" id="console-overlay">
+    <div class="compiler-3d-stage">
+      <!-- 3D PC Workstation Node -->
+      <div class="stage-node workstation-node">
+        <div class="pc-3d-monitor">
+          <div class="pc-screen-line line-1"></div>
+          <div class="pc-screen-line line-2"></div>
+          <div class="pc-screen-line line-3"></div>
+        </div>
+        <div class="pc-stand"></div>
+        <div class="pc-base"></div>
+        <span class="stage-label">PC Workstation</span>
+      </div>
+
+      <!-- Flying 3D Papers Arc Stream -->
+      <div class="flying-papers-stream">
+        <div class="flying-paper-card paper-1">
+          <div class="doc-line short"></div>
+          <div class="doc-line long"></div>
+          <div class="doc-line medium"></div>
+        </div>
+        <div class="flying-paper-card paper-2">
+          <div class="doc-line long"></div>
+          <div class="doc-line short"></div>
+          <div class="doc-line medium"></div>
+        </div>
+        <div class="flying-paper-card paper-3">
+          <div class="doc-line medium"></div>
+          <div class="doc-line long"></div>
+          <div class="doc-line short"></div>
+        </div>
+      </div>
+
+      <!-- 3D Academic File Folder Node -->
+      <div class="stage-node folder-node">
+        <div class="folder-3d-wrapper">
+          <img src="icons/app-logo.png" alt="Academic File" class="stage-folder-img">
+          <div class="folder-glow-ring"></div>
+        </div>
+        <span class="stage-label">Academic File</span>
+      </div>
+    </div>
+
+    <h4 class="compiler-title">Compiling Academic File Package</h4>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+
+    <div class="console-log" id="console-log">Initializing build pipeline...</div>
+  </div>
+
+</div>
+
+<!-- System Notification Toast stack -->
+<div class="toast-stack" id="toast-stack">
+  <!-- Dynamic toasts appended here -->
+</div>
+
+<!-- Modal confirmation box -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-content">
+    <h3 style="font-family: 'Inter', sans-serif; font-size:16px; font-weight:600;" id="modal-title">Confirm Action</h3>
+    <p style="font-size:13px; color: var(--text-secondary);" id="modal-message">Do you want to continue?</p>
+    <div style="display: flex; gap: 12px; align-self: flex-end; margin-top: 10px;">
+      <button class="btn btn-outline" id="modal-cancel-btn">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ GLASSMORPHIC LOCK SCREEN OVERLAY ═══════════ -->
+<div id="screen-lock" class="modal-overlay" style="display: none; z-index: 1500; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(16px);">
+  <div class="login-card" id="lock-card-box" style="margin: auto;">
+    <div class="login-logo">
+      <div class="icon-wrap-gold"><i class="ph ph-lock"></i></div>
+      <h3 style="margin-top: 8px;">Session Locked</h3>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 100%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-radius: 16px; margin-bottom: 22px; border: 1.5px solid rgba(255, 255, 255, 0.7); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.8);">
+      <div class="avatar" id="lock-faculty-avatar" style="width: 44px; height: 44px; font-size: 14px;">SG</div>
+      <div style="display: flex; flex-direction: column;">
+        <div style="font-weight: 800; font-size: 14px; color: var(--text-main);" id="lock-faculty-name">Dr. Shweta P. Ghode</div>
+        <div style="font-size: 11px; font-weight: 700; color: #047857; display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+          Session Active &amp; Protected
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Enter Personal PIN Code</label>
+      <input type="password" id="lock-pin-input" placeholder="Enter PIN to unlock" maxlength="10"
+             onkeydown="if(event.key==='Enter') App.unlockSession()">
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="App.unlockSession()">
+      <i class="ph ph-lock-key-open"></i> Unlock Academic Workspace
+    </button>
+
+    <div style="text-align: center; margin-top: 20px;">
+      <a href="javascript:void(0)" onclick="App.doLogout()" class="lock-exit-link">
+        <i class="ph ph-sign-out"></i> Or <span class="exit-word">Exit</span> &amp; Terminate Session Completely
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- AppStart Engine Scripts -->
+<script src="./appstart/config.js"></script>
+<script src="./appstart/license.js"></script>
+<script src="./appstart/keystore.js"></script>
+<script type="module">
+  import { Translator }    from './appstart/translator.js';
+  import { SchemaLearner } from './appstart/schema.js';
+  window.Translator    = Translator;
+  window.SchemaLearner = SchemaLearner;
+</script>
+<script src="./appstart/appstart.js"></script>
+
+<!-- Javascript Boot Modules -->
+<script src="js/firebase-config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+  document.addEventListener('appstart:complete', async (e) => {
+    console.log("🏁 AppStart Complete. Launching Academic Workspace...");
+    const context = e.detail;
+    window.appStartContext = context;
+    
+    try {
+      await App.initFromEngine(context);
+    } catch (err) {
+      console.error("❌ Portal Launch Failed:", err);
+    }
+  });
+
+  // Start the AppStart loader
+  AppStart.init();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW failed:', err));
+  }
+</script>
+
+</body>
+</html>
