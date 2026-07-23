@@ -3,10 +3,11 @@
  * Cache-first for app shell, network-first for API
  */
 
-const CACHE_NAME = 'acad-file-v4';
+const CACHE_NAME = 'acad-file-v5';
 const APP_SHELL = [
   './',
   './index.html',
+  './app',
   './app.html',
   './css/app.css',
   './js/firebase-config.js',
@@ -55,6 +56,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Navigation requests → network-first, fallback to cached /app or /app.html or /index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const fall = await caches.match('./app') || await caches.match('./app.html') || await caches.match('./index.html') || await caches.match('./');
+          return fall || fetch(event.request);
+        })
+    );
+    return;
+  }
+
   // Google Fonts → cache-first
   if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
     event.respondWith(
@@ -70,7 +90,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // App shell → cache-first, fallback to network
+  // Static Assets → cache-first, fallback to network
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then(cached => {
       if (cached) return cached;
@@ -81,13 +101,7 @@ self.addEventListener('fetch', event => {
         }
         return response;
       });
-    }).catch(async () => {
-      if (event.request.mode === 'navigate') {
-        const fall = await caches.match('./app.html') || await caches.match('./index.html');
-        if (fall) return fall;
-      }
-      return fetch(event.request);
-    })
+    }).catch(() => fetch(event.request))
   );
 });
 
