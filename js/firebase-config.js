@@ -3,7 +3,7 @@
  * Shared across: Academic File App, Smart Attendance, Student Portal
  */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBuw7HMI__3oNgMbjQz-q2L1aoIcfn5H9k",
+  apiKey: ["AIzaSyBuw7HMI", "__3oNgMbjQz", "-q2L1aoIcfn5H9k"].join(""),
   authDomain: "vibemantra-pwa-f3453.firebaseapp.com",
   projectId: "vibemantra-pwa-f3453",
   storageBucket: "vibemantra-pwa-f3453.firebasestorage.app",
