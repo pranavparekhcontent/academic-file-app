@@ -1104,6 +1104,8 @@ function getTeachingPlan(code, teacher, sheetId) {
     } else {
       if (!seenKeys[key].executedDate && top.executedDate) {
         seenKeys[key].executedDate = top.executedDate;
+      } else if (seenKeys[key].executedDate && top.executedDate && String(seenKeys[key].executedDate).indexOf(String(top.executedDate)) === -1) {
+        seenKeys[key].executedDate = String(seenKeys[key].executedDate).trim() + ', ' + String(top.executedDate).trim();
       }
       if (!seenKeys[key].remark && top.remark) {
         seenKeys[key].remark = top.remark;

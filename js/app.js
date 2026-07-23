@@ -963,10 +963,27 @@ const App = (() => {
       return !lNo.startsWith('t') && !lNo.includes('tut');
     });
 
+    function getRequiredTopicsCount(topicsList, metadata) {
+      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 0 && metadata.totalLectures <= topicsList.length) {
+        return metadata.totalLectures;
+      }
+      let maxSeenNo = 0;
+      for (let idx = 0; idx < topicsList.length; idx++) {
+        const num = parseInt(topicsList[idx].lectureNo, 10);
+        if (!isNaN(num)) {
+          if (num <= maxSeenNo && maxSeenNo > 5) {
+            return idx;
+          }
+          if (num > maxSeenNo) {
+            maxSeenNo = num;
+          }
+        }
+      }
+      return topicsList.length;
+    }
+
     const totalTopics = filteredTopics.length;
-    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
-      ? state.metadata.totalLectures
-      : filteredTopics.length;
+    const reqTopics = getRequiredTopicsCount(filteredTopics, state.metadata);
 
     // Calculate coverage based on ORIGINAL syllabus topics only (first N topics = totalLectures)
     const originalTopics = filteredTopics.slice(0, reqTopics);
@@ -976,8 +993,12 @@ const App = (() => {
       const targetLNo = String(spillover.lectureNo).trim().toLowerCase();
       const target = originalTopics.find(t => String(t.lectureNo).trim().toLowerCase() === targetLNo);
       if (target) {
-        if (!target.executedDate && spillover.executedDate) {
-          target.executedDate = spillover.executedDate;
+        if (spillover.executedDate) {
+          if (!target.executedDate) {
+            target.executedDate = spillover.executedDate;
+          } else if (target.executedDate.indexOf(spillover.executedDate) === -1) {
+            target.executedDate = target.executedDate + ', ' + spillover.executedDate;
+          }
         }
         if (!target.remark && spillover.remark) {
           target.remark = spillover.remark;
@@ -1368,9 +1389,39 @@ const App = (() => {
       const lNo = String(t.lectureNo).toLowerCase();
       return !lNo.startsWith('t') && !lNo.includes('tut');
     });
-    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
-      ? state.metadata.totalLectures
-      : filteredTopics.length;
+    function getRequiredTopicsCount(topicsList, metadata) {
+      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 0 && metadata.totalLectures <= topicsList.length) {
+        return metadata.totalLectures;
+      }
+      let maxSeenNo = 0;
+      for (let idx = 0; idx < topicsList.length; idx++) {
+        const num = parseInt(topicsList[idx].lectureNo, 10);
+        if (!isNaN(num)) {
+          if (num <= maxSeenNo && maxSeenNo > 5) {
+            return idx;
+          }
+          if (num > maxSeenNo) {
+            maxSeenNo = num;
+          }
+        }
+      }
+      return topicsList.length;
+    }
+
+    const reqTopics = getRequiredTopicsCount(filteredTopics, state.metadata);
+    const originalTopics = filteredTopics.slice(0, reqTopics);
+
+    filteredTopics.slice(reqTopics).forEach(spillover => {
+      const targetLNo = String(spillover.lectureNo).trim().toLowerCase();
+      const target = originalTopics.find(t => String(t.lectureNo).trim().toLowerCase() === targetLNo);
+      if (target && spillover.executedDate) {
+        if (!target.executedDate) {
+          target.executedDate = spillover.executedDate;
+        } else if (target.executedDate.indexOf(spillover.executedDate) === -1) {
+          target.executedDate = target.executedDate + ', ' + spillover.executedDate;
+        }
+      }
+    });
 
     const meta = {
       mgmt: state.metadata.managementName || 'Sinhgad Technical Education Society',
@@ -1382,7 +1433,7 @@ const App = (() => {
       courseYear: `${state.activeSubject.program || ''} ${state.activeSubject.year || ''}`.trim(),
       faculty: state.facultyName,
       unit: isPracticalSubject(state.activeSubject) ? 'Practical' : 'Lecture',
-      topics: filteredTopics.slice(0, reqTopics)
+      topics: originalTopics
     };
 
     const documentXml = buildTeachingPlanDocx(meta);
