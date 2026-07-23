@@ -968,6 +968,21 @@ const App = (() => {
 
     // Calculate coverage based on ORIGINAL syllabus topics only (first N topics = totalLectures)
     const originalTopics = filteredTopics.slice(0, reqTopics);
+
+    // Merge execution dates from any spillover rows at the bottom of the sheet onto original syllabus topics
+    filteredTopics.slice(reqTopics).forEach(spillover => {
+      const targetLNo = String(spillover.lectureNo).trim().toLowerCase();
+      const target = originalTopics.find(t => String(t.lectureNo).trim().toLowerCase() === targetLNo);
+      if (target) {
+        if (!target.executedDate && spillover.executedDate) {
+          target.executedDate = spillover.executedDate;
+        }
+        if (!target.remark && spillover.remark) {
+          target.remark = spillover.remark;
+        }
+      }
+    });
+
     const coveredTopics = originalTopics.filter(t => t.executedDate).length;
     // Completion percentage (relative to required lectures for accreditation)
     const pct = reqTopics > 0 ? Math.round((coveredTopics / reqTopics) * 100) : 0;
@@ -989,12 +1004,12 @@ const App = (() => {
     today.setHours(0, 0, 0, 0);
 
     // ── Milestone rows ──
-    if (filteredTopics.length === 0) {
+    if (originalTopics.length === 0) {
       list.innerHTML = `<div class="d5-milestone-empty">No syllabus topics defined.</div>`;
       return;
     }
 
-    filteredTopics.forEach(t => {
+    originalTopics.forEach(t => {
       const done = !!t.executedDate;
       const plannedText = formatDisplayDate(t.plannedDate) || '—';
       const taughtText = done ? formatDisplayDate(t.executedDate) : '';
