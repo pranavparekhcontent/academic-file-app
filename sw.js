@@ -3,7 +3,7 @@
  * Cache-first for app shell, network-first for API
  */
 
-const CACHE_NAME = 'acad-file-v3';
+const CACHE_NAME = 'acad-file-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -22,11 +22,11 @@ const APP_SHELL = [
   './appstart/appstart.css'
 ];
 
-// Install — cache app shell
+// Install — cache app shell safely with allSettled
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => Promise.allSettled(APP_SHELL.map(url => cache.add(url).catch(e => console.warn('SW item skip:', url)))))
       .then(() => self.skipWaiting())
   );
 });
@@ -81,11 +81,12 @@ self.addEventListener('fetch', event => {
         }
         return response;
       });
-    }).catch(() => {
-      // Fallback for navigation
+    }).catch(async () => {
       if (event.request.mode === 'navigate') {
-        return caches.match('./app.html') || caches.match('app.html') || caches.match('./index.html');
+        const fall = await caches.match('./app.html') || await caches.match('./index.html');
+        if (fall) return fall;
       }
+      return fetch(event.request);
     })
   );
 });
