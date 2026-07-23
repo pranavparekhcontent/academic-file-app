@@ -1146,7 +1146,16 @@ function getTeachingPlan(code, teacher, sheetId) {
 
 function syncTeachingPlan(code, teacher, sheetId) {
   if (!code) return { success: false, error: 'Missing subject code' };
-  
+
+  function _normDate(d) {
+    if (d === null || d === undefined || d === '') return '';
+    var dt = (d instanceof Date) ? d : new Date(d);
+    if (!isNaN(dt.getTime())) {
+      return Utilities.formatDate(dt, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    }
+    return String(d).trim();
+  }
+
   var targetIds = getTargetSheetIds(code, sheetId);
   var outSsId = targetIds.outputSheetId;
   
@@ -1224,52 +1233,21 @@ function syncTeachingPlan(code, teacher, sheetId) {
   var firstDateColIdx = nameColIdx + 1;
   
   var attendanceLogs = [];
-  var mos = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
+  var seenLogKeys = {};
   for (var c = firstDateColIdx; c < totalPColIdx; c++) {
     var val = String(dateRow[c]).trim().toLowerCase();
     if (val.indexOf('total p') !== -1 || val.indexOf('% att') !== -1 || val === '') break;
     
-    var dateHeader = String(dateRow[c]).trim();
+    var dateHeader = dateRow[c];
     var topicConducted = String(topicRow[c] || '').trim();
-    
-    var dateIso = '';
-    try {
-      if (dateRow[c] instanceof Date || Object.prototype.toString.call(dateRow[c]) === '[object Date]') {
-        dateIso = Utilities.formatDate(dateRow[c], Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else {
-        // Strip lecture suffixes like " (L2)", "(L2)", " L2" case-insensitively
-        var cleanHeader = dateHeader.replace(/\s*\(l\d+\)/i, "").replace(/\s+l\d+/i, "").trim();
-        var parts = cleanHeader.split('-');
-        if (parts.length >= 2) {
-          var day = parseInt(parts[0], 10);
-          var monIdx = mos.indexOf(parts[1]);
-          if (monIdx !== -1) {
-            var yr = new Date().getFullYear();
-            if (parts[2]) {
-              var y = parseInt(parts[2], 10);
-              yr = y < 100 ? 2000 + y : y;
-            }
-            var d = new Date(yr, monIdx, day);
-            dateIso = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-          }
-        }
-        if (!dateIso) {
-          var parsed = new Date(cleanHeader);
-          if (!isNaN(parsed.getTime())) {
-            dateIso = Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-          }
-        }
-      }
-    } catch(e) {}
-    
-    if (!dateIso) dateIso = dateHeader;
+    var dateIso = _normDate(dateHeader);
 
-    if (topicConducted) {
-      attendanceLogs.push({
-        date: dateIso,
-        topic: topicConducted
-      });
+    if (topicConducted && dateIso) {
+      var key = dateIso + '||' + topicConducted.toLowerCase();
+      if (!seenLogKeys[key]) {
+        seenLogKeys[key] = true;
+        attendanceLogs.push({ date: dateIso, topic: topicConducted });
+      }
     }
   }
 
@@ -1295,42 +1273,58 @@ function syncTeachingPlan(code, teacher, sheetId) {
       var log = attendanceLogs[j];
       var dateStr = log.date;
       var cleanLogTopic = cleanStr(log.topic);
+      if (!cleanLogTopic) continue;
       
-      var emptyMatch = null;
-      var appendMatch = null;
+      var target = null;
       
+      // PASS 1: Exact Match (prioritized)
       for (var i = 0; i < topics.length; i++) {
         var t = topics[i];
         var cleanSyllabus = cleanStr(t.syllabus);
-        if (cleanSyllabus.indexOf(cleanLogTopic) !== -1 || cleanLogTopic.indexOf(cleanSyllabus) !== -1) {
-          if (t.executedDate && String(t.executedDate).indexOf(dateStr) !== -1) {
-            emptyMatch = null;
-            appendMatch = null;
-            break; // Already contains this date, skip
-          }
-          if (!t.executedDate && !emptyMatch) {
-            emptyMatch = t;
-          }
-          if (t.executedDate && !appendMatch) {
-            appendMatch = t;
+        if (cleanSyllabus === cleanLogTopic) {
+          target = t;
+          break;
+        }
+      }
+      
+      // PASS 2: High-Confidence Similarity Match (Only if Pass 1 fails)
+      if (!target) {
+        var bestRatio = 0;
+        for (var i = 0; i < topics.length; i++) {
+          var t = topics[i];
+          var cleanSyllabus = cleanStr(t.syllabus);
+          var minLen = Math.min(cleanSyllabus.length, cleanLogTopic.length);
+          var maxLen = Math.max(cleanSyllabus.length, cleanLogTopic.length);
+          if (minLen >= 4 && (cleanSyllabus.indexOf(cleanLogTopic) !== -1 || cleanLogTopic.indexOf(cleanSyllabus) !== -1)) {
+            var ratio = minLen / maxLen;
+            // Strict threshold (at least 55% length similarity) to avoid single generic words matching long detailed titles
+            if (ratio >= 0.55 && ratio > bestRatio) {
+              bestRatio = ratio;
+              target = t;
+            }
           }
         }
       }
       
-      var target = emptyMatch || appendMatch;
       if (target) {
-        if (!target.executedDate) {
+        var currentCellVal = ws.getRange(target.rowIndex, executedCol).getValue();
+        var currentDates = String(currentCellVal || '')
+          .split(',')
+          .map(function(s) { return _normDate(s.trim()); })
+          .filter(function(s) { return s !== ''; });
+
+        if (currentDates.indexOf(dateStr) !== -1) {
+          target.executedDate = String(currentCellVal || '');
+          continue;
+        }
+
+        if (!currentCellVal || String(currentCellVal).trim() === '') {
           target.executedDate = dateStr;
-          var dateParts = dateStr.split('-');
-          if (dateParts.length === 3) {
-            var dateObj = new Date(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1, parseInt(dateParts[2], 10));
-            ws.getRange(target.rowIndex, executedCol).setValue(dateObj);
-          } else {
-            ws.getRange(target.rowIndex, executedCol).setValue(dateStr);
-          }
+          ws.getRange(target.rowIndex, executedCol).setValue(dateStr);
         } else {
-          target.executedDate = String(target.executedDate).trim() + ", " + dateStr;
-          ws.getRange(target.rowIndex, executedCol).setValue(target.executedDate);
+          var newVal = String(currentCellVal).trim() + ", " + dateStr;
+          target.executedDate = newVal;
+          ws.getRange(target.rowIndex, executedCol).setValue(newVal);
         }
         updated++;
       }
