@@ -406,7 +406,7 @@ const App = (() => {
     try {
       const data = await API.getAllData();
       if (!data.success) {
-        Toast.show('Sync Failure', data.error || 'Server connection error.', 'danger');
+        Toast.show('Refresh Failure', data.error || 'Server connection error.', 'danger');
         if (labelEl) labelEl.innerText = 'Offline Connection Failed';
         return;
       }
@@ -794,7 +794,7 @@ const App = (() => {
     updateDashboardStats();
 
     // Show loading indicators
-    Toast.show('Syncing Workload', `Loading active database logs for ${code}...`, 'success');
+    Toast.show('Refreshing Workload', `Loading active database logs for ${code}...`, 'success');
 
     // Sync dataset with Sheets
     await triggerSyncAllViews();
@@ -862,7 +862,7 @@ const App = (() => {
       console.error(e);
       state.teachingPlan = { all: [], theory: [], practical: [] };
       updateDashboardStats();
-      Toast.show('Sync Error', e.message || 'Unable to sync database logs.', 'danger');
+      Toast.show('Refresh Error', e.message || 'Unable to sync database logs.', 'danger');
     }
   }
 
@@ -907,10 +907,10 @@ const App = (() => {
 
   // ─── TEACHING PLAN CONTROLLER ───────────────────────────
   function triggerManualSync() {
-    Toast.show('Sync Executing', 'Re-evaluating attendance log date entries...', 'success');
+    Toast.show('Refresh Executing', 'Re-evaluating attendance log date entries...', 'success');
     triggerSyncAllViews().then(() => {
       populateTeachingPlan();
-      Toast.show('Sync Complete', 'Dates aligned with attendance sheet.', 'success');
+      Toast.show('Refresh Complete', 'Dates aligned with attendance sheet.', 'success');
     });
   }
 
@@ -1048,12 +1048,25 @@ const App = (() => {
         const planned = parseToDate(t.plannedDate);
         if (planned) {
           const days = Math.round((planned - today) / 86400000);
-          if (days > 1)       { fillerLabel = 'Upcoming'; fillerVal = `in ${days} days`; }
-          else if (days === 1){ fillerLabel = 'Upcoming'; fillerVal = 'tomorrow'; }
-          else if (days === 0){ fillerLabel = 'Today';    fillerVal = 'due today'; }
+          if (days > 1)       { fillerLabel = 'Upcoming'; fillerVal = `in ${days} days`; fillerCls = 'upcoming'; }
+          else if (days === 1){ fillerLabel = 'Upcoming'; fillerVal = 'tomorrow'; fillerCls = 'upcoming'; }
+          else if (days === 0){ fillerLabel = 'Today';    fillerVal = 'due today'; fillerCls = 'today'; }
           else if (days === -1){ fillerLabel = 'Overdue'; fillerVal = '1 day late'; fillerCls = 'late'; }
           else                { fillerLabel = 'Overdue';  fillerVal = `${-days} days late`; fillerCls = 'late'; }
         }
+      }
+
+      let iconHtml = '';
+      if (done) {
+        iconHtml = '<i class="ph-fill ph-check-circle d5-ms-icon done"></i>';
+      } else if (fillerCls === 'late') {
+        iconHtml = '<i class="ph-fill ph-warning d5-ms-icon late"></i>';
+      } else if (fillerCls === 'upcoming') {
+        iconHtml = '<i class="ph ph-clock d5-ms-icon upcoming"></i>';
+      } else if (fillerCls === 'today') {
+        iconHtml = '<i class="ph ph-clock-countdown d5-ms-icon today"></i>';
+      } else {
+        iconHtml = '<i class="ph ph-clock d5-ms-icon wait"></i>';
       }
 
       const row = document.createElement('div');
@@ -1066,7 +1079,7 @@ const App = (() => {
             <span class="d5-ms-name">${escHtml(t.syllabus)}</span>
             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               ${isPractical ? `<span class="d5-ms-batch-tag"><i class="ph ph-users-three"></i> ${escHtml(batchName)}</span>` : ''}
-              <span class="d5-ms-tag ${done ? 'done' : 'pending'}">${done ? (isPractical ? 'Conducted' : 'Taught') : 'Pending'}</span>
+              <span class="d5-ms-tag ${done ? 'done' : (fillerCls === 'upcoming' ? 'upcoming' : 'pending')}">${done ? (isPractical ? 'Conducted' : 'Taught') : (fillerCls === 'upcoming' ? 'Upcoming' : (fillerCls === 'today' ? 'Today' : 'Pending'))}</span>
             </div>
           </div>
           <div class="d5-ms-track ${done ? 'done' : ''}">
@@ -1086,7 +1099,7 @@ const App = (() => {
             <span class="d5-ms-date-val filler ${fillerCls}">${fillerVal}</span>`}
           </div>
         </div>
-        <i class="ph-fill ${done ? 'ph-check-circle d5-ms-icon done' : 'ph-warning d5-ms-icon pending'}"></i>
+        ${iconHtml}
       `;
       list.appendChild(row);
     });
@@ -1206,7 +1219,7 @@ const App = (() => {
         const filesChip = document.getElementById('card-cal-files');
         if (filesChip) filesChip.innerText = `${files.length} file${files.length === 1 ? '' : 's'}`;
         const calStatus = document.getElementById('card-cal-status');
-        if (calStatus) calStatus.innerText = files.length ? 'Auto-synced' : 'No files';
+        if (calStatus) calStatus.innerText = files.length ? 'Auto-refreshed' : 'No files';
 
         // Show blinking "NEW UPDATE" badge on dashboard card if changes found
         updateScheduleBadge(hasUpdates ? 'update' : (files.length ? 'synced' : 'empty'));
@@ -1252,7 +1265,7 @@ const App = (() => {
         grid.innerHTML = `
           <div class="schedule-empty">
             <i class="ph ph-warning-circle" style="font-size: 48px; color: var(--danger); opacity: 0.6;"></i>
-            <h4>Sync Error</h4>
+            <h4>Refresh Error</h4>
             <p>${escHtml(res.error || 'Failed to load files from Google Drive.')}</p>
           </div>
         `;
@@ -1300,7 +1313,7 @@ const App = (() => {
       if (navDot) navDot.style.display = '';
     } else {
       badge.className = 'gf-badge';
-      badge.innerHTML = 'Synced';
+      badge.innerHTML = 'Refreshed';
       if (navDot) navDot.style.display = 'none';
     }
   }
@@ -1595,7 +1608,7 @@ const App = (() => {
 
   // ─── ACCREDITATION FILE COMPILER (CARD 15 ACTION) ─────────
   const consoleMessages = [
-    "📡 Syncing lecture logs from Smart Attendance Sheet...",
+    "📡 Refreshing lecture logs from Smart Attendance Sheet...",
     "🔍 Matching planned vs taught syllabus dates...",
     "🧮 Calculating syllabus completion metrics...",
     "📂 Loading RMDIPER document templates...",
@@ -1650,7 +1663,7 @@ Generated: ${formatDisplayDate(new Date())}
 [X] 1. Syllabus Copy (Declaration Index)
 [X] 2. Individual Faculty Workload Time Table
 [X] 3. Theory Syllabus Declaration Report
-[X] 4. Executed Teaching Plan Logs (Synced from Smart Attendance: ${conducted}/${reqTopics} topics, ${progressPct}%)
+[X] 4. Executed Teaching Plan Logs (Refreshed from Smart Attendance: ${conducted}/${reqTopics} topics, ${progressPct}%)
 [X] 5. Academic Calendar & Timetable Records
 [X] 6. List of Reference Books & Web Resources
 
@@ -1684,8 +1697,15 @@ Generated: ${formatDisplayDate(new Date())}
     const trimmed = String(dateStr).trim();
     const mos = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
+    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY (Indian/British day-first: DD/MM/YYYY)
+    let m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (m) {
+      const d = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
+    }
+
     // YYYY-MM-DD (build locally to avoid UTC shift)
-    let m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
 
     // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26)
@@ -1696,11 +1716,12 @@ Generated: ${formatDisplayDate(new Date())}
       if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
-    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY (Indian/British day-first)
-    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    // DD-MMM (e.g. 24-Jul, 5-Aug)
+    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})$/);
     if (m) {
-      const d = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
-      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
+      const mi = mos.indexOf(m[2].toLowerCase());
+      const y = new Date().getFullYear();
+      if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
     const fallback = new Date(trimmed);

@@ -161,18 +161,36 @@ function _parseSubjectCode(code, typeHint, nameHint) {
     };
   }
 
-  // Extract batch inside brackets if present, e.g. "BP702P (A)" -> batch = "A"
+  // Smart Batch extraction (handles "(A)", "(a)", "A", "-A", "_A", "Batch A", "BATCH-A", "B1", etc.)
   var batch = '';
-  var bracketMatch = raw.match(/\(([^)]+)\)/);
+  var bracketMatch = raw.match(/\((?:batch\s*)?([a-zA-Z0-9]+)\)/i);
   if (bracketMatch && bracketMatch[1]) {
     batch = bracketMatch[1].trim();
+  } else {
+    // Check trailing batch pattern after space, dash, underscore, or word "batch"
+    var trailingMatch = raw.match(/(?:[\s\-_]+(?:batch[\s\-_]*)?|[\s\-_]+)([a-zA-Z0-9]{1,3})$/i);
+    if (trailingMatch && trailingMatch[1]) {
+      var candidate = trailingMatch[1].trim();
+      // Only treat as batch if candidate is NOT a subject code suffix like 'P' or 'T' alone when preceded by digits
+      if (!/^\d+[PT]$/i.test(candidate)) {
+        batch = candidate;
+      }
+    }
   }
 
-  // Base code stripped of parenthetical text and extra spaces
-  var baseCode = raw.replace(/\s*\([^)]*\)/g, '').trim();
-  // Alphanumeric clean base code without spaces or dashes, e.g. "BP 702P" -> "BP702P"
+  // Base code stripped of parenthetical text, batch text, and extra spaces
+  var baseCode = raw;
+  if (batch) {
+    baseCode = raw.replace(/\s*\([^)]*\)/gi, '')
+                  .replace(new RegExp('(?:[\\s\\-_]+(?:batch[\\s\\-_]*)?|[\\s\\-_]+)' + batch + '$', 'i'), '')
+                  .trim();
+  } else {
+    baseCode = raw.replace(/\s*\([^)]*\)/gi, '').trim();
+  }
+
   var cleanBaseCode = baseCode.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  var cleanFullCode = raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  var cleanBatch = batch.toUpperCase();
+  var cleanFullCode = cleanBaseCode + (cleanBatch ? cleanBatch : '');
 
   // Practical determination
   var typeStr = String(typeHint || '').toLowerCase();
@@ -184,7 +202,7 @@ function _parseSubjectCode(code, typeHint, nameHint) {
     isPractical = true;
   } else if (nameStr.indexOf('practical') !== -1 || nameStr.indexOf('lab') !== -1) {
     isPractical = true;
-  } else if (raw.toLowerCase().indexOf('practical') !== -1 || raw.toLowerCase().indexOf('lab') !== -1) {
+  } else if (raw.toLowerCase().indexOf('practical') !== -1 || raw.toLowerCase().indexOf('lab') !== -1 || cleanBatch !== '') {
     isPractical = true;
   } else {
     // Check code ending with P (e.g. BP702P, BP106P, etc.)
@@ -198,14 +216,14 @@ function _parseSubjectCode(code, typeHint, nameHint) {
     baseCode: baseCode,
     cleanBaseCode: cleanBaseCode,
     cleanFullCode: cleanFullCode,
-    batch: batch,
+    batch: cleanBatch,
     isPractical: isPractical
   };
 }
 
 /**
  * Fail-Proof Sheet Search Algorithm
- * Finds the best sheet tab matching subject code (handles "BP702P (A)", "BP 702P", "BP702P", etc.)
+ * Finds the best sheet tab matching subject code (handles "BP702P (A)", "BP 702P", "BP702P A", "BP702P-A", etc.)
  */
 function _findSheetByCode(ss, inputCode) {
   if (!ss || !inputCode) return null;
@@ -223,33 +241,41 @@ function _findSheetByCode(ss, inputCode) {
     var parsedSheet = _parseSubjectCode(sheetName);
     var score = 0;
 
-    // 1. Exact string match (case-insensitive)
+    // 1. Exact raw string match (case-insensitive)
     if (sheetName.toLowerCase() === parsedInput.raw.toLowerCase()) {
       score = 100;
     }
-    // 2. Clean full code match (e.g., "BP 702P (A)" == "BP702P(A)")
+    // 2. Clean full code match with batch match (e.g. "BP702P(A)" == "BP702PA" or "BP 702P A" == "BP702PA")
+    else if (parsedSheet.cleanFullCode === parsedInput.cleanFullCode && parsedSheet.batch === parsedInput.batch) {
+      score = 95;
+    }
+    // 3. Clean full code match
     else if (parsedSheet.cleanFullCode === parsedInput.cleanFullCode) {
       score = 90;
     }
-    // 3. Exact clean base code match with matching batch
-    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode && parsedInput.batch && parsedSheet.batch && parsedInput.batch.toLowerCase() === parsedSheet.batch.toLowerCase()) {
+    // 4. Exact clean base code match AND matching non-empty batch
+    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode && parsedInput.batch && parsedSheet.batch && parsedInput.batch === parsedSheet.batch) {
       score = 85;
     }
-    // 4. Exact clean base code match (e.g. input "BP702P (A)" matches sheet "BP702P" or "BP 702P")
-    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode) {
+    // 5. Exact clean base code match when NO batch is requested by input (e.g., theory subject or master sheet)
+    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode && !parsedInput.batch && !parsedSheet.batch) {
       score = 80;
     }
-    // 5. Sheet name contains clean base code and batch keyword
-    else if (parsedSheet.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1 || parsedInput.cleanBaseCode.indexOf(parsedSheet.cleanBaseCode) !== -1) {
-      if (parsedInput.batch && sheetName.toLowerCase().indexOf(parsedInput.batch.toLowerCase()) !== -1) {
-        score = 75;
-      } else {
-        score = 70;
-      }
+    // 6. Base code match when input has batch but sheet has no batch (fallback)
+    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode && parsedInput.batch && !parsedSheet.batch) {
+      score = 70;
     }
-    // 6. Sheet name starts with clean base code
-    else if (sheetName.toUpperCase().replace(/[^A-Z0-9]/g, '').indexOf(parsedInput.cleanBaseCode) === 0) {
-      score = 60;
+    // 7. Base code match when input has no batch but sheet has batch (fallback)
+    else if (parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode) {
+      score = 65;
+    }
+    // 8. Partial clean base code match with batch match
+    else if ((parsedSheet.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1 || parsedInput.cleanBaseCode.indexOf(parsedSheet.cleanBaseCode) !== -1)) {
+      if (parsedInput.batch && parsedSheet.batch === parsedInput.batch) {
+        score = 60;
+      } else {
+        score = 50;
+      }
     }
 
     if (score > maxScore) {
@@ -259,7 +285,7 @@ function _findSheetByCode(ss, inputCode) {
   }
 
   // If score is strong enough, return best match
-  if (bestSheet && maxScore >= 60) {
+  if (bestSheet && maxScore >= 50) {
     return bestSheet;
   }
 
@@ -1149,11 +1175,52 @@ function syncTeachingPlan(code, teacher, sheetId) {
 
   function _normDate(d) {
     if (d === null || d === undefined || d === '') return '';
-    var dt = (d instanceof Date) ? d : new Date(d);
+
+    // If d is already a Date object from Google Sheets
+    if (d instanceof Date || Object.prototype.toString.call(d) === '[object Date]') {
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+      }
+      return '';
+    }
+
+    var str = String(d).trim();
+    if (!str) return '';
+
+    // Explicit DD/MM/YYYY or DD-MM-YYYY string check (prevents JS new Date() from swapping DD and MM!)
+    var ddmmyyyy = str.match(/^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{2,4})(?:\s*\(.*\))?$/);
+    if (ddmmyyyy) {
+      var day = parseInt(ddmmyyyy[1], 10);
+      var month = parseInt(ddmmyyyy[2], 10);
+      var year = parseInt(ddmmyyyy[3], 10);
+      if (year < 100) year += 2000;
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        var padD = day < 10 ? '0' + day : '' + day;
+        var padM = month < 10 ? '0' + month : '' + month;
+        return padD + '/' + padM + '/' + year;
+      }
+    }
+
+    // Handle "24-Jul" or "24-Jul (L2)"
+    var ddm = str.match(/^(\d{1,2})-([A-Za-z]{3})(?:\s*\(.*\))?$/);
+    if (ddm) {
+      var mos = {'jan':0,'feb':1,'mar':2,'apr':3,'may':4,'jun':5,'jul':6,'aug':7,'sep':8,'oct':9,'nov':10,'dec':11};
+      var mi = mos[ddm[2].toLowerCase()];
+      if (mi !== undefined) {
+        var y = new Date().getFullYear();
+        var padD = parseInt(ddm[1], 10) < 10 ? '0' + parseInt(ddm[1], 10) : '' + ddm[1];
+        var padM = (mi + 1) < 10 ? '0' + (mi + 1) : '' + (mi + 1);
+        return padD + '/' + padM + '/' + y;
+      }
+    }
+
+    // Fallback Date parsing for YYYY-MM-DD or standard ISO strings
+    var dt = new Date(str);
     if (!isNaN(dt.getTime())) {
       return Utilities.formatDate(dt, Session.getScriptTimeZone(), 'dd/MM/yyyy');
     }
-    return String(d).trim();
+
+    return str;
   }
 
   var targetIds = getTargetSheetIds(code, sheetId);
@@ -1272,61 +1339,92 @@ function syncTeachingPlan(code, teacher, sheetId) {
     for (var j = 0; j < attendanceLogs.length; j++) {
       var log = attendanceLogs[j];
       var dateStr = log.date;
-      var cleanLogTopic = cleanStr(log.topic);
-      if (!cleanLogTopic) continue;
-      
-      var target = null;
-      
-      // PASS 1: Exact Match (prioritized)
-      for (var i = 0; i < topics.length; i++) {
-        var t = topics[i];
-        var cleanSyllabus = cleanStr(t.syllabus);
-        if (cleanSyllabus === cleanLogTopic) {
-          target = t;
-          break;
-        }
-      }
-      
-      // PASS 2: High-Confidence Similarity Match (Only if Pass 1 fails)
-      if (!target) {
-        var bestRatio = 0;
+
+      // Handle multi-topic entries (comma/semicolon/slash separated)
+      var subTopics = String(log.topic || '').split(/[,;/]+/);
+
+      for (var k = 0; k < subTopics.length; k++) {
+        var rawSubTopic = subTopics[k].trim();
+        var cleanLogTopic = cleanStr(rawSubTopic);
+        if (!cleanLogTopic || cleanLogTopic.length < 2) continue;
+
+        var target = null;
+        
+        // PASS 1: Exact Match (prioritized)
         for (var i = 0; i < topics.length; i++) {
           var t = topics[i];
           var cleanSyllabus = cleanStr(t.syllabus);
-          var minLen = Math.min(cleanSyllabus.length, cleanLogTopic.length);
-          var maxLen = Math.max(cleanSyllabus.length, cleanLogTopic.length);
-          if (minLen >= 4 && (cleanSyllabus.indexOf(cleanLogTopic) !== -1 || cleanLogTopic.indexOf(cleanSyllabus) !== -1)) {
-            var ratio = minLen / maxLen;
-            // Strict threshold (at least 55% length similarity) to avoid single generic words matching long detailed titles
-            if (ratio >= 0.55 && ratio > bestRatio) {
-              bestRatio = ratio;
-              target = t;
+          if (cleanSyllabus === cleanLogTopic) {
+            target = t;
+            break;
+          }
+        }
+        
+        // PASS 2: Substring Containment Match (lowered threshold to 35%)
+        if (!target) {
+          var bestRatio = 0;
+          for (var i = 0; i < topics.length; i++) {
+            var t = topics[i];
+            var cleanSyllabus = cleanStr(t.syllabus);
+            var minLen = Math.min(cleanSyllabus.length, cleanLogTopic.length);
+            var maxLen = Math.max(cleanSyllabus.length, cleanLogTopic.length);
+            if (minLen >= 3 && (cleanSyllabus.indexOf(cleanLogTopic) !== -1 || cleanLogTopic.indexOf(cleanSyllabus) !== -1)) {
+              var ratio = minLen / maxLen;
+              if (ratio >= 0.35 && ratio > bestRatio) {
+                bestRatio = ratio;
+                target = t;
+              }
             }
           }
         }
-      }
-      
-      if (target) {
-        var currentCellVal = ws.getRange(target.rowIndex, executedCol).getValue();
-        var currentDates = String(currentCellVal || '')
-          .split(',')
-          .map(function(s) { return _normDate(s.trim()); })
-          .filter(function(s) { return s !== ''; });
 
-        if (currentDates.indexOf(dateStr) !== -1) {
-          target.executedDate = String(currentCellVal || '');
-          continue;
+        // PASS 3: Word-Overlap Matching (for customized/numbered/abbreviated teacher entries)
+        if (!target) {
+          var logWords = cleanLogTopic.match(/[a-z0-9]{3,}/g) || [];
+          if (logWords.length > 0) {
+            var bestWordScore = 0;
+            for (var i = 0; i < topics.length; i++) {
+              var t = topics[i];
+              var syllabusWords = cleanStr(t.syllabus).match(/[a-z0-9]{3,}/g) || [];
+              if (syllabusWords.length === 0) continue;
+              
+              var matchCount = 0;
+              for (var w = 0; w < logWords.length; w++) {
+                if (syllabusWords.indexOf(logWords[w]) !== -1) {
+                  matchCount++;
+                }
+              }
+              var wordRatio = matchCount / Math.max(logWords.length, 1);
+              if (wordRatio >= 0.5 && wordRatio > bestWordScore) {
+                bestWordScore = wordRatio;
+                target = t;
+              }
+            }
+          }
         }
+        
+        if (target) {
+          var currentCellVal = ws.getRange(target.rowIndex, executedCol).getValue();
+          var currentDates = String(currentCellVal || '')
+            .split(',')
+            .map(function(s) { return _normDate(s.trim()); })
+            .filter(function(s) { return s !== ''; });
 
-        if (!currentCellVal || String(currentCellVal).trim() === '') {
-          target.executedDate = dateStr;
-          ws.getRange(target.rowIndex, executedCol).setValue(dateStr);
-        } else {
-          var newVal = String(currentCellVal).trim() + ", " + dateStr;
-          target.executedDate = newVal;
-          ws.getRange(target.rowIndex, executedCol).setValue(newVal);
+          if (currentDates.indexOf(dateStr) !== -1) {
+            target.executedDate = String(currentCellVal || '');
+            continue;
+          }
+
+          if (!currentCellVal || String(currentCellVal).trim() === '') {
+            target.executedDate = dateStr;
+            ws.getRange(target.rowIndex, executedCol).setValue(dateStr);
+          } else {
+            var newVal = String(currentCellVal).trim() + ", " + dateStr;
+            target.executedDate = newVal;
+            ws.getRange(target.rowIndex, executedCol).setValue(newVal);
+          }
+          updated++;
         }
-        updated++;
       }
     }
     

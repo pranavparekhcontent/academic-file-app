@@ -151,16 +151,25 @@
 
       <!-- Sidebar Bottom Profile Card -->
       <div class="sidebar-profile-card">
-        <div class="avatar" id="faculty-avatar">SG</div>
-        <div class="profile-details">
-          <div class="profile-name" id="faculty-display-name">Dr. Shweta P. Ghode</div>
+        <div class="profile-header">
+          <div class="avatar" id="faculty-avatar">SG</div>
+          <div class="profile-details">
+            <div class="profile-name" id="faculty-display-name">Dr. Shweta P. Ghode</div>
+            <div class="profile-status">
+              <span class="status-dot"></span> Active Session
+            </div>
+          </div>
         </div>
-        <button class="btn-lock" onclick="App.lockSession()" title="Lock Session (Break / Lecture Mode)">
-          <i class="ph ph-lock"></i>
-        </button>
-        <button class="btn-logout" onclick="App.doLogout()" title="Exit Workspace">
-          <i class="ph ph-power"></i>
-        </button>
+        <div class="profile-actions">
+          <button class="btn-lock" onclick="App.lockSession()" title="Lock Session (Break / Lecture Mode)">
+            <i class="ph ph-lock"></i>
+            <span>Lock</span>
+          </button>
+          <button class="btn-logout" onclick="App.doLogout()" title="Exit Workspace">
+            <i class="ph ph-power"></i>
+            <span>Exit</span>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -228,14 +237,14 @@
                   <span class="gf-module-label">Module 1</span>
                 </div>
                 <div class="gf-badge" id="badge-calendar">
-                  Synced
+                  Refreshed
                 </div>
               </div>
               <h3>Academic Calendars & Timetable</h3>
               <p>Academic calendar planning, timetable scheduling, and semester date management.</p>
               <div class="gf-card-foot">
                 <span class="gf-foot-chip" id="card-cal-files">Drive files</span>
-                <span class="gf-foot-status" id="card-cal-status">Auto-synced</span>
+                <span class="gf-foot-status" id="card-cal-status">Auto-refreshed</span>
               </div>
             </div>
 
@@ -249,7 +258,7 @@
                 <div class="gf-pct-badge" id="card-tp-progress-pct">0%</div>
               </div>
               <h3>Syllabus & Teaching Plan</h3>
-              <p>Syllabus checks, academic calendar sync, execution logs matching Smart Attendance.</p>
+              <p>Syllabus checks, academic calendar refresh, execution logs matching Smart Attendance.</p>
               <div class="gf-card-foot">
                 <span class="gf-foot-status" id="card-tp-complete-lbl">0% complete</span>
                 <span class="gf-foot-count" id="card-tp-count-lbl">0/45</span>
@@ -274,7 +283,7 @@
               </div>
               <div class="d5-hero-actions" style="display: flex; gap: 10px; align-items: center;">
                 <button class="btn btn-primary" onclick="App.triggerManualSync()">
-                  <i class="ph ph-arrows-clockwise"></i> Sync
+                  <i class="ph ph-arrows-clockwise"></i> Refresh
                 </button>
                 <button class="d5-glass-btn" onclick="App.downloadTeachingPlanDoc()">
                   <i class="ph ph-file-doc"></i>
@@ -298,7 +307,7 @@
               <div>
                 <div class="panel-title" id="tp-milestone-title">Lecture Milestones</div>
                 <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                  Syllabus requirements parsed from the Teaching Plan sheet. Execution dates sync automatically from Smart Attendance topic headers.
+                  Syllabus requirements parsed from the Teaching Plan sheet. Execution dates refresh automatically from Smart Attendance topic headers.
                 </p>
               </div>
               <div class="form-group" style="margin-bottom:0; min-width: 220px;">
