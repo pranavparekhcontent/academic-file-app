@@ -1032,6 +1032,9 @@ const App = (() => {
       return;
     }
 
+    // Always clear container before populating to prevent duplicate DOM elements on sync
+    list.innerHTML = '';
+
     originalTopics.forEach(t => {
       const done = !!t.executedDate;
       const plannedText = formatDisplayDate(t.plannedDate) || '—';

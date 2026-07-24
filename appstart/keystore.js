@@ -8,12 +8,32 @@
 
 const KeyStore = (() => {
 
-  const STORE_KEY  = () => APP_CONFIG.LICENSE_STORAGE_KEY;   // key name
+  const STORE_KEY  = () => (window.APP_CONFIG && window.APP_CONFIG.LICENSE_STORAGE_KEY) || "academic_file_license";   // key name
   const DB_NAME    = "appstart_db";
   const DB_STORE   = "keystore";
   const COOKIE_DAYS = 365;   // cookie lifetime in days
 
-  // ── Layer 1: Cookie (Primary) ─────────────────────────────
+  // ── Layer 0: LocalStorage (Primary - Fast & Permanent per Origin) ───
+  const LS = {
+    save(name, val) {
+      try {
+        localStorage.setItem(name, val);
+        return true;
+      } catch { return false; }
+    },
+    load(name) {
+      try {
+        return localStorage.getItem(name) || null;
+      } catch { return null; }
+    },
+    clear(name) {
+      try {
+        localStorage.removeItem(name);
+      } catch {}
+    }
+  };
+
+  // ── Layer 1: Cookie (Secondary) ─────────────────────────────
   const CK = {
     save(name, val) {
       try {
@@ -45,7 +65,7 @@ const KeyStore = (() => {
     },
   };
 
-  // ── Layer 2: IndexedDB (Secondary) ──────────────────────────
+  // ── Layer 2: IndexedDB (Tertiary) ──────────────────────────
   const IDB = {
     _db: null,
     _open() {
@@ -88,29 +108,36 @@ const KeyStore = (() => {
 
   // ── Public API ─────────────────────────────────────────────
   async function save(key) {
-    CK.save(STORE_KEY(), key);
-    await IDB.save(STORE_KEY(), key);
+    const k = STORE_KEY();
+    LS.save(k, key);
+    CK.save(k, key);
+    await IDB.save(k, key);
   }
 
   async function load() {
-    const fromCK  = CK.load(STORE_KEY());
-    const fromIDB = await IDB.load(STORE_KEY());
-    const found   = fromCK || fromIDB || null;
+    const k = STORE_KEY();
+    const fromLS  = LS.load(k);
+    const fromCK  = CK.load(k);
+    const fromIDB = await IDB.load(k);
+    const found   = fromLS || fromCK || fromIDB || null;
     if (found) {
-      if (!fromCK)  CK.save(STORE_KEY(), found);
-      if (!fromIDB) IDB.save(STORE_KEY(), found);
+      if (!fromLS)  LS.save(k, found);
+      if (!fromCK)  CK.save(k, found);
+      if (!fromIDB) IDB.save(k, found);
     }
     return found;
   }
 
   async function clear() {
-    CK.clear(STORE_KEY());
-    await IDB.clear(STORE_KEY());
+    const k = STORE_KEY();
+    LS.clear(k);
+    CK.clear(k);
+    await IDB.clear(k);
   }
 
   // Exposed for internal use (e.g. version caching)
-  function setItem(name, val) { CK.save(name, val); IDB.save(name, val); }
-  async function getItem(name) { return CK.load(name) || await IDB.load(name); }
+  function setItem(name, val) { LS.save(name, val); CK.save(name, val); IDB.save(name, val); }
+  async function getItem(name) { return LS.load(name) || CK.load(name) || await IDB.load(name); }
 
   return { save, load, clear, setItem, getItem };
 })();
