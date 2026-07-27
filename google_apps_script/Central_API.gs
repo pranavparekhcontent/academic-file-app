@@ -1565,9 +1565,24 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // Scan parentFolder (the Drive folder of the active Attendance App Input Sheet) and its subfolders
+    // Scan ONLY subfolders named "Academic Calendars & Timetable" (case-insensitive / spelling tolerant) inside parentFolder
     if (parentFolder) {
-      collectFilesFromFolder(parentFolder);
+      try {
+        var subfolders = parentFolder.getFolders();
+        var foundTargetFolder = false;
+        while (subfolders.hasNext()) {
+          var sub = subfolders.next();
+          var subName = sub.getName().toLowerCase();
+          if (subName.indexOf('academic') > -1 || subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('schedule') > -1) {
+            collectFilesFromFolder(sub);
+            foundTargetFolder = true;
+          }
+        }
+        // Fallback: If no subfolder matching the name was found, collect from parentFolder directly
+        if (!foundTargetFolder) {
+          collectFilesFromFolder(parentFolder);
+        }
+      } catch(e) {}
     }
 
     // Sort by last updated descending (newest first)
