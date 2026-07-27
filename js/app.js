@@ -1241,17 +1241,17 @@ const App = (() => {
           const thumbUrl = f.thumbnailLink || '';
           const displayName = f.name.replace(/\.[^.]+$/, ''); // strip extension
           const ext = (f.name.match(/\.([^.]+)$/) || ['', ''])[1].toUpperCase();
-          const previewUrl = (f.webViewLink || '').replace('/view?usp=drivesdk', '/preview').replace('/view', '/preview');
+          const previewUrl = f.id ? `https://drive.google.com/file/d/${f.id}/preview` : (f.webViewLink || '').replace(/\/view.*$/, '/preview');
           const isUpdated = changedIds.has(f.id);
 
           return `
-            <div class="schedule-file-card" onclick="App.openFilePreview('${escHtml(previewUrl)}', '${escHtml(f.name)}', '${escHtml(f.webViewLink || '')}')" style="--i:${i}; animation-delay: ${i * 0.06}s;">
+            <div class="schedule-file-card" data-preview-url="${_escAttr(previewUrl)}" data-file-name="${_escAttr(f.name)}" data-drive-url="${_escAttr(f.webViewLink || '')}" onclick="App.handleFileCardClick(this)" style="--i:${i}; animation-delay: ${i * 0.06}s;">
               ${isUpdated ? '<span class="file-update-pip">NEW</span>' : ''}
-              <div class="schedule-file-thumb" style="${thumbUrl ? `background-image: url('${thumbUrl}');` : ''}">
+              <div class="schedule-file-thumb" style="${thumbUrl ? `background-image: url('${_escAttr(thumbUrl)}');` : ''}">
                 ${!thumbUrl ? `<i class="ph ${icon}" style="font-size: 40px; color: ${color};"></i>` : ''}
               </div>
               <div class="schedule-file-info">
-                <span class="schedule-file-name" title="${escHtml(f.name)}">${escHtml(displayName)}</span>
+                <span class="schedule-file-name" title="${_escAttr(f.name)}">${escHtml(displayName)}</span>
                 ${ext ? `<span class="schedule-file-ext" style="color: ${color};">${ext}</span>` : ''}
               </div>
             </div>
@@ -1280,6 +1280,24 @@ const App = (() => {
         </div>
       `;
     }
+  }
+
+  function _escAttr(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function handleFileCardClick(el) {
+    if (!el) return;
+    const previewUrl = el.getAttribute('data-preview-url') || '';
+    const fileName = el.getAttribute('data-file-name') || '';
+    const driveUrl = el.getAttribute('data-drive-url') || '';
+    openFilePreview(previewUrl, fileName, driveUrl);
   }
 
   function openFilePreview(previewUrl, fileName, driveUrl) {
@@ -1772,6 +1790,7 @@ Generated: ${formatDisplayDate(new Date())}
     saveTopicRemark,
     startCompilation,
     loadAcademicSchedule,
+    handleFileCardClick,
     openFilePreview,
     closeFilePreview
   };

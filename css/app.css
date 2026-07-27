@@ -2832,30 +2832,26 @@ button, [role='button'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 0;
 }
 
 .file-preview-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .file-preview-content {
   position: relative;
-  width: 100%;
-  max-width: 900px;
-  height: 85vh;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--glass-card-bg);
-  border-radius: var(--radius-xl);
-  border-top: var(--crystal-rim-top);
-  border-left: var(--crystal-rim-top);
-  border-bottom: var(--crystal-rim-bottom);
-  border-right: var(--crystal-rim-bottom);
+  background: var(--bg-dark, #0b0f19);
+  border-radius: 0;
   box-shadow: 0 25px 60px rgba(0,0,0,0.5);
   overflow: hidden;
   animation: previewIn 0.3s cubic-bezier(.22,1,.36,1);
