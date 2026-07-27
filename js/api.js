@@ -98,6 +98,9 @@ const API = (() => {
           _setCache('allData', data);
           return data;
         }
+        const cached = _getCache('allData');
+        if (cached) return cached;
+        return data;
       } catch (e) {
         console.warn('API.getAllData network failed:', e.message);
       }
@@ -116,6 +119,9 @@ const API = (() => {
           _setCache(cacheKey, data);
           return data;
         }
+        const cached = _getCache(cacheKey);
+        if (cached) return cached;
+        return data;
       } catch (e) {
         console.warn('API.getTeachingPlan network failed:', e.message);
       }
@@ -181,6 +187,9 @@ const API = (() => {
           _setCache(cacheKey, data);
           return data;
         }
+        const cached = _getCache(cacheKey);
+        if (cached) return cached;
+        return data;
       } catch (e) {
         console.warn('API.getAcademicSchedule failed:', e.message);
       }
