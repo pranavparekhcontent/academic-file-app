@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.0)
+ *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.1)
  *  Supports both Smart Attendance PWA and Academic File PWA.
  *  Proxies access to college sheets via the sheetId parameter.
  * ═══════════════════════════════════════════════════════════════
