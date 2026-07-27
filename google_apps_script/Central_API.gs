@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.2)
+ *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.3)
  *  Supports both Smart Attendance PWA and Academic File PWA.
  *  Proxies access to college sheets via the sheetId parameter.
  * ═══════════════════════════════════════════════════════════════
@@ -1643,7 +1643,7 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
         var fileIterator = folder.getFiles();
         while (fileIterator.hasNext()) {
           var file = fileIterator.next();
-          if (file.getId() === realId) continue;
+          if (file.getId() === targetSpreadsheetId) continue;
           if (seenIds[file.getId()]) continue;
           seenIds[file.getId()] = true;
           var thumbLink = '';

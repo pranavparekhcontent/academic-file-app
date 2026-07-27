@@ -1280,10 +1280,18 @@ const App = (() => {
         _saveSeenFingerprint(files);
 
       } else {
+        const subtitleEl = document.getElementById('schedule-subtitle');
+        if (subtitleEl) {
+          subtitleEl.innerHTML = `<span style="color: var(--danger); font-weight: 500;"><i class="ph ph-warning"></i> ${escHtml(res.error || 'Failed to load files from Google Drive.')}</span>`;
+        }
+        const cardDriveEmailEl = document.getElementById('card-cal-drive-email');
+        if (cardDriveEmailEl) {
+          cardDriveEmailEl.innerText = 'Drive: Config error';
+        }
         grid.innerHTML = `
           <div class="schedule-empty">
             <i class="ph ph-warning-circle" style="font-size: 48px; color: var(--danger); opacity: 0.6;"></i>
-            <h4>Refresh Error</h4>
+            <h4>Drive Access Error</h4>
             <p>${escHtml(res.error || 'Failed to load files from Google Drive.')}</p>
           </div>
         `;
