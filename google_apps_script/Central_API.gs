@@ -1529,117 +1529,98 @@ function getAcademicSchedule(sheetId) {
       try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
     }
 
-    var scheduleFolder = null;
-
-    // 1. Check parent folder for subfolders matching keywords or exact name
-    if (parentFolder) {
-      var subfolders = parentFolder.getFolders();
-      while (subfolders.hasNext()) {
-        var sub = subfolders.next();
-        var subName = sub.getName().toLowerCase();
-        if (subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('time table') > -1 || subName.indexOf('schedule') > -1 || subName.indexOf('academic') > -1) {
-          scheduleFolder = sub;
-          break;
-        }
-      }
-    }
-
-    // 2. Global search for exact folder name "Academic Calendars & Timetable"
-    if (!scheduleFolder) {
-      try {
-        var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
-        if (globalFolders.hasNext()) {
-          scheduleFolder = globalFolders.next();
-        }
-      } catch(e) {}
-    }
-
-    // 3. Global search for any folder containing Academic / Timetable / Calendar keywords
-    if (!scheduleFolder) {
-      try {
-        var allMatching = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender'");
-        if (allMatching.hasNext()) {
-          scheduleFolder = allMatching.next();
-        }
-      } catch(e) {}
-    }
-
-    // 4. Only if NO existing folder is found anywhere, create a new one
-    if (!scheduleFolder) {
-      try {
-        if (parentFolder) {
-          scheduleFolder = parentFolder.createFolder("Academic Calendars & Timetable");
-        } else {
-          scheduleFolder = DriveApp.getRootFolder().createFolder("Academic Calendars & Timetable");
-        }
-      } catch(e) {}
-    }
-
-    if (!scheduleFolder) {
-      return { success: false, error: "Parent Google Drive folder not accessible." };
-    }
-    
     var allFiles = [];
     var seenIds = {};
 
     function collectFilesFromFolder(folder) {
-      var fileIterator = folder.getFiles();
-      while (fileIterator.hasNext()) {
-        var file = fileIterator.next();
-        if (seenIds[file.getId()]) continue;
-        seenIds[file.getId()] = true;
-        var thumbLink = '';
-        try { thumbLink = file.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400' : ''; } catch(e) { thumbLink = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'; }
-        var updated = '';
-        try { updated = file.getLastUpdated().toISOString(); } catch(e) {}
-        allFiles.push({
-          id: file.getId(),
-          name: file.getName(),
-          mimeType: file.getMimeType(),
-          webViewLink: file.getUrl(),
-          thumbnailLink: thumbLink,
-          lastUpdated: updated
-        });
-      }
+      if (!folder) return;
+      try {
+        var fileIterator = folder.getFiles();
+        while (fileIterator.hasNext()) {
+          var file = fileIterator.next();
+          if (seenIds[file.getId()]) continue;
+          seenIds[file.getId()] = true;
+          var thumbLink = '';
+          try { thumbLink = file.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400' : ''; } catch(e) { thumbLink = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'; }
+          var updated = '';
+          try { updated = file.getLastUpdated().toISOString(); } catch(e) {}
+          allFiles.push({
+            id: file.getId(),
+            name: file.getName(),
+            mimeType: file.getMimeType(),
+            webViewLink: file.getUrl(),
+            thumbnailLink: thumbLink,
+            lastUpdated: updated
+          });
+        }
+        var childFolders = folder.getFolders();
+        while (childFolders.hasNext()) {
+          collectFilesFromFolder(childFolders.next());
+        }
+      } catch(e) {}
     }
 
-    collectFilesFromFolder(scheduleFolder);
-
-    // Also check immediate subfolders inside scheduleFolder
-    var childFolders = scheduleFolder.getFolders();
-    while (childFolders.hasNext()) {
-      collectFilesFromFolder(childFolders.next());
-    }
-
-    // Fallback: If no files in scheduleFolder, check parentFolder for calendar/timetable files
-    if (allFiles.length === 0 && parentFolder) {
-      var parentFileIterator = parentFolder.getFiles();
-      while (parentFileIterator.hasNext()) {
-        var pf = parentFileIterator.next();
-        var pName = pf.getName().toLowerCase();
-        if (pName.indexOf('calendar') > -1 || pName.indexOf('calender') > -1 || pName.indexOf('timetable') > -1 || pName.indexOf('time table') > -1 || pName.indexOf('schedule') > -1) {
-          if (!seenIds[pf.getId()]) {
-            seenIds[pf.getId()] = true;
-            var tLink = '';
-            try { tLink = pf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400' : ''; } catch(e) { tLink = 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400'; }
-            var pUpdated = '';
-            try { pUpdated = pf.getLastUpdated().toISOString(); } catch(e) {}
-            allFiles.push({
-              id: pf.getId(),
-              name: pf.getName(),
-              mimeType: pf.getMimeType(),
-              webViewLink: pf.getUrl(),
-              thumbnailLink: tLink,
-              lastUpdated: pUpdated
-            });
+    // 1. Search parentFolder subfolders for any matching folder
+    if (parentFolder) {
+      try {
+        var subfolders = parentFolder.getFolders();
+        while (subfolders.hasNext()) {
+          var sub = subfolders.next();
+          var subName = sub.getName().toLowerCase();
+          if (subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('time table') > -1 || subName.indexOf('schedule') > -1 || subName.indexOf('academic') > -1) {
+            collectFilesFromFolder(sub);
           }
         }
-      }
+      } catch(e) {}
     }
-    
+
+    // 2. Search globally across ALL of Drive for folders named "Academic Calendars & Timetable"
+    try {
+      var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
+      while (globalFolders.hasNext()) {
+        collectFilesFromFolder(globalFolders.next());
+      }
+    } catch(e) {}
+
+    // 3. Search globally for any folder containing Academic / Timetable / Calendar keywords
+    try {
+      var globalMatches = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender'");
+      while (globalMatches.hasNext()) {
+        collectFilesFromFolder(globalMatches.next());
+      }
+    } catch(e) {}
+
+    // 4. Check parentFolder itself for any loose calendar/timetable files
+    if (parentFolder) {
+      try {
+        var parentFileIterator = parentFolder.getFiles();
+        while (parentFileIterator.hasNext()) {
+          var pf = parentFileIterator.next();
+          var pName = pf.getName().toLowerCase();
+          if (pName.indexOf('calendar') > -1 || pName.indexOf('calender') > -1 || pName.indexOf('timetable') > -1 || pName.indexOf('time table') > -1 || pName.indexOf('schedule') > -1 || pName.indexOf('academic') > -1) {
+            if (!seenIds[pf.getId()]) {
+              seenIds[pf.getId()] = true;
+              var tLink = '';
+              try { tLink = pf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400' : ''; } catch(e) { tLink = 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400'; }
+              var pUpdated = '';
+              try { pUpdated = pf.getLastUpdated().toISOString(); } catch(e) {}
+              allFiles.push({
+                id: pf.getId(),
+                name: pf.getName(),
+                mimeType: pf.getMimeType(),
+                webViewLink: pf.getUrl(),
+                thumbnailLink: tLink,
+                lastUpdated: pUpdated
+              });
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
-    
+
     return {
       success: true,
       files: allFiles,
