@@ -498,57 +498,8 @@ function getTargetSheetIds(code, sheetId) {
   var teachingPlanId = '';
   var outputSheetId = '';
 
-  // 1. Try to resolve links directly from the shared Master Config Sheet row
-  try {
-    var MASTER_CONFIG_SHEET_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
-    var masterSs = SpreadsheetApp.openById(MASTER_CONFIG_SHEET_ID);
-    var masterWs = masterSs.getSheetByName("smart attendance client sheet") || masterSs.getSheets()[0];
-    if (masterWs) {
-      var data = masterWs.getDataRange().getValues();
-      // Look at the headers in row 3 (index 2) to find output link and teaching plan link
-      var headers = data[2] || data[0]; 
-      var inputCol = -1, outputCol = -1, tpCol = -1;
-      
-      for (var c = 0; c < headers.length; c++) {
-        var h = String(headers[c]).toLowerCase().trim();
-        if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1) inputCol = c;
-        if (h.indexOf('output link') !== -1 || h.indexOf('output sheet') !== -1 || h.indexOf('output excel') !== -1) outputCol = c;
-        if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) tpCol = c;
-      }
-      
-      // Default fallback column indexes if header strings didn't hit
-      if (inputCol === -1) inputCol = 4; // Col E
-      if (outputCol === -1) outputCol = 5; // Col F
-      if (tpCol === -1) tpCol = 6; // Col G
-      
-      for (var r = 3; r < data.length; r++) {
-        var row = data[r];
-        var rowInputId = String(row[inputCol] || '').trim();
-        if (rowInputId === sheetId || (sheetId && rowInputId.indexOf(sheetId) !== -1) || (rowInputId && sheetId.indexOf(rowInputId) !== -1)) {
-          
-          // Extract output link ID
-          var outVal = (outputCol !== -1 && outputCol < row.length) ? String(row[outputCol] || '').trim() : '';
-          if (outVal) {
-            var m = outVal.match(/\/d\/(.*?)(\/|$)/);
-            outputSheetId = m ? m[1] : outVal;
-          }
-          
-          // Extract teaching plan link ID
-          var tpVal = (tpCol !== -1 && tpCol < row.length) ? String(row[tpCol] || '').trim() : '';
-          if (tpVal) {
-            var m = tpVal.match(/\/d\/(.*?)(\/|$)/);
-            teachingPlanId = m ? m[1] : tpVal;
-          }
-          break;
-        }
-      }
-    }
-  } catch(err) {
-    Logger.log("Error looking up from master config sheet: " + err.message);
-  }
-
-  // 2. Fallback to parsing the individual subjects sheet tab if not resolved above
-  if (!teachingPlanId || !outputSheetId) {
+  // 1. Try to resolve links directly from the active Attendance App Input Sheet's "subjects" tab
+  if (sheetId) {
     try {
       var ss = _getSpreadsheet(sheetId);
       var ws = ss.getSheetByName('subjects');
@@ -558,7 +509,7 @@ function getTargetSheetIds(code, sheetId) {
         var outColIdx = -1;
         var codeColIdx = 0;
 
-        var headers = data[0];
+        var headers = data[0] || [];
         for (var c = 0; c < headers.length; c++) {
           var val = String(headers[c]).toLowerCase().trim();
           if (val.indexOf('teaching plan') !== -1 || val.indexOf('syllabus') !== -1) tpColIdx = c;
@@ -587,7 +538,56 @@ function getTargetSheetIds(code, sheetId) {
     }
   }
 
-  // Final default fallbacks
+  // 2. Fallback to Master Config Sheet if links were not found in active sheet
+  if (!teachingPlanId || !outputSheetId) {
+    try {
+      var MASTER_CONFIG_SHEET_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
+      var masterSs = SpreadsheetApp.openById(MASTER_CONFIG_SHEET_ID);
+      var masterWs = masterSs.getSheetByName("smart attendance client sheet") || masterSs.getSheets()[0];
+      if (masterWs) {
+        var data = masterWs.getDataRange().getValues();
+        var headers = data[2] || data[0]; 
+        var inputCol = -1, outputCol = -1, tpCol = -1;
+        
+        for (var c = 0; c < headers.length; c++) {
+          var h = String(headers[c]).toLowerCase().trim();
+          if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1) inputCol = c;
+          if (h.indexOf('output link') !== -1 || h.indexOf('output sheet') !== -1 || h.indexOf('output excel') !== -1) outputCol = c;
+          if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) tpCol = c;
+        }
+        
+        if (inputCol === -1) inputCol = 4;
+        if (outputCol === -1) outputCol = 5;
+        if (tpCol === -1) tpCol = 6;
+        
+        for (var r = 3; r < data.length; r++) {
+          var row = data[r];
+          var rowInputId = String(row[inputCol] || '').trim();
+          if (rowInputId === sheetId || (sheetId && rowInputId.indexOf(sheetId) !== -1) || (rowInputId && sheetId.indexOf(rowInputId) !== -1)) {
+            if (!outputSheetId) {
+              var outVal = (outputCol !== -1 && outputCol < row.length) ? String(row[outputCol] || '').trim() : '';
+              if (outVal) {
+                var m = outVal.match(/\/d\/(.*?)(\/|$)/);
+                outputSheetId = m ? m[1] : outVal;
+              }
+            }
+            if (!teachingPlanId) {
+              var tpVal = (tpCol !== -1 && tpCol < row.length) ? String(row[tpCol] || '').trim() : '';
+              if (tpVal) {
+                var m = tpVal.match(/\/d\/(.*?)(\/|$)/);
+                teachingPlanId = m ? m[1] : tpVal;
+              }
+            }
+            break;
+          }
+        }
+      }
+    } catch(err) {
+      Logger.log("Error looking up from master config sheet: " + err.message);
+    }
+  }
+
+  // 3. Final default fallbacks
   if (!teachingPlanId) teachingPlanId = sheetId;
   if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
 
