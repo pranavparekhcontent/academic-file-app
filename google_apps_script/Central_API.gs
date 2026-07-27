@@ -1565,25 +1565,35 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // Scan ONLY subfolders named "Academic Calendars & Timetable" (case-insensitive / spelling tolerant) inside parentFolder
+    // 1. Scan subfolders inside parentFolder matching Academic / Calendar / Timetable / Schedule, and loose files
     if (parentFolder) {
       try {
         var subfolders = parentFolder.getFolders();
-        var foundTargetFolder = false;
         while (subfolders.hasNext()) {
           var sub = subfolders.next();
           var subName = sub.getName().toLowerCase();
           if (subName.indexOf('academic') > -1 || subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('schedule') > -1) {
             collectFilesFromFolder(sub);
-            foundTargetFolder = true;
           }
         }
-        // Fallback: If no subfolder matching the name was found, collect from parentFolder directly
-        if (!foundTargetFolder) {
-          collectFilesFromFolder(parentFolder);
-        }
+        collectFilesFromFolder(parentFolder);
       } catch(e) {}
     }
+
+    // 2. Global search for folders named "Academic Calendars & Timetable" or "Academic Calenders & Timetable"
+    try {
+      var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
+      while (globalFolders.hasNext()) {
+        collectFilesFromFolder(globalFolders.next());
+      }
+    } catch(e) {}
+
+    try {
+      var globalFolders2 = DriveApp.getFoldersByName("Academic Calenders & Timetable");
+      while (globalFolders2.hasNext()) {
+        collectFilesFromFolder(globalFolders2.next());
+      }
+    } catch(e) {}
 
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
