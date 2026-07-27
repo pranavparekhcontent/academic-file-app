@@ -1565,49 +1565,10 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // 1. Scan subfolders inside parentFolder
+    // Scan parentFolder (the Drive folder of the active Attendance App Input Sheet) and its subfolders
     if (parentFolder) {
-      try {
-        var subfolders = parentFolder.getFolders();
-        while (subfolders.hasNext()) {
-          var sub = subfolders.next();
-          collectFilesFromFolder(sub);
-        }
-      } catch(e) {}
+      collectFilesFromFolder(parentFolder);
     }
-
-    // 2. Scan parentFolder loose files
-    if (parentFolder) {
-      try {
-        var parentFileIterator = parentFolder.getFiles();
-        while (parentFileIterator.hasNext()) {
-          var pf = parentFileIterator.next();
-          if (!seenIds[pf.getId()]) {
-            seenIds[pf.getId()] = true;
-            var tLink = '';
-            try { tLink = pf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400' : ''; } catch(e) { tLink = 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400'; }
-            var pUpdated = '';
-            try { pUpdated = pf.getLastUpdated().toISOString(); } catch(e) {}
-            allFiles.push({
-              id: pf.getId(),
-              name: pf.getName(),
-              mimeType: pf.getMimeType(),
-              webViewLink: pf.getUrl(),
-              thumbnailLink: tLink,
-              lastUpdated: pUpdated
-            });
-          }
-        }
-      } catch(e) {}
-    }
-
-    // 3. Search globally across ALL of Drive for folders named "Academic Calendars & Timetable"
-    try {
-      var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
-      while (globalFolders.hasNext()) {
-        collectFilesFromFolder(globalFolders.next());
-      }
-    } catch(e) {}
 
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
