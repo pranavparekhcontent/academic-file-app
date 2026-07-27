@@ -516,9 +516,9 @@ function _getCollegeSheetIds(sheetId) {
       
       for (var c = 0; c < headers.length; c++) {
         var h = String(headers[c]).toLowerCase().trim();
-        if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1) inputCol = c;
+        if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1 || h.indexOf('sheet id') !== -1 || h.indexOf('master sheet') !== -1 || h.indexOf('input sheet') !== -1) inputCol = c;
         if (h.indexOf('output link') !== -1 || h.indexOf('output sheet') !== -1 || h.indexOf('output excel') !== -1) outputCol = c;
-        if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) tpCol = c;
+        if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1 || h.indexOf('tp link') !== -1) tpCol = c;
       }
       
       if (inputCol === -1) inputCol = 4;
@@ -1567,15 +1567,23 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
 
     try {
       // 🔧 Use the college's spreadsheet (targetSpreadsheetId) to locate its Drive parent folder
-      var files = DriveApp.getFileById(targetSpreadsheetId).getParents();
-      if (files.hasNext()) {
-        parentFolder = files.next();
-        scannedFolderName = parentFolder.getName();
-        scannedFolderId = parentFolder.getId();
+      var targetFile = DriveApp.getFileById(targetSpreadsheetId);
+      if (targetFile) {
         try {
-          var owner = parentFolder.getOwner();
-          if (owner) folderOwnerEmail = owner.getEmail();
+          var fileOwner = targetFile.getOwner();
+          if (fileOwner) folderOwnerEmail = fileOwner.getEmail();
         } catch(e) {}
+        
+        var files = targetFile.getParents();
+        if (files.hasNext()) {
+          parentFolder = files.next();
+          scannedFolderName = parentFolder.getName();
+          scannedFolderId = parentFolder.getId();
+          try {
+            var folderOwner = parentFolder.getOwner();
+            if (folderOwner && !folderOwnerEmail) folderOwnerEmail = folderOwner.getEmail();
+          } catch(e) {}
+        }
       }
     } catch(e) {}
 
