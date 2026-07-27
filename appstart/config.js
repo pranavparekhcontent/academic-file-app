@@ -39,12 +39,15 @@ const APP_CONFIG = {
     "https://docs.google.com/spreadsheets/d/1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk/gviz/tq?tqx=out:json",
 
   dataFetcher: async (serverUrl, sheetId = "") => {
-    // Sanitize: Remove trailing slashes and any query parameters
-    const cleanUrl = serverUrl.replace(/\/+$/, "").replace(/\?.*$/, "");
+    const cleanUrl = (serverUrl || "").replace(/\/+$/, "").replace(/\?.*$/, "");
+    let sId = sheetId;
+    if (!sId && window.ACAD_CONFIG && window.ACAD_CONFIG.SHEET_ID) {
+      sId = window.ACAD_CONFIG.SHEET_ID;
+    }
     
     let targetUrl = cleanUrl + '?action=getAllData';
-    if (sheetId) {
-      targetUrl += '&sheetId=' + encodeURIComponent(sheetId);
+    if (sId) {
+      targetUrl += '&sheetId=' + encodeURIComponent(sId);
     }
     
     console.log("AppStart fetching Academic File initial data from:", targetUrl);
@@ -54,6 +57,14 @@ const APP_CONFIG = {
         .then(r => {
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return r.json();
+        })
+        .then(data => {
+          if (data && (data.success || data.teachers)) {
+            try {
+              localStorage.setItem('acad_cache_allData', JSON.stringify({ ts: Date.now(), data }));
+            } catch (e) {}
+          }
+          return data;
         })
         .catch(err => {
           console.error("AppStart Data Fetcher Error:", err);

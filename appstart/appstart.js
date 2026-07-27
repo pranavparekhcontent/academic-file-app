@@ -789,8 +789,9 @@ const AppStart = (() => {
   const _startDataFetch = async () => {
     if (!APP_CONFIG.dataFetcher) return;
 
-    // 1. Execute the fetcher (might be async or return a map of promises)
-    const promisesOrMap = await APP_CONFIG.dataFetcher(_serverUrl);
+    const sheetId = (_sheetConfig && _sheetConfig["sheet_id"]) || "";
+    // 1. Execute the fetcher with serverUrl and sheetId
+    const promisesOrMap = await APP_CONFIG.dataFetcher(_serverUrl, sheetId);
 
     if (!promisesOrMap) return;
 
