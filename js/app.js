@@ -1225,11 +1225,12 @@ const App = (() => {
         updateScheduleBadge(hasUpdates ? 'update' : (files.length ? 'synced' : 'empty'));
 
         if (files.length === 0) {
+          const folderInfo = res.scannedFolderName ? `<br><small style="opacity: 0.7;">(Drive folder scanned: <strong>${escHtml(res.scannedFolderName)}</strong>)</small>` : '';
           grid.innerHTML = `
             <div class="schedule-empty">
               <i class="ph ph-cloud-arrow-up" style="font-size: 48px; color: var(--accent-blue); opacity: 0.5;"></i>
               <h4>No Files Found</h4>
-              <p>Upload PDFs, images, or documents to your<br><strong>"Academic Calendars & Timetable"</strong> Google Drive folder.</p>
+              <p>Upload PDFs, images, or documents to your<br><strong>"Academic Calendars & Timetable"</strong> Google Drive folder.${folderInfo}</p>
             </div>
           `;
           return;

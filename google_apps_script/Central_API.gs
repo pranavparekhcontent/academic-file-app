@@ -1520,13 +1520,23 @@ function getAcademicSchedule(sheetId) {
       return { success: false, error: "Spreadsheet ID missing." };
     }
     var parentFolder = null;
+    var scannedFolderName = "";
+    var scannedFolderId = "";
     try {
       var files = DriveApp.getFileById(realId).getParents();
-      if (files.hasNext()) parentFolder = files.next();
+      if (files.hasNext()) {
+        parentFolder = files.next();
+        scannedFolderName = parentFolder.getName();
+        scannedFolderId = parentFolder.getId();
+      }
     } catch(e) {}
 
     if (!parentFolder) {
-      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
+      try { 
+        parentFolder = DriveApp.getRootFolder();
+        scannedFolderName = "My Drive (Root)";
+        scannedFolderId = parentFolder.getId();
+      } catch(e) {}
     }
 
     var allFiles = [];
@@ -1560,21 +1570,43 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // 1. Search parentFolder subfolders for any matching folder
+    // 1. Scan subfolders inside parentFolder
     if (parentFolder) {
       try {
         var subfolders = parentFolder.getFolders();
         while (subfolders.hasNext()) {
           var sub = subfolders.next();
-          var subName = sub.getName().toLowerCase();
-          if (subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('time table') > -1 || subName.indexOf('schedule') > -1 || subName.indexOf('academic') > -1) {
-            collectFilesFromFolder(sub);
+          collectFilesFromFolder(sub);
+        }
+      } catch(e) {}
+    }
+
+    // 2. Scan parentFolder loose files
+    if (parentFolder) {
+      try {
+        var parentFileIterator = parentFolder.getFiles();
+        while (parentFileIterator.hasNext()) {
+          var pf = parentFileIterator.next();
+          if (!seenIds[pf.getId()]) {
+            seenIds[pf.getId()] = true;
+            var tLink = '';
+            try { tLink = pf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400' : ''; } catch(e) { tLink = 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400'; }
+            var pUpdated = '';
+            try { pUpdated = pf.getLastUpdated().toISOString(); } catch(e) {}
+            allFiles.push({
+              id: pf.getId(),
+              name: pf.getName(),
+              mimeType: pf.getMimeType(),
+              webViewLink: pf.getUrl(),
+              thumbnailLink: tLink,
+              lastUpdated: pUpdated
+            });
           }
         }
       } catch(e) {}
     }
 
-    // 2. Search globally across ALL of Drive for folders named "Academic Calendars & Timetable"
+    // 3. Search globally across ALL of Drive for folders named "Academic Calendars & Timetable"
     try {
       var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
       while (globalFolders.hasNext()) {
@@ -1582,47 +1614,13 @@ function getAcademicSchedule(sheetId) {
       }
     } catch(e) {}
 
-    // 3. Search globally for any folder containing Academic / Timetable / Calendar keywords
-    try {
-      var globalMatches = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender'");
-      while (globalMatches.hasNext()) {
-        collectFilesFromFolder(globalMatches.next());
-      }
-    } catch(e) {}
-
-    // 4. Check parentFolder itself for any loose calendar/timetable files
-    if (parentFolder) {
-      try {
-        var parentFileIterator = parentFolder.getFiles();
-        while (parentFileIterator.hasNext()) {
-          var pf = parentFileIterator.next();
-          var pName = pf.getName().toLowerCase();
-          if (pName.indexOf('calendar') > -1 || pName.indexOf('calender') > -1 || pName.indexOf('timetable') > -1 || pName.indexOf('time table') > -1 || pName.indexOf('schedule') > -1 || pName.indexOf('academic') > -1) {
-            if (!seenIds[pf.getId()]) {
-              seenIds[pf.getId()] = true;
-              var tLink = '';
-              try { tLink = pf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400' : ''; } catch(e) { tLink = 'https://drive.google.com/thumbnail?id=' + pf.getId() + '&sz=w400'; }
-              var pUpdated = '';
-              try { pUpdated = pf.getLastUpdated().toISOString(); } catch(e) {}
-              allFiles.push({
-                id: pf.getId(),
-                name: pf.getName(),
-                mimeType: pf.getMimeType(),
-                webViewLink: pf.getUrl(),
-                thumbnailLink: tLink,
-                lastUpdated: pUpdated
-              });
-            }
-          }
-        }
-      } catch(e) {}
-    }
-
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
 
     return {
       success: true,
+      scannedFolderName: scannedFolderName,
+      scannedFolderId: scannedFolderId,
       files: allFiles,
       timetable: allFiles.find(function(f) { var n = f.name.toLowerCase(); return n.indexOf('timetable') > -1 || n.indexOf('time table') > -1 || n.indexOf('schedule') > -1; }) || null,
       calendar: allFiles.find(function(f) { var n = f.name.toLowerCase(); return n.indexOf('calendar') > -1 || n.indexOf('calender') > -1 || n.indexOf('event') > -1; }) || null
