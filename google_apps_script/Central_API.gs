@@ -1508,6 +1508,12 @@ function addCustomSyllabusTopic(data, sheetId) {
  * If found, scans for files with 'timetable' or 'calendar' in their names,
  * returning their preview URLs.
  */
+function _isAcademicScheduleFolderOrFile(name) {
+  if (!name) return false;
+  var n = String(name).toLowerCase().trim();
+  return /(academic|calen[da]rs?|time\s*tables?|schedules?|routines?|syllab(us|i)|events?)/i.test(n);
+}
+
 function getAcademicSchedule(sheetId) {
   try {
     var realId = extractSpreadsheetId(sheetId) || sheetId;
@@ -1571,8 +1577,7 @@ function getAcademicSchedule(sheetId) {
         var subfolders = parentFolder.getFolders();
         while (subfolders.hasNext()) {
           var sub = subfolders.next();
-          var subName = sub.getName().toLowerCase();
-          if (subName.indexOf('academic') > -1 || subName.indexOf('calendar') > -1 || subName.indexOf('calender') > -1 || subName.indexOf('timetable') > -1 || subName.indexOf('schedule') > -1) {
+          if (_isAcademicScheduleFolderOrFile(sub.getName())) {
             collectFilesFromFolder(sub);
           }
         }
@@ -1580,18 +1585,14 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // 2. Global search for folders named "Academic Calendars & Timetable" or "Academic Calenders & Timetable"
+    // 2. Smart global search across Drive for folders matching keywords
     try {
-      var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
-      while (globalFolders.hasNext()) {
-        collectFilesFromFolder(globalFolders.next());
-      }
-    } catch(e) {}
-
-    try {
-      var globalFolders2 = DriveApp.getFoldersByName("Academic Calenders & Timetable");
-      while (globalFolders2.hasNext()) {
-        collectFilesFromFolder(globalFolders2.next());
+      var globalMatches = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender' or name contains 'Schedule'");
+      while (globalMatches.hasNext()) {
+        var gf = globalMatches.next();
+        if (_isAcademicScheduleFolderOrFile(gf.getName())) {
+          collectFilesFromFolder(gf);
+        }
       }
     } catch(e) {}
 
@@ -1603,8 +1604,8 @@ function getAcademicSchedule(sheetId) {
       scannedFolderName: scannedFolderName,
       scannedFolderId: scannedFolderId,
       files: allFiles,
-      timetable: allFiles.find(function(f) { var n = f.name.toLowerCase(); return n.indexOf('timetable') > -1 || n.indexOf('time table') > -1 || n.indexOf('schedule') > -1; }) || null,
-      calendar: allFiles.find(function(f) { var n = f.name.toLowerCase(); return n.indexOf('calendar') > -1 || n.indexOf('calender') > -1 || n.indexOf('event') > -1; }) || null
+      timetable: allFiles.find(function(f) { return /(timetable|time\s*table|schedule)s?/i.test(f.name); }) || null,
+      calendar: allFiles.find(function(f) { return /(calen[da]r|event|academic)s?/i.test(f.name); }) || null
     };
   } catch (err) {
     return { success: false, error: err.message };
