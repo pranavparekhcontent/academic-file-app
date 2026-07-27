@@ -3,7 +3,7 @@
  * Cache-first for app shell, network-first for API
  */
 
-const CACHE_NAME = 'acad-file-v12';
+const CACHE_NAME = 'acad-file-v13';
 const APP_SHELL = [
   './',
   './index.html',
@@ -44,6 +44,22 @@ self.addEventListener('activate', event => {
 // Fetch strategy
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  // version.json → always network-first (never serve stale version info)
+  if (url.pathname.endsWith('version.json')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then(c => c || new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' } })))
+    );
+    return;
+  }
 
   // API calls (Google Apps Script) → network-first
   if (url.hostname.includes('script.google.com') || url.hostname.includes('googleapis.com')) {
