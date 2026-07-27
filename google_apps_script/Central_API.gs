@@ -1530,38 +1530,71 @@ function _isAcademicScheduleFolderOrFile(name) {
   return /(academic|calen[da]rs?|time\s*tables?|schedules?|routines?|syllab(us|i)|events?)/i.test(n);
 }
 
+function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
+  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
+  
+  // 1. Direct teachingPlanLink parameter from frontend
+  if (teachingPlanLink) {
+    var id = extractSpreadsheetId(teachingPlanLink);
+    if (id && id !== MASTER_CONFIG_ID) return id;
+  }
+
+  var cleanSheetId = extractSpreadsheetId(sheetId) || sheetId;
+
+  // 2. Scan Master Config sheet row for this college
+  try {
+    var globalTpLink = getGlobalTeachingPlanLink(cleanSheetId);
+    if (globalTpLink) {
+      var gId = extractSpreadsheetId(globalTpLink);
+      if (gId && gId !== MASTER_CONFIG_ID) return gId;
+    }
+  } catch(e) {}
+
+  // 3. Scan the college's OWN input spreadsheet ('subjects' tab) for Teaching Plan links
+  if (cleanSheetId && cleanSheetId !== MASTER_CONFIG_ID) {
+    try {
+      var ss = _getSpreadsheet(cleanSheetId);
+      if (ss) {
+        var ws = ss.getSheetByName('subjects');
+        if (ws) {
+          var data = ws.getDataRange().getValues();
+          var headers = (data[0] || []).map(function(h) { return String(h).toLowerCase().trim(); });
+          var tpCol = -1;
+          for (var c = 0; c < headers.length; c++) {
+            if (headers[c].indexOf('teaching plan') !== -1 || headers[c].indexOf('syllabus') !== -1 || headers[c].indexOf('tp link') !== -1) {
+              tpCol = c;
+              break;
+            }
+          }
+          if (tpCol !== -1) {
+            for (var r = 1; r < data.length; r++) {
+              var val = String(data[r][tpCol] || '').trim();
+              if (val) {
+                var foundId = extractSpreadsheetId(val);
+                if (foundId && foundId !== MASTER_CONFIG_ID) return foundId;
+              }
+            }
+          }
+        }
+      }
+    } catch(e) {
+      Logger.log("_resolveCollegeTeachingPlanId college subjects scan error: " + e.message);
+    }
+  }
+
+  // 4. Fallback: if cleanSheetId itself is the college's spreadsheet (and NOT master config ID)
+  if (cleanSheetId && cleanSheetId !== MASTER_CONFIG_ID) {
+    return cleanSheetId;
+  }
+
+  return '';
+}
+
 function getAcademicSchedule(sheetId, teachingPlanLink) {
   try {
-    var realId = extractSpreadsheetId(sheetId) || sheetId;
-    if (!realId) {
-      return { success: false, error: "Spreadsheet ID missing." };
-    }
-
-    var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
-    var targetSpreadsheetId = '';
-    
-    // 1. Direct parameter from frontend
-    if (teachingPlanLink) {
-      targetSpreadsheetId = extractSpreadsheetId(teachingPlanLink) || teachingPlanLink;
-    }
-    
-    // 2. Lookup via getTargetSheetIds (checks master config row + college's subjects tab)
+    var targetSpreadsheetId = _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink);
     if (!targetSpreadsheetId) {
-      var targetIds = getTargetSheetIds('', sheetId);
-      targetSpreadsheetId = targetIds.teachingPlanId || targetIds.outputSheetId || '';
-    }
-
-    // 3. Fallback to realId ONLY if realId is NOT the master config sheet ID
-    if (!targetSpreadsheetId || targetSpreadsheetId === MASTER_CONFIG_ID) {
-      if (realId && realId !== MASTER_CONFIG_ID) {
-        targetSpreadsheetId = realId;
-      } else {
-        targetSpreadsheetId = '';
-      }
-    }
-
-    if (!targetSpreadsheetId) {
-      return { success: false, error: "College Teaching Plan Spreadsheet ID not found." };
+      return { success: false, error: "College Teaching Plan spreadsheet link not configured." };
     }
 
     var effectiveEmail = "";
@@ -1575,7 +1608,6 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     var folderOwnerEmail = "";
 
     try {
-      // 🔧 Use the college's spreadsheet (targetSpreadsheetId) to locate its Drive parent folder
       var targetFile = DriveApp.getFileById(targetSpreadsheetId);
       if (targetFile) {
         try {
@@ -1594,18 +1626,12 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
           } catch(e) {}
         }
       }
-    } catch(e) {}
+    } catch(e) {
+      return { success: false, error: "Unable to access Drive file for Teaching Plan (ID: " + targetSpreadsheetId + "): " + e.message };
+    }
 
     if (!parentFolder) {
-      try {
-        parentFolder = DriveApp.getRootFolder();
-        scannedFolderName = "My Drive (Root)";
-        scannedFolderId = parentFolder.getId();
-        try {
-          var owner = parentFolder.getOwner();
-          if (owner) folderOwnerEmail = owner.getEmail();
-        } catch(e) {}
-      } catch(e) {}
+      return { success: false, error: "Parent Google Drive folder for Teaching Plan spreadsheet could not be located." };
     }
 
     var allFiles = [];
