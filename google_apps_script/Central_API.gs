@@ -1530,6 +1530,8 @@ function getAcademicSchedule(sheetId) {
     }
 
     var scheduleFolder = null;
+
+    // 1. Check parent folder for subfolders matching keywords or exact name
     if (parentFolder) {
       var subfolders = parentFolder.getFolders();
       while (subfolders.hasNext()) {
@@ -1540,23 +1542,33 @@ function getAcademicSchedule(sheetId) {
           break;
         }
       }
-      if (!scheduleFolder) {
-        var exactSubs = parentFolder.getFoldersByName("Academic Calendars & Timetable");
-        if (exactSubs.hasNext()) {
-          scheduleFolder = exactSubs.next();
-        } else {
-          try {
-            scheduleFolder = parentFolder.createFolder("Academic Calendars & Timetable");
-          } catch(e) {}
-        }
-      }
     }
 
+    // 2. Global search for exact folder name "Academic Calendars & Timetable"
     if (!scheduleFolder) {
       try {
         var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
         if (globalFolders.hasNext()) {
           scheduleFolder = globalFolders.next();
+        }
+      } catch(e) {}
+    }
+
+    // 3. Global search for any folder containing Academic / Timetable / Calendar keywords
+    if (!scheduleFolder) {
+      try {
+        var allMatching = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender'");
+        if (allMatching.hasNext()) {
+          scheduleFolder = allMatching.next();
+        }
+      } catch(e) {}
+    }
+
+    // 4. Only if NO existing folder is found anywhere, create a new one
+    if (!scheduleFolder) {
+      try {
+        if (parentFolder) {
+          scheduleFolder = parentFolder.createFolder("Academic Calendars & Timetable");
         } else {
           scheduleFolder = DriveApp.getRootFolder().createFolder("Academic Calendars & Timetable");
         }
