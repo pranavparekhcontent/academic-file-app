@@ -763,6 +763,7 @@ const AppStart = (() => {
         collegeLogo:    _sheetConfig["college_logo"]     || "",
         contactNo:      _sheetConfig["contact_no"]       || "",
         outputSheetId:  _sheetConfig["output_sheet_id"] || "",
+        teachingPlanLink: _sheetConfig["teaching_plan_link"] || "",
         config:         _sheetConfig,
         fetchedData,
       };

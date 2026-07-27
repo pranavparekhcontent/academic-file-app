@@ -180,9 +180,12 @@ const API = (() => {
 
   async function getAcademicSchedule() {
     const cacheKey = 'academic_schedule';
+    // Resolve teaching plan link from appStartContext (set at login from master config)
+    const ctx = window.appStartContext || {};
+    const tpLink = ctx.teachingPlanLink || (ctx.config && ctx.config.teaching_plan_link) || '';
     if (navigator.onLine) {
       try {
-        const data = await _get('getAcademicSchedule');
+        const data = await _get('getAcademicSchedule', { teachingPlanLink: tpLink });
         if (data.success) {
           _setCache(cacheKey, data);
           return data;

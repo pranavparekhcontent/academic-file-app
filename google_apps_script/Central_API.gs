@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.1)
+ *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.2)
  *  Supports both Smart Attendance PWA and Academic File PWA.
  *  Proxies access to college sheets via the sheetId parameter.
  * ═══════════════════════════════════════════════════════════════
@@ -59,7 +59,7 @@ function doGet(e) {
         result = syncTeachingPlan(e.parameter.code, e.parameter.teacher, sheetId);
         break;
       case 'getAcademicSchedule':
-        result = getAcademicSchedule(sheetId);
+        result = getAcademicSchedule(sheetId, e.parameter.teachingPlanLink);
         break;
 
       default: 
@@ -1530,20 +1530,29 @@ function _isAcademicScheduleFolderOrFile(name) {
   return /(academic|calen[da]rs?|time\s*tables?|schedules?|routines?|syllab(us|i)|events?)/i.test(n);
 }
 
-function getAcademicSchedule(sheetId) {
+function getAcademicSchedule(sheetId, teachingPlanLink) {
   try {
     var realId = extractSpreadsheetId(sheetId) || sheetId;
     if (!realId) {
       return { success: false, error: "Spreadsheet ID missing." };
     }
 
-    // ── 🔧 FIX: Resolve college-specific spreadsheet first ──────────────────
-    // Previously used realId (the master config sheet) directly, which meant
-    // the parent folder scanned was always the master config's Drive folder.
-    // Now we look up the college's output/teaching-plan sheet from the master
-    // config row and use THAT spreadsheet to locate the college's Drive folder.
-    var collegeIds = _getCollegeSheetIds(sheetId);
-    var targetSpreadsheetId = collegeIds.teachingPlanId || collegeIds.outputSheetId || realId;
+    // ── v3.2 FIX: Use the teachingPlanLink passed from frontend first ────────
+    // The frontend already has the teaching plan link from the master config row
+    // (read at login). We extract the spreadsheet ID from it and use THAT to
+    // locate the college's Drive folder. Falls back to _getCollegeSheetIds() and
+    // then to realId if nothing is provided.
+    var targetSpreadsheetId = '';
+    if (teachingPlanLink) {
+      targetSpreadsheetId = extractSpreadsheetId(teachingPlanLink) || teachingPlanLink;
+    }
+    if (!targetSpreadsheetId) {
+      var collegeIds = _getCollegeSheetIds(sheetId);
+      targetSpreadsheetId = collegeIds.teachingPlanId || collegeIds.outputSheetId || '';
+    }
+    if (!targetSpreadsheetId) {
+      targetSpreadsheetId = realId;
+    }
     // ─────────────────────────────────────────────────────────────────────────
 
     var effectiveEmail = "";
