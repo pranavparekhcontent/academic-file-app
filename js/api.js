@@ -178,11 +178,27 @@ const API = (() => {
   }
 
 
-  async function getAcademicSchedule() {
+  async function getAcademicSchedule(explicitTpLink) {
     const cacheKey = 'academic_schedule';
-    // Resolve teaching plan link from appStartContext (set at login from master config)
-    const ctx = window.appStartContext || {};
-    const tpLink = ctx.teachingPlanLink || (ctx.config && ctx.config.teaching_plan_link) || '';
+    
+    // Comprehensive resolution of college Teaching Plan Link
+    let tpLink = explicitTpLink || '';
+    if (!tpLink && typeof App !== 'undefined' && App.state) {
+      if (App.state.activeSubject && App.state.activeSubject.teachingPlanLink) {
+        tpLink = App.state.activeSubject.teachingPlanLink;
+      } else if (App.state.subjects && App.state.subjects.length) {
+        const found = App.state.subjects.find(s => s && s.teachingPlanLink);
+        if (found) tpLink = found.teachingPlanLink;
+      } else if (App.state.allData && App.state.allData.subjects && App.state.allData.subjects.length) {
+        const found = App.state.allData.subjects.find(s => s && s.teachingPlanLink);
+        if (found) tpLink = found.teachingPlanLink;
+      }
+    }
+    if (!tpLink) {
+      const ctx = window.appStartContext || {};
+      tpLink = ctx.teachingPlanLink || (ctx.config && (ctx.config.teaching_plan_link || ctx.config.teachingPlanLink)) || '';
+    }
+
     if (navigator.onLine) {
       try {
         const data = await _get('getAcademicSchedule', { teachingPlanLink: tpLink });

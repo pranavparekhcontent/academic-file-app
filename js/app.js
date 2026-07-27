@@ -1221,10 +1221,10 @@ const App = (() => {
         const calStatus = document.getElementById('card-cal-status');
         if (calStatus) calStatus.innerText = files.length ? 'Auto-refreshed' : 'No files';
 
-        const driveEmail = res.folderOwnerEmail || res.effectiveEmail || res.activeEmail || '';
+        const driveEmail = res.folderOwnerEmail || '';
         const cardDriveEmailEl = document.getElementById('card-cal-drive-email');
         if (cardDriveEmailEl) {
-          cardDriveEmailEl.innerText = driveEmail ? `Drive: ${driveEmail}` : 'Drive: Connected';
+          cardDriveEmailEl.innerText = driveEmail ? `Drive: ${driveEmail}` : 'Drive: Connected (College Folder)';
         }
 
         // Show blinking "NEW UPDATE" badge on dashboard card if changes found

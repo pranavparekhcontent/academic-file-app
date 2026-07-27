@@ -1537,23 +1537,32 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
       return { success: false, error: "Spreadsheet ID missing." };
     }
 
-    // ── v3.2 FIX: Use the teachingPlanLink passed from frontend first ────────
-    // The frontend already has the teaching plan link from the master config row
-    // (read at login). We extract the spreadsheet ID from it and use THAT to
-    // locate the college's Drive folder. Falls back to _getCollegeSheetIds() and
-    // then to realId if nothing is provided.
+    var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
     var targetSpreadsheetId = '';
+    
+    // 1. Direct parameter from frontend
     if (teachingPlanLink) {
       targetSpreadsheetId = extractSpreadsheetId(teachingPlanLink) || teachingPlanLink;
     }
+    
+    // 2. Lookup via getTargetSheetIds (checks master config row + college's subjects tab)
     if (!targetSpreadsheetId) {
-      var collegeIds = _getCollegeSheetIds(sheetId);
-      targetSpreadsheetId = collegeIds.teachingPlanId || collegeIds.outputSheetId || '';
+      var targetIds = getTargetSheetIds('', sheetId);
+      targetSpreadsheetId = targetIds.teachingPlanId || targetIds.outputSheetId || '';
     }
+
+    // 3. Fallback to realId ONLY if realId is NOT the master config sheet ID
+    if (!targetSpreadsheetId || targetSpreadsheetId === MASTER_CONFIG_ID) {
+      if (realId && realId !== MASTER_CONFIG_ID) {
+        targetSpreadsheetId = realId;
+      } else {
+        targetSpreadsheetId = '';
+      }
+    }
+
     if (!targetSpreadsheetId) {
-      targetSpreadsheetId = realId;
+      return { success: false, error: "College Teaching Plan Spreadsheet ID not found." };
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     var effectiveEmail = "";
     try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
