@@ -1523,10 +1523,12 @@ function getAcademicSchedule(sheetId) {
     try {
       var files = DriveApp.getFileById(realId).getParents();
       if (files.hasNext()) parentFolder = files.next();
-    } catch(e) {
-      return { success: false, error: "Cannot access spreadsheet or parent folder: " + e.message };
+    } catch(e) {}
+
+    if (!parentFolder) {
+      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
     }
-    
+
     var scheduleFolder = null;
     if (parentFolder) {
       var subfolders = parentFolder.getFolders();
@@ -1543,11 +1545,24 @@ function getAcademicSchedule(sheetId) {
         if (exactSubs.hasNext()) {
           scheduleFolder = exactSubs.next();
         } else {
-          scheduleFolder = parentFolder.createFolder("Academic Calendars & Timetable");
+          try {
+            scheduleFolder = parentFolder.createFolder("Academic Calendars & Timetable");
+          } catch(e) {}
         }
       }
     }
-    
+
+    if (!scheduleFolder) {
+      try {
+        var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
+        if (globalFolders.hasNext()) {
+          scheduleFolder = globalFolders.next();
+        } else {
+          scheduleFolder = DriveApp.getRootFolder().createFolder("Academic Calendars & Timetable");
+        }
+      } catch(e) {}
+    }
+
     if (!scheduleFolder) {
       return { success: false, error: "Parent Google Drive folder not accessible." };
     }
