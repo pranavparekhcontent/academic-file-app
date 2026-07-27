@@ -1616,6 +1616,41 @@ function getAcademicSchedule(sheetId) {
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
 
+    // 3. Final fallback: search for files directly by name across all accessible Drive locations
+    //    (including "Shared with me", which the folder-based strategies might miss when the
+    //     spreadsheet's parent folder hierarchy isn't accessible to the script's execution identity).
+    try {
+      var fileSearch = DriveApp.searchFiles(
+        "title contains 'timetable' or title contains 'time table' or " +
+        "title contains 'calendar' or title contains 'calender' or " +
+        "title contains 'schedule' or title contains 'academic'"
+      );
+      while (fileSearch.hasNext()) {
+        var sf = fileSearch.next();
+        if (sf.getId() === realId) continue;
+        if (!seenIds[sf.getId()]) {
+          seenIds[sf.getId()] = true;
+          var thumb = '';
+          try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
+          var upd = '';
+          try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
+          allFiles.push({
+            id: sf.getId(),
+            name: sf.getName(),
+            mimeType: sf.getMimeType(),
+            webViewLink: sf.getUrl(),
+            thumbnailLink: thumb,
+            lastUpdated: upd
+          });
+        }
+      }
+    } catch(e) {
+      console.error('getAcademicSchedule searchFiles fallback error: ' + e.message);
+    }
+
+    // Re-sort after adding direct search results
+    allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
+
     return {
       success: true,
       effectiveEmail: effectiveEmail,
