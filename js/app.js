@@ -1224,8 +1224,22 @@ const App = (() => {
         // Show blinking "NEW UPDATE" badge on dashboard card if changes found
         updateScheduleBadge(hasUpdates ? 'update' : (files.length ? 'synced' : 'empty'));
 
+        // Update heading subtitle with Drive account email & scanned folder name
+        const subtitleEl = document.getElementById('schedule-subtitle');
+        if (subtitleEl) {
+          const emailDisplay = res.effectiveEmail || res.activeEmail || '';
+          const folderDisplay = res.scannedFolderName ? ` • Folder: "${escHtml(res.scannedFolderName)}"` : '';
+          const ownerDisplay = res.folderOwnerEmail ? ` (Owner: ${escHtml(res.folderOwnerEmail)})` : '';
+          if (emailDisplay) {
+            subtitleEl.innerHTML = `Fetching from <strong>${escHtml(emailDisplay)}</strong>'s Google Drive${folderDisplay}${ownerDisplay}`;
+          } else {
+            subtitleEl.innerText = `Files synced from your Google Drive folder. Click any file to preview.`;
+          }
+        }
+
         if (files.length === 0) {
-          const folderInfo = res.scannedFolderName ? `<br><small style="opacity: 0.7;">(Drive folder scanned: <strong>${escHtml(res.scannedFolderName)}</strong>)</small>` : '';
+          const emailDisplay = res.effectiveEmail || res.activeEmail || '';
+          const folderInfo = res.scannedFolderName ? `<br><small style="opacity: 0.85; display: inline-block; margin-top: 8px;">Drive Account: <strong>${escHtml(emailDisplay)}</strong> | Folder: <strong>${escHtml(res.scannedFolderName)}</strong>${res.folderOwnerEmail ? ` | Owner: <strong>${escHtml(res.folderOwnerEmail)}</strong>` : ''}</small>` : '';
           grid.innerHTML = `
             <div class="schedule-empty">
               <i class="ph ph-cloud-arrow-up" style="font-size: 48px; color: var(--accent-blue); opacity: 0.5;"></i>

@@ -1520,15 +1520,27 @@ function getAcademicSchedule(sheetId) {
     if (!realId) {
       return { success: false, error: "Spreadsheet ID missing." };
     }
+
+    var effectiveEmail = "";
+    try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
+    var activeEmail = "";
+    try { activeEmail = Session.getActiveUser().getEmail(); } catch(e) {}
+
     var parentFolder = null;
     var scannedFolderName = "";
     var scannedFolderId = "";
+    var folderOwnerEmail = "";
+
     try {
       var files = DriveApp.getFileById(realId).getParents();
       if (files.hasNext()) {
         parentFolder = files.next();
         scannedFolderName = parentFolder.getName();
         scannedFolderId = parentFolder.getId();
+        try {
+          var owner = parentFolder.getOwner();
+          if (owner) folderOwnerEmail = owner.getEmail();
+        } catch(e) {}
       }
     } catch(e) {}
 
@@ -1537,6 +1549,10 @@ function getAcademicSchedule(sheetId) {
         parentFolder = DriveApp.getRootFolder();
         scannedFolderName = "My Drive (Root)";
         scannedFolderId = parentFolder.getId();
+        try {
+          var owner = parentFolder.getOwner();
+          if (owner) folderOwnerEmail = owner.getEmail();
+        } catch(e) {}
       } catch(e) {}
     }
 
@@ -1549,6 +1565,7 @@ function getAcademicSchedule(sheetId) {
         var fileIterator = folder.getFiles();
         while (fileIterator.hasNext()) {
           var file = fileIterator.next();
+          if (file.getId() === realId) continue;
           if (seenIds[file.getId()]) continue;
           seenIds[file.getId()] = true;
           var thumbLink = '';
@@ -1601,6 +1618,9 @@ function getAcademicSchedule(sheetId) {
 
     return {
       success: true,
+      effectiveEmail: effectiveEmail,
+      activeEmail: activeEmail,
+      folderOwnerEmail: folderOwnerEmail,
       scannedFolderName: scannedFolderName,
       scannedFolderId: scannedFolderId,
       files: allFiles,
