@@ -493,19 +493,25 @@ function getOutputSheetId(sheetId) {
   }
   return '';
 }
-
-function getTargetSheetIds(code, sheetId) {
+ 
+/**
+ * Extract college-specific sheet IDs from the master config sheet
+ * by matching the sheetId (input sheet ID/URL) against the configured row.
+ * This is the "code-independent" portion of getTargetSheetIds().
+ * Returns { outputSheetId, teachingPlanId } (both may be empty if not found).
+ */
+function _getCollegeSheetIds(sheetId) {
   var teachingPlanId = '';
   var outputSheetId = '';
-
-  // 1. Try to resolve links directly from the shared Master Config Sheet row
+ 
+  // Try to resolve links directly from the shared Master Config Sheet row
   try {
     var MASTER_CONFIG_SHEET_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
     var masterSs = SpreadsheetApp.openById(MASTER_CONFIG_SHEET_ID);
     var masterWs = masterSs.getSheetByName("smart attendance client sheet") || masterSs.getSheets()[0];
     if (masterWs) {
       var data = masterWs.getDataRange().getValues();
-      var headers = data[2] || data[0]; 
+      var headers = data[2] || data[0];
       var inputCol = -1, outputCol = -1, tpCol = -1;
       
       for (var c = 0; c < headers.length; c++) {
@@ -539,10 +545,20 @@ function getTargetSheetIds(code, sheetId) {
       }
     }
   } catch(err) {
-    Logger.log("Error looking up from master config sheet: " + err.message);
+    Logger.log("_getCollegeSheetIds: Error looking up from master config sheet: " + err.message);
   }
+ 
+  return { outputSheetId: outputSheetId, teachingPlanId: teachingPlanId };
+}
+ 
+function getTargetSheetIds(code, sheetId) {
+  // 1. Resolve college-level sheet IDs from the shared Master Config Sheet row
+  var collegeIds = _getCollegeSheetIds(sheetId);
+  var teachingPlanId = collegeIds.teachingPlanId;
+  var outputSheetId = collegeIds.outputSheetId;
 
-  // 2. Fallback to parsing the individual subjects sheet tab if not resolved above
+  // 2. Fallback to parsing the individual subjects sheet tab for subject-specific overrides
+  //    (only fills in blanks — doesn't override the master config row's values)
   if (!teachingPlanId || !outputSheetId) {
     try {
       var ss = _getSpreadsheet(sheetId);
@@ -1521,6 +1537,15 @@ function getAcademicSchedule(sheetId) {
       return { success: false, error: "Spreadsheet ID missing." };
     }
 
+    // ── 🔧 FIX: Resolve college-specific spreadsheet first ──────────────────
+    // Previously used realId (the master config sheet) directly, which meant
+    // the parent folder scanned was always the master config's Drive folder.
+    // Now we look up the college's output/teaching-plan sheet from the master
+    // config row and use THAT spreadsheet to locate the college's Drive folder.
+    var collegeIds = _getCollegeSheetIds(sheetId);
+    var targetSpreadsheetId = collegeIds.teachingPlanId || collegeIds.outputSheetId || realId;
+    // ─────────────────────────────────────────────────────────────────────────
+
     var effectiveEmail = "";
     try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
     var activeEmail = "";
@@ -1532,7 +1557,8 @@ function getAcademicSchedule(sheetId) {
     var folderOwnerEmail = "";
 
     try {
-      var files = DriveApp.getFileById(realId).getParents();
+      // 🔧 Use the college's spreadsheet (targetSpreadsheetId) to locate its Drive parent folder
+      var files = DriveApp.getFileById(targetSpreadsheetId).getParents();
       if (files.hasNext()) {
         parentFolder = files.next();
         scannedFolderName = parentFolder.getName();
@@ -1545,7 +1571,7 @@ function getAcademicSchedule(sheetId) {
     } catch(e) {}
 
     if (!parentFolder) {
-      try { 
+      try {
         parentFolder = DriveApp.getRootFolder();
         scannedFolderName = "My Drive (Root)";
         scannedFolderId = parentFolder.getId();
@@ -1602,13 +1628,17 @@ function getAcademicSchedule(sheetId) {
       } catch(e) {}
     }
 
-    // 2. Smart global search across Drive for folders matching keywords
+    // 2. 🔧 Scoped search within the college's folder tree for folders matching keywords
+    //    Previously used DriveApp.searchFolders() which searched ALL of Drive.
+    //    Now scoped via parentFolder.searchFolders() to stay within the college's folder.
     try {
-      var globalMatches = DriveApp.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender' or name contains 'Schedule'");
-      while (globalMatches.hasNext()) {
-        var gf = globalMatches.next();
-        if (_isAcademicScheduleFolderOrFile(gf.getName())) {
-          collectFilesFromFolder(gf);
+      if (parentFolder) {
+        var globalMatches = parentFolder.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender' or name contains 'Schedule'");
+        while (globalMatches.hasNext()) {
+          var gf = globalMatches.next();
+          if (_isAcademicScheduleFolderOrFile(gf.getName())) {
+            collectFilesFromFolder(gf);
+          }
         }
       }
     } catch(e) {}
@@ -1616,32 +1646,34 @@ function getAcademicSchedule(sheetId) {
     // Sort by last updated descending (newest first)
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
 
-    // 3. Final fallback: search for files directly by name across all accessible Drive locations
-    //    (including "Shared with me", which the folder-based strategies might miss when the
-    //     spreadsheet's parent folder hierarchy isn't accessible to the script's execution identity).
+    // 3. 🔧 Scoped file search within the college's folder tree
+    //    Previously used DriveApp.searchFiles() which searched ALL of Drive.
+    //    Now scoped via parentFolder.searchFiles() to stay within the college's folder.
     try {
-      var fileSearch = DriveApp.searchFiles(
-        "title contains 'timetable' or title contains 'time table' or " +
-        "title contains 'calendar' or title contains 'calender' or " +
-        "title contains 'schedule' or title contains 'academic'"
-      );
-      while (fileSearch.hasNext()) {
-        var sf = fileSearch.next();
-        if (sf.getId() === realId) continue;
-        if (!seenIds[sf.getId()]) {
-          seenIds[sf.getId()] = true;
-          var thumb = '';
-          try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
-          var upd = '';
-          try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
-          allFiles.push({
-            id: sf.getId(),
-            name: sf.getName(),
-            mimeType: sf.getMimeType(),
-            webViewLink: sf.getUrl(),
-            thumbnailLink: thumb,
-            lastUpdated: upd
-          });
+      if (parentFolder) {
+        var fileSearch = parentFolder.searchFiles(
+          "title contains 'timetable' or title contains 'time table' or " +
+          "title contains 'calendar' or title contains 'calender' or " +
+          "title contains 'schedule' or title contains 'academic'"
+        );
+        while (fileSearch.hasNext()) {
+          var sf = fileSearch.next();
+          if (sf.getId() === targetSpreadsheetId) continue;
+          if (!seenIds[sf.getId()]) {
+            seenIds[sf.getId()] = true;
+            var thumb = '';
+            try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
+            var upd = '';
+            try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
+            allFiles.push({
+              id: sf.getId(),
+              name: sf.getName(),
+              mimeType: sf.getMimeType(),
+              webViewLink: sf.getUrl(),
+              thumbnailLink: thumb,
+              lastUpdated: upd
+            });
+          }
         }
       }
     } catch(e) {

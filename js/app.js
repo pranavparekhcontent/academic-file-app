@@ -1276,6 +1276,18 @@ const App = (() => {
         // Save current fingerprint so next load won't show badges again
         _saveSeenFingerprint(files);
 
+        // Show Drive account info below the grid
+        const driveInfoEl = document.getElementById('schedule-drive-info');
+        if (driveInfoEl) {
+          const driveEmail = res.effectiveEmail || res.activeEmail || res.folderOwnerEmail || '';
+          if (driveEmail) {
+            driveInfoEl.innerHTML = `<i class="ph ph-cloud" style="margin-right: 3px;"></i> Drive associated: <strong>${escHtml(driveEmail)}</strong>`;
+            driveInfoEl.style.display = '';
+          } else {
+            driveInfoEl.style.display = 'none';
+          }
+        }
+
       } else {
         grid.innerHTML = `
           <div class="schedule-empty">
