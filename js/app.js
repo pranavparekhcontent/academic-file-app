@@ -1767,51 +1767,109 @@ const App = (() => {
       return;
     }
 
-    const facultyCardsHtml = faculties.map(f => {
+    const facultyPalettes = [
+      {
+        bg: 'rgba(238, 242, 255, 0.75)',
+        border: 'rgba(99, 102, 241, 0.40)',
+        shadow: 'rgba(99, 102, 241, 0.08)',
+        title: '#1e1b4b',
+        icon: '#4f46e5',
+        subText: '#3730a3',
+        badgeBg: 'rgba(79, 70, 229, 0.12)',
+        badgeColor: '#4338ca',
+        badgeBorder: 'rgba(79, 70, 229, 0.30)',
+        subBorder: 'rgba(199, 210, 254, 0.60)'
+      },
+      {
+        bg: 'rgba(240, 253, 250, 0.75)',
+        border: 'rgba(20, 184, 166, 0.40)',
+        shadow: 'rgba(20, 184, 166, 0.08)',
+        title: '#042f2e',
+        icon: '#0d9488',
+        subText: '#115e59',
+        badgeBg: 'rgba(13, 148, 136, 0.12)',
+        badgeColor: '#0f766e',
+        badgeBorder: 'rgba(13, 148, 136, 0.30)',
+        subBorder: 'rgba(153, 246, 228, 0.60)'
+      },
+      {
+        bg: 'rgba(250, 245, 255, 0.75)',
+        border: 'rgba(168, 85, 247, 0.40)',
+        shadow: 'rgba(168, 85, 247, 0.08)',
+        title: '#3b0764',
+        icon: '#9333ea',
+        subText: '#6b21a8',
+        badgeBg: 'rgba(147, 51, 234, 0.12)',
+        badgeColor: '#7e22ce',
+        badgeBorder: 'rgba(147, 51, 234, 0.30)',
+        subBorder: 'rgba(233, 213, 255, 0.60)'
+      },
+      {
+        bg: 'rgba(255, 241, 242, 0.75)',
+        border: 'rgba(244, 63, 94, 0.40)',
+        shadow: 'rgba(244, 63, 94, 0.08)',
+        title: '#4c0519',
+        icon: '#e11d48',
+        subText: '#9f1239',
+        badgeBg: 'rgba(225, 29, 72, 0.12)',
+        badgeColor: '#be123c',
+        badgeBorder: 'rgba(225, 29, 72, 0.30)',
+        subBorder: 'rgba(254, 205, 211, 0.60)'
+      },
+      {
+        bg: 'rgba(240, 249, 255, 0.75)',
+        border: 'rgba(56, 189, 248, 0.40)',
+        shadow: 'rgba(56, 189, 248, 0.08)',
+        title: '#0c4a6e',
+        icon: '#0284c7',
+        subText: '#075985',
+        badgeBg: 'rgba(2, 132, 199, 0.12)',
+        badgeColor: '#0369a1',
+        badgeBorder: 'rgba(2, 132, 199, 0.30)',
+        subBorder: 'rgba(186, 230, 253, 0.60)'
+      }
+    ];
+
+    const facultyCardsHtml = faculties.map((f, idx) => {
+      const pal = facultyPalettes[idx % facultyPalettes.length];
       const isZero = (f.overallPercent === 0);
 
-      // Tinted Glass Colors based on 0% vs >0% progress
-      const cardBg = isZero ? 'rgba(254, 242, 242, 0.70)' : 'rgba(236, 253, 245, 0.70)';
-      const cardBorder = isZero ? 'rgba(248, 113, 113, 0.45)' : 'rgba(52, 211, 153, 0.45)';
-      const cardShadow = isZero ? 'rgba(220, 38, 38, 0.08)' : 'rgba(16, 185, 129, 0.08)';
-
-      const titleColor = isZero ? '#991b1b' : '#064e3b';
-      const iconColor = isZero ? '#dc2626' : '#059669';
-      const subTextColor = isZero ? '#7f1d1d' : '#064e3b';
-
-      const badgeBg = isZero ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-      const badgeColor = isZero ? '#dc2626' : '#047857';
-      const badgeBorder = isZero ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)';
-
+      // Progress Bar: Red if 0%, Green if >0%
       const barBg = isZero ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
       const barColor = isZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
 
-      const subBorder = isZero ? 'rgba(252, 165, 165, 0.50)' : 'rgba(167, 243, 208, 0.50)';
-      const viewLinkColor = isZero ? '#dc2626' : '#059669';
-
       const subjectRows = (f.subjects || []).map(s => {
-        const pctColor = s.percent === 0 ? '#dc2626' : '#059669';
+        const isSubZero = (s.percent === 0);
+        const pctColor = isSubZero ? '#dc2626' : '#059669';
+        const pctBg = isSubZero ? 'rgba(239, 68, 68, 0.10)' : 'rgba(16, 185, 129, 0.10)';
+        const pctBorder = isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)';
+
         return `
-          <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.65); border: 1.5px solid ${subBorder};" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
-            <div class="incharge-subject-top">
-              <span style="font-weight: 800; color: #0f172a;">${escHtml(s.name)} (${escHtml(s.code)})</span>
-              <span style="color: ${pctColor}; font-weight: 800; font-size: 13px;">${s.percent}% Covered</span>
+          <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.70); border: 1.5px solid ${pal.subBorder}; border-radius: 14px; padding: 12px 14px;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
+            <div class="incharge-subject-top" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div style="font-weight: 800; color: #0f172a; font-size: 13.5px; line-height: 1.35; flex: 1;">
+                ${escHtml(s.name)} <span style="color: #475569; font-weight: 700; font-size: 12px;">(${escHtml(s.code)})</span>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 4px 10px; border-radius: 10px; min-width: 68px; flex-shrink: 0;">
+                <span style="font-size: 13.5px; font-weight: 900; color: ${pctColor}; line-height: 1.1;">${s.percent}%</span>
+                <span style="font-size: 9.5px; font-weight: 800; color: ${pctColor}; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.9; line-height: 1; margin-top: 2px;">Covered</span>
+              </div>
             </div>
-            <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-              <span style="font-size: 12px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
-              <span style="font-size: 12px; color: ${viewLinkColor}; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
+            <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
+              <span style="font-size: 11.5px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+              <span style="font-size: 12px; color: #0284c7 !important; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important;"></i></span>
             </div>
           </div>
         `;
       }).join('');
 
       return `
-        <div class="faculty-progress-card" style="background: ${cardBg} !important; border: 1.5px solid ${cardBorder} !important; box-shadow: 0 8px 24px ${cardShadow} !important;">
+        <div class="faculty-progress-card" style="background: ${pal.bg} !important; border: 1.5px solid ${pal.border} !important; box-shadow: 0 8px 24px ${pal.shadow} !important;">
           <div class="faculty-card-header">
-            <div class="faculty-card-name" style="color: ${titleColor}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${iconColor};"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge" style="background: ${badgeBg}; color: ${badgeColor}; border: 1.5px solid ${badgeBorder}; padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
+            <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
+            <div class="faculty-card-badge" style="background: ${pal.badgeBg}; color: ${pal.badgeColor}; border: 1.5px solid ${pal.badgeBorder}; padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
           </div>
-          <div style="font-size: 12.5px; color: ${subTextColor}; font-weight: 700; margin-bottom: 10px; opacity: 0.9;">
+          <div style="font-size: 12.5px; color: ${pal.subText}; font-weight: 700; margin-bottom: 10px; opacity: 0.95;">
             ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
           </div>
           <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: ${barBg}; border-radius: 4px; overflow: hidden;">
