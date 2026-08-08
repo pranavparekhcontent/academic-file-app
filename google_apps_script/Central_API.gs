@@ -1668,11 +1668,6 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
             var folderOwner = parentFolder.getOwner();
             if (folderOwner && !folderOwnerEmail) folderOwnerEmail = folderOwner.getEmail();
           } catch(e) {}
-        } else {
-          try {
-            parentFolder = DriveApp.getRootFolder();
-            scannedFolderName = "My Drive";
-          } catch(e) {}
         }
       }
     } catch(e) {
@@ -1680,7 +1675,7 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     }
 
     if (!parentFolder) {
-      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
+      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
     }
 
     var academicFolder = _findAcademicFolder(parentFolder);
@@ -1992,8 +1987,6 @@ function uploadAcademicDocument(data, sheetId) {
         var parents = targetFile.getParents();
         if (parents.hasNext()) {
           parentFolder = parents.next();
-        } else {
-          try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
         }
       }
     } catch(e) {
@@ -2001,12 +1994,12 @@ function uploadAcademicDocument(data, sheetId) {
     }
 
     if (!parentFolder) {
-      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
+      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
     }
 
     var academicFolder = _findAcademicFolder(parentFolder);
     if (!academicFolder) {
-      academicFolder = parentFolder;
+      return { success: false, error: "Folder Not Found / Permission Error: Could not locate or create 'Academic Calendars & Timetable' folder inside college Drive." };
     }
 
     var bytes = Utilities.base64Decode(data.fileData);
