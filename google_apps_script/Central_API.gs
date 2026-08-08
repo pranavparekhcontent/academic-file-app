@@ -1668,6 +1668,11 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
             var folderOwner = parentFolder.getOwner();
             if (folderOwner && !folderOwnerEmail) folderOwnerEmail = folderOwner.getEmail();
           } catch(e) {}
+        } else {
+          try {
+            parentFolder = DriveApp.getRootFolder();
+            scannedFolderName = "My Drive";
+          } catch(e) {}
         }
       }
     } catch(e) {
@@ -1675,7 +1680,7 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     }
 
     if (!parentFolder) {
-      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
+      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
     }
 
     var academicFolder = _findAcademicFolder(parentFolder);
@@ -1987,6 +1992,8 @@ function uploadAcademicDocument(data, sheetId) {
         var parents = targetFile.getParents();
         if (parents.hasNext()) {
           parentFolder = parents.next();
+        } else {
+          try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
         }
       }
     } catch(e) {
@@ -1994,7 +2001,7 @@ function uploadAcademicDocument(data, sheetId) {
     }
 
     if (!parentFolder) {
-      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located." };
+      try { parentFolder = DriveApp.getRootFolder(); } catch(e) {}
     }
 
     var academicFolder = _findAcademicFolder(parentFolder);

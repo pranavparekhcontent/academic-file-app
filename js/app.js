@@ -85,6 +85,16 @@ const App = (() => {
 
   // ─── TOAST NOTIFICATIONS ────────────────────────────────
   const Toast = {
+    dismissAll() {
+      const stack = document.getElementById('toast-stack');
+      if (!stack) return;
+      stack.querySelectorAll('.toast').forEach(t => {
+        t.classList.remove('active');
+        if (t.parentNode) t.parentNode.removeChild(t);
+      });
+      stack.classList.remove('has-toasts');
+    },
+
     show(title, msg, type = 'success') {
       const stack = document.getElementById('toast-stack');
       if (!stack) return;
@@ -657,6 +667,7 @@ const App = (() => {
 
         showScreen('portal');
         switchView('incharge-dashboard');
+        Toast.dismissAll();
         Toast.show('Access Granted', `Welcome ${state.inchargeName}`, 'success');
       } else {
         state._inchargeAttempts['global'] = (state._inchargeAttempts['global'] || 0) + 1;
