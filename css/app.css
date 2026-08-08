@@ -2943,3 +2943,151 @@ button, [role='button'] {
     justify-content: flex-start;
   }
 }
+
+/* ══════════════════════════════════════
+   ACADEMIC INCHARGE DASHBOARD & TABS
+   ══════════════════════════════════════ */
+.login-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm, 12px);
+  padding: 4px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.login-tab {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-xs, 8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.login-tab.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.incharge-info-box {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border-left: 3px solid #6366f1;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary, #cbd5e1);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.custom-glass-option-item.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+.incharge-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.incharge-stat-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 18px;
+  backdrop-filter: blur(12px);
+}
+
+.incharge-stat-card .stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.incharge-stat-card .stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 6px 0;
+}
+
+.incharge-stat-card .stat-sub {
+  font-size: 11px;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.faculty-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.faculty-progress-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  backdrop-filter: blur(16px);
+}
+
+.faculty-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.faculty-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.faculty-card-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.incharge-subject-item {
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.incharge-subject-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 4px;
+}
+
+.incharge-subject-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}

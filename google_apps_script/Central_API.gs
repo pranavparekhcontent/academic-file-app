@@ -61,6 +61,15 @@ function doGet(e) {
       case 'getAcademicSchedule':
         result = getAcademicSchedule(sheetId, e.parameter.teachingPlanLink);
         break;
+      case 'getAcademicIncharges':
+        result = getAcademicIncharges(sheetId);
+        break;
+      case 'academicInchargeLogin':
+        result = academicInchargeLogin(e.parameter.name, e.parameter.pin, sheetId);
+        break;
+      case 'getInchargeDashboard':
+        result = getInchargeDashboard(sheetId);
+        break;
 
       default: 
         result = { error: 'Unknown GET action: ' + action };
@@ -640,6 +649,311 @@ function getGlobalTeachingPlanLink(sheetId) {
     Logger.log("Error getting global teaching plan link: " + e.message);
   }
   return '';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACADEMIC INCHARGE DASHBOARD & AUTHENTICATION
+   ═══════════════════════════════════════════════════════════════ */
+
+function _getAcademicInchargeList(sheetId) {
+  var list = [];
+  if (!sheetId) return list;
+  try {
+    var ss = _getSpreadsheet(sheetId);
+    if (!ss) return list;
+
+    var sheets = ss.getSheets();
+    if (!sheets || sheets.length === 0) return list;
+
+    var priorityKeywords = ['client', 'config', 'faculty', 'academic', 'incharge', 'coordinator'];
+    var prioritizedSheets = [];
+    var remainingSheets = [];
+
+    for (var s = 0; s < sheets.length; s++) {
+      var sName = sheets[s].getName().toLowerCase();
+      var isPriority = priorityKeywords.some(function(k) { return sName.indexOf(k) !== -1; });
+      if (isPriority) prioritizedSheets.push(sheets[s]);
+      else remainingSheets.push(sheets[s]);
+    }
+
+    var sortedSheets = prioritizedSheets.concat(remainingSheets);
+
+    for (var sIdx = 0; sIdx < sortedSheets.length; sIdx++) {
+      var sheet = sortedSheets[sIdx];
+      var data = sheet.getDataRange().getValues();
+      if (!data || data.length === 0) continue;
+
+      // Pass 1: Header row search for both incharge and pin columns
+      var inchargeCol = -1;
+      var pinCol = -1;
+      var headerRowIdx = -1;
+
+      for (var r = 0; r < Math.min(data.length, 15); r++) {
+        var row = data[r];
+        var foundIncharge = -1;
+        var foundPin = -1;
+        for (var c = 0; c < row.length; c++) {
+          var val = String(row[c] || '').toLowerCase().trim();
+          if (val.indexOf('academic incharge') !== -1 || val.indexOf('academic coordinator') !== -1 || (val.indexOf('incharge') !== -1 && val.indexOf('name') !== -1) || val.indexOf('coordinator') !== -1) {
+            foundIncharge = c;
+          }
+          if (val.indexOf('pin') !== -1 || val.indexOf('password') !== -1 || val.indexOf('passcode') !== -1) {
+            foundPin = c;
+          }
+        }
+        if (foundIncharge !== -1 && foundPin !== -1) {
+          inchargeCol = foundIncharge;
+          pinCol = foundPin;
+          headerRowIdx = r;
+          break;
+        }
+      }
+
+      if (inchargeCol !== -1 && pinCol !== -1 && headerRowIdx !== -1) {
+        for (var i = headerRowIdx + 1; i < data.length; i++) {
+          var nameVal = String(data[i][inchargeCol] || '').trim();
+          var pinVal = String(data[i][pinCol] || '').trim();
+          if (nameVal && pinVal) {
+            list.push({ name: nameVal, pin: pinVal });
+          }
+        }
+        if (list.length > 0) return list;
+      }
+
+      // Pass 2: Key-value cell scan for incharge label with nearby PIN
+      for (var r2 = 0; r2 < data.length; r2++) {
+        for (var c2 = 0; c2 < data[r2].length; c2++) {
+          var cellVal = String(data[r2][c2] || '').toLowerCase().trim();
+          if ((cellVal.indexOf('academic incharge') !== -1 || cellVal.indexOf('academic coordinator') !== -1 || cellVal.indexOf('incharge') !== -1) && cellVal.indexOf('pin') === -1) {
+            var candName = '';
+            if (c2 + 1 < data[r2].length && String(data[r2][c2 + 1] || '').trim()) {
+              candName = String(data[r2][c2 + 1]).trim();
+            } else if (r2 + 1 < data.length && String(data[r2 + 1][c2] || '').trim()) {
+              candName = String(data[r2 + 1][c2]).trim();
+            }
+
+            if (candName) {
+              var candPin = '';
+              var minR = Math.max(0, r2 - 2), maxR = Math.min(data.length - 1, r2 + 2);
+              var minC = Math.max(0, c2 - 2), maxC = Math.min(data[r2].length - 1, c2 + 3);
+
+              for (var pr = minR; pr <= maxR; pr++) {
+                for (var pc = minC; pc <= maxC; pc++) {
+                  var pVal = String(data[pr][pc] || '').toLowerCase().trim();
+                  if (pVal.indexOf('pin') !== -1 || pVal.indexOf('password') !== -1 || pVal.indexOf('passcode') !== -1) {
+                    if (pc + 1 < data[pr].length && String(data[pr][pc + 1] || '').trim()) {
+                      candPin = String(data[pr][pc + 1]).trim();
+                    } else if (pr + 1 < data.length && String(data[pr + 1][pc] || '').trim()) {
+                      candPin = String(data[pr + 1][pc]).trim();
+                    }
+                  }
+                  if (candPin) break;
+                }
+                if (candPin) break;
+              }
+
+              if (candName && candPin) {
+                list.push({ name: candName, pin: candPin });
+              }
+            }
+          }
+        }
+      }
+      if (list.length > 0) return list;
+    }
+  } catch(e) {
+    Logger.log("_getAcademicInchargeList error: " + e.message);
+  }
+  return list;
+}
+
+function getAcademicIncharges(sheetId) {
+  try {
+    var rawList = _getAcademicInchargeList(sheetId);
+    var incharges = [];
+    var seen = {};
+    for (var i = 0; i < rawList.length; i++) {
+      var item = rawList[i];
+      if (item && item.name && !seen[item.name]) {
+        seen[item.name] = true;
+        incharges.push({ name: item.name });
+      }
+    }
+    return { success: true, incharges: incharges };
+  } catch(e) {
+    return { success: false, error: e.message, incharges: [] };
+  }
+}
+
+function academicInchargeLogin(name, pin, sheetId) {
+  try {
+    if (!pin) {
+      return { success: false, error: "Security PIN is required." };
+    }
+    var list = _getAcademicInchargeList(sheetId);
+    var targetPin = String(pin).trim();
+    var targetName = name ? String(name).trim().toLowerCase() : '';
+
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var itemName = String(item.name || '').trim();
+      var itemPin = String(item.pin || '').trim();
+
+      if (targetName) {
+        if (itemName.toLowerCase() === targetName && itemPin === targetPin) {
+          return { success: true, name: itemName };
+        }
+      } else {
+        if (itemPin === targetPin) {
+          return { success: true, name: itemName || "Academic Incharge" };
+        }
+      }
+    }
+    return { success: false, error: "Invalid PIN or Incharge not found." };
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function getInchargeDashboard(sheetId) {
+  try {
+    var ss = _getSpreadsheet(sheetId);
+    var ws = ss.getSheetByName('subjects');
+    if (!ws) {
+      return { success: false, error: "Subjects sheet not found." };
+    }
+
+    var data = ws.getDataRange().getValues();
+    if (!data || data.length <= 1) {
+      return { success: false, error: "No subjects data available." };
+    }
+
+    var cols = _mapSubjectCols(data[0] || []);
+    var facultyMap = {};
+    var subjectCodeSet = {};
+    var distinctCodes = [];
+    var collegeName = "";
+    var managementName = "";
+
+    for (var i = 1; i < data.length; i++) {
+      var rawFaculty = String(data[i][cols.faculty] || '').trim();
+      var sCode = String(data[i][cols.code] || '').trim();
+      var sName = String(data[i][cols.name] || '').trim();
+      var sYear = String(data[i][cols.year] || '').trim();
+      var sSem = String(data[i][cols.semester] || '').trim();
+
+      if (!sCode) continue;
+
+      if (!subjectCodeSet[sCode]) {
+        subjectCodeSet[sCode] = true;
+        distinctCodes.push(sCode);
+      }
+
+      var facList = rawFaculty ? rawFaculty.split(',').map(function(x) { return x.trim(); }) : ['Unassigned'];
+      for (var f = 0; f < facList.length; f++) {
+        var facName = facList[f];
+        if (!facName) continue;
+        if (!facultyMap[facName]) facultyMap[facName] = [];
+
+        facultyMap[facName].push({
+          code: sCode,
+          name: sName,
+          year: sYear,
+          semester: sSem,
+          faculty: facName
+        });
+      }
+    }
+
+    // Process up to 80 distinct codes to prevent script execution timeout
+    var maxCodes = Math.min(distinctCodes.length, 80);
+    var subjectPlanMap = {};
+
+    for (var c = 0; c < maxCodes; c++) {
+      var code = distinctCodes[c];
+      try {
+        var planRes = getTeachingPlan(code, '', sheetId);
+        if (planRes && planRes.success) {
+          if (!collegeName && planRes.metadata && planRes.metadata.collegeName) {
+            collegeName = planRes.metadata.collegeName;
+          }
+          if (!managementName && planRes.metadata && planRes.metadata.managementName) {
+            managementName = planRes.metadata.managementName;
+          }
+
+          var topics = planRes.topics || [];
+          var totalLec = (planRes.metadata && planRes.metadata.totalLectures > 0) ? planRes.metadata.totalLectures : topics.length;
+          var conductedCount = topics.filter(function(t) { return t.executedDate && String(t.executedDate).trim() !== ''; }).length;
+          var pct = totalLec > 0 ? Math.round((conductedCount / totalLec) * 100) : (topics.length > 0 ? Math.round((conductedCount / topics.length) * 100) : 0);
+
+          subjectPlanMap[code] = {
+            totalLectures: totalLec,
+            totalConducted: conductedCount,
+            percent: pct
+          };
+        } else {
+          subjectPlanMap[code] = { totalLectures: 0, totalConducted: 0, percent: 0 };
+        }
+      } catch(ex) {
+        subjectPlanMap[code] = { totalLectures: 0, totalConducted: 0, percent: 0 };
+      }
+    }
+
+    var faculties = [];
+    var grandTotalLectures = 0;
+    var grandTotalConducted = 0;
+    var grandTotalSubjects = 0;
+
+    var facKeys = Object.keys(facultyMap);
+    for (var k = 0; k < facKeys.length; k++) {
+      var fac = facKeys[k];
+      var subs = facultyMap[fac];
+      var facLectures = 0;
+      var facConducted = 0;
+
+      for (var s = 0; s < subs.length; s++) {
+        var info = subjectPlanMap[subs[s].code] || { totalLectures: 0, totalConducted: 0, percent: 0 };
+        subs[s].totalLectures = info.totalLectures;
+        subs[s].totalConducted = info.totalConducted;
+        subs[s].percent = info.percent;
+
+        facLectures += info.totalLectures;
+        facConducted += info.totalConducted;
+      }
+
+      var facPct = facLectures > 0 ? Math.round((facConducted / facLectures) * 100) : 0;
+      grandTotalLectures += facLectures;
+      grandTotalConducted += facConducted;
+      grandTotalSubjects += subs.length;
+
+      faculties.push({
+        faculty: fac,
+        totalSubjects: subs.length,
+        totalLectures: facLectures,
+        totalConducted: facConducted,
+        overallPercent: facPct,
+        subjects: subs
+      });
+    }
+
+    var avgCoverage = grandTotalLectures > 0 ? Math.round((grandTotalConducted / grandTotalLectures) * 100) : 0;
+
+    return {
+      success: true,
+      collegeName: collegeName || "Institutional Workspace",
+      managementName: managementName || "Academic Management",
+      overallStats: {
+        totalFaculties: faculties.length,
+        totalSubjects: grandTotalSubjects,
+        totalLectures: grandTotalLectures,
+        totalConducted: grandTotalConducted,
+        avgCoveragePercent: avgCoverage
+      },
+      faculties: faculties
+    };
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1524,10 +1838,31 @@ function addCustomSyllabusTopic(data, sheetId) {
  * If found, scans for files with 'timetable' or 'calendar' in their names,
  * returning their preview URLs.
  */
-function _isAcademicScheduleFolderOrFile(name) {
+function _isAcademicCalendarsFolder(name) {
   if (!name) return false;
   var n = String(name).toLowerCase().trim();
-  return /(academic|calen[da]rs?|time\s*tables?|schedules?|routines?|syllab(us|i)|events?)/i.test(n);
+  return /(academic\s*calendar|timetable|time\s*table|schedule|calendar)/i.test(n);
+}
+
+function _findAcademicFolder(parentFolder) {
+  if (!parentFolder) return null;
+  try {
+    var folders = parentFolder.getFolders();
+    while (folders.hasNext()) {
+      var f = folders.next();
+      if (_isAcademicCalendarsFolder(f.getName())) {
+        return f;
+      }
+    }
+    var searched = parentFolder.searchFolders("title contains 'Academic'");
+    while (searched.hasNext()) {
+      var sf = searched.next();
+      if (_isAcademicCalendarsFolder(sf.getName())) {
+        return sf;
+      }
+    }
+  } catch(e) {}
+  return null;
 }
 
 function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
@@ -1591,10 +1926,15 @@ function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
 }
 
 function getAcademicSchedule(sheetId, teachingPlanLink) {
+  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
   try {
     var targetSpreadsheetId = _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink);
     if (!targetSpreadsheetId) {
       return { success: false, error: "College Teaching Plan spreadsheet link not configured." };
+    }
+
+    if (targetSpreadsheetId === MASTER_CONFIG_ID) {
+      return { success: false, error: "SECURITY BLOCK: Access to Master Config sheet for Academic Schedule is prohibited." };
     }
 
     var effectiveEmail = "";
@@ -1606,18 +1946,19 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     var scannedFolderName = "";
     var scannedFolderId = "";
     var folderOwnerEmail = "";
+    var targetFile = null;
 
     try {
-      var targetFile = DriveApp.getFileById(targetSpreadsheetId);
+      targetFile = DriveApp.getFileById(targetSpreadsheetId);
       if (targetFile) {
         try {
           var fileOwner = targetFile.getOwner();
           if (fileOwner) folderOwnerEmail = fileOwner.getEmail();
         } catch(e) {}
         
-        var files = targetFile.getParents();
-        if (files.hasNext()) {
-          parentFolder = files.next();
+        var parents = targetFile.getParents();
+        if (parents.hasNext()) {
+          parentFolder = parents.next();
           scannedFolderName = parentFolder.getName();
           scannedFolderId = parentFolder.getId();
           try {
@@ -1627,11 +1968,20 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
         }
       }
     } catch(e) {
-      return { success: false, error: "Unable to access Drive file for Teaching Plan (ID: " + targetSpreadsheetId + "): " + e.message };
+      return { success: false, error: "Drive Permission Error: Unable to access Teaching Plan file (ID: " + targetSpreadsheetId + ") using Service Account (" + effectiveEmail + "). Please share the file with " + effectiveEmail + "." };
     }
 
     if (!parentFolder) {
-      return { success: false, error: "Parent Google Drive folder for Teaching Plan spreadsheet could not be located." };
+      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
+    }
+
+    var academicFolder = _findAcademicFolder(parentFolder);
+    if (!academicFolder) {
+      return {
+        success: false,
+        error: "Folder Not Found / Permission Error: 'Academic Calendars & Timetable' folder NOT FOUND inside '" + (scannedFolderName || 'Parent Folder') + "' (Owner: " + (folderOwnerEmail || "Unknown") + "). Fix: Create folder exactly 'Academic Calendars & Timetable' inside same folder as Teaching Plan sheet, share both with " + (effectiveEmail || "Service Account") + ".",
+        files: []
+      };
     }
 
     var allFiles = [];
@@ -1643,7 +1993,7 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
         var fileIterator = folder.getFiles();
         while (fileIterator.hasNext()) {
           var file = fileIterator.next();
-          if (file.getId() === targetSpreadsheetId) continue;
+          if (file.getId() === targetSpreadsheetId || file.getId() === MASTER_CONFIG_ID) continue;
           if (seenIds[file.getId()]) continue;
           seenIds[file.getId()] = true;
           var thumbLink = '';
@@ -1666,82 +2016,47 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
       } catch(e) {}
     }
 
-    // 1. Scan subfolders inside parentFolder matching Academic / Calendar / Timetable / Schedule, and loose files
-    if (parentFolder) {
-      try {
-        var subfolders = parentFolder.getFolders();
-        while (subfolders.hasNext()) {
-          var sub = subfolders.next();
-          if (_isAcademicScheduleFolderOrFile(sub.getName())) {
-            collectFilesFromFolder(sub);
-          }
-        }
-        collectFilesFromFolder(parentFolder);
-      } catch(e) {}
-    }
+    collectFilesFromFolder(academicFolder);
 
-    // 2. 🔧 Scoped search within the college's folder tree for folders matching keywords
-    //    Previously used DriveApp.searchFolders() which searched ALL of Drive.
-    //    Now scoped via parentFolder.searchFolders() to stay within the college's folder.
     try {
-      if (parentFolder) {
-        var globalMatches = parentFolder.searchFolders("name contains 'Academic' or name contains 'Timetable' or name contains 'Calendar' or name contains 'Calender' or name contains 'Schedule'");
-        while (globalMatches.hasNext()) {
-          var gf = globalMatches.next();
-          if (_isAcademicScheduleFolderOrFile(gf.getName())) {
-            collectFilesFromFolder(gf);
-          }
-        }
-      }
-    } catch(e) {}
-
-    // Sort by last updated descending (newest first)
-    allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
-
-    // 3. 🔧 Scoped file search within the college's folder tree
-    //    Previously used DriveApp.searchFiles() which searched ALL of Drive.
-    //    Now scoped via parentFolder.searchFiles() to stay within the college's folder.
-    try {
-      if (parentFolder) {
-        var fileSearch = parentFolder.searchFiles(
-          "title contains 'timetable' or title contains 'time table' or " +
-          "title contains 'calendar' or title contains 'calender' or " +
-          "title contains 'schedule' or title contains 'academic'"
-        );
-        while (fileSearch.hasNext()) {
-          var sf = fileSearch.next();
-          if (sf.getId() === targetSpreadsheetId) continue;
-          if (!seenIds[sf.getId()]) {
-            seenIds[sf.getId()] = true;
-            var thumb = '';
-            try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
-            var upd = '';
-            try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
-            allFiles.push({
-              id: sf.getId(),
-              name: sf.getName(),
-              mimeType: sf.getMimeType(),
-              webViewLink: sf.getUrl(),
-              thumbnailLink: thumb,
-              lastUpdated: upd
-            });
-          }
+      var fileSearch = academicFolder.searchFiles(
+        "title contains 'timetable' or title contains 'time table' or " +
+        "title contains 'calendar' or title contains 'calender' or " +
+        "title contains 'schedule' or title contains 'academic'"
+      );
+      while (fileSearch.hasNext()) {
+        var sf = fileSearch.next();
+        if (sf.getId() === targetSpreadsheetId || sf.getId() === MASTER_CONFIG_ID) continue;
+        if (!seenIds[sf.getId()]) {
+          seenIds[sf.getId()] = true;
+          var thumb = '';
+          try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
+          var upd = '';
+          try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
+          allFiles.push({
+            id: sf.getId(),
+            name: sf.getName(),
+            mimeType: sf.getMimeType(),
+            webViewLink: sf.getUrl(),
+            thumbnailLink: thumb,
+            lastUpdated: upd
+          });
         }
       }
     } catch(e) {
-      console.error('getAcademicSchedule searchFiles fallback error: ' + e.message);
+      console.error('getAcademicSchedule scoped search error: ' + e.message);
     }
 
-    // Re-sort after adding direct search results
     allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
 
     return {
       success: true,
+      mode: "COLLEGE_DRIVE_STRICT",
       effectiveEmail: effectiveEmail,
       activeEmail: activeEmail,
       folderOwnerEmail: folderOwnerEmail,
-      scannedFolderName: scannedFolderName,
-      scannedFolderId: scannedFolderId,
+      scannedFolderName: academicFolder.getName(),
+      scannedFolderId: academicFolder.getId(),
       files: allFiles,
       timetable: allFiles.find(function(f) { return /(timetable|time\s*table|schedule)s?/i.test(f.name); }) || null,
       calendar: allFiles.find(function(f) { return /(calen[da]r|event|academic)s?/i.test(f.name); }) || null

@@ -14,6 +14,15 @@ const App = (() => {
     subjects: [],
     facultyName: '',
     allData: null,
+
+    // Academic Incharge State
+    academicIncharges: [],
+    inchargeName: '',
+    isAcademicIncharge: false,
+    inchargeDashboard: null,
+    _inchargeAttempts: {},
+    _inchargeLocked: {},
+    loginMode: 'faculty',
     
     // Active Workload Subject
     activeCode: '',
@@ -353,13 +362,15 @@ const App = (() => {
     const titles = {
       dashboard: 'Index',
       'academic-schedule': 'Academic Calendars & Timetable',
-      'teaching-plan': 'Syllabus & Teaching Plan'
+      'teaching-plan': 'Syllabus & Teaching Plan',
+      'incharge-dashboard': 'Academic Incharge Dashboard'
     };
     document.getElementById('portal-view-title').innerText = titles[viewId] || 'Portal';
 
     // Synchronize views with current data
     if (viewId === 'teaching-plan') populateTeachingPlan();
     else if (viewId === 'academic-schedule') loadAcademicSchedule();
+    else if (viewId === 'incharge-dashboard') loadInchargeDashboard();
   }
 
   // ─── SETUP SCREEN ──────────────────────────────────────
@@ -403,6 +414,8 @@ const App = (() => {
     if (labelEl) labelEl.innerText = 'Loading faculty list...';
     if (menu) menu.innerHTML = '<div style="padding: 12px; font-size: 12px; color: var(--text-secondary); text-align: center;">Loading faculty list...</div>';
 
+    loadAcademicIncharges().catch(err => console.warn("Failed loading incharges:", err));
+
     try {
       const data = await API.getAllData();
       if (!data.success) {
@@ -418,6 +431,180 @@ const App = (() => {
     } catch (e) {
       Toast.show('Network Issue', 'Verify API endpoint script connections.', 'danger');
       if (labelEl) labelEl.innerText = 'Network connection failed';
+    }
+  }
+
+  async function loadAcademicIncharges() {
+    try {
+      const data = await API.getAcademicIncharges();
+      if (data && data.success) {
+        state.academicIncharges = data.incharges || [];
+        buildInchargeSelector();
+      }
+    } catch(e) {
+      console.warn("loadAcademicIncharges error:", e.message);
+    }
+  }
+
+  function buildInchargeSelector() {
+    const select = document.getElementById('login-incharge-select');
+    const menu = document.getElementById('custom-incharge-menu');
+    const label = document.getElementById('custom-incharge-label');
+    if (!select && !menu) return;
+
+    if (select) select.innerHTML = '<option value="">Select Academic Incharge</option>';
+    if (menu) menu.innerHTML = '';
+
+    if (!state.academicIncharges || state.academicIncharges.length === 0) {
+      if (label) label.innerText = 'Select Academic Incharge';
+      if (menu) menu.innerHTML = '<div style="padding: 12px; font-size: 12px; color: var(--text-secondary); text-align: center;">No incharges listed</div>';
+      return;
+    }
+
+    state.academicIncharges.forEach(inc => {
+      const isLocked = !!state._inchargeLocked[inc.name];
+      if (select) {
+        const opt = document.createElement('option');
+        opt.value = inc.name;
+        opt.textContent = isLocked ? `${inc.name} (Locked)` : inc.name;
+        if (isLocked) opt.disabled = true;
+        select.appendChild(opt);
+      }
+
+      if (menu) {
+        const item = document.createElement('div');
+        item.className = `custom-glass-option-item ${isLocked ? 'locked' : ''}`;
+        item.innerHTML = `
+          <i class="ph ph-shield-check option-icon"></i>
+          <span>${escHtml(inc.name)}${isLocked ? ' <strong style="color:#ef4444;">(Locked)</strong>' : ''}</span>
+        `;
+        item.onclick = (e) => {
+          e.stopPropagation();
+          if (isLocked) {
+            Toast.show('Account Locked', 'Incharge account locked due to 3 failed attempts.', 'danger');
+            return;
+          }
+          selectCustomInchargeOption(inc.name, inc.name);
+        };
+        menu.appendChild(item);
+      }
+    });
+  }
+
+  function toggleCustomInchargeDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('custom-incharge-menu');
+    const trig = document.getElementById('custom-incharge-trigger');
+    if (menu && trig) {
+      const isOpen = menu.style.display === 'block';
+      menu.style.display = isOpen ? 'none' : 'block';
+      trig.classList.toggle('active', !isOpen);
+    }
+  }
+
+  function selectCustomInchargeOption(name, labelText) {
+    const select = document.getElementById('login-incharge-select');
+    const label = document.getElementById('custom-incharge-label');
+    const menu = document.getElementById('custom-incharge-menu');
+    const trig = document.getElementById('custom-incharge-trigger');
+
+    if (select) select.value = name;
+    if (label) label.innerText = labelText || name;
+    if (menu) menu.style.display = 'none';
+    if (trig) trig.classList.remove('active');
+  }
+
+  function switchLoginMode(mode) {
+    state.loginMode = mode;
+    const tabFac = document.getElementById('tab-faculty');
+    const tabInc = document.getElementById('tab-incharge');
+    const formFac = document.getElementById('login-faculty-form');
+    const formInc = document.getElementById('login-incharge-form');
+
+    if (tabFac) tabFac.classList.toggle('active', mode === 'faculty');
+    if (tabInc) tabInc.classList.toggle('active', mode === 'incharge');
+    if (formFac) formFac.style.display = mode === 'faculty' ? 'block' : 'none';
+    if (formInc) formInc.style.display = mode === 'incharge' ? 'block' : 'none';
+  }
+
+  function showInchargePinPrompt() {
+    if (state._inchargeLocked['global']) {
+      Toast.show('Account Locked', 'Too many failed PIN attempts (3/3). Access locked until app restart.', 'danger');
+      return;
+    }
+    const modal = document.getElementById('incharge-pin-modal');
+    const pinInput = document.getElementById('login-incharge-pin-input');
+    if (modal) {
+      modal.style.display = 'flex';
+      if (pinInput) {
+        pinInput.value = '';
+        setTimeout(() => pinInput.focus(), 150);
+      }
+    } else {
+      const pin = prompt('Enter Academic Incharge Security PIN:');
+      if (pin) doInchargeLogin(pin);
+    }
+  }
+
+  function hideInchargePinPrompt() {
+    const modal = document.getElementById('incharge-pin-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function doInchargeLogin(providedPin) {
+    const pin = providedPin !== undefined ? String(providedPin).trim() : (document.getElementById('login-incharge-pin-input') ? document.getElementById('login-incharge-pin-input').value.trim() : '');
+    const selName = document.getElementById('login-incharge-select') ? document.getElementById('login-incharge-select').value : '';
+
+    if (!pin) {
+      Toast.show('Validation Error', 'Enter Academic Incharge PIN code.', 'danger');
+      return;
+    }
+
+    if (state._inchargeLocked['global']) {
+      Toast.show('Account Locked', 'Too many failed PIN attempts (3/3). Access locked until app restart.', 'danger');
+      return;
+    }
+
+    Toast.show('Authenticating...', 'Verifying incharge credentials with college sheet...', 'warning');
+
+    try {
+      const res = await API.academicInchargeLogin(selName, pin);
+      if (res && res.success) {
+        state._inchargeAttempts['global'] = 0;
+        state.isAcademicIncharge = true;
+        state.inchargeName = res.name || 'Academic Incharge';
+        state.facultyName = state.inchargeName;
+
+        hideInchargePinPrompt();
+
+        // Update profile header UI
+        const nameEl = document.getElementById('faculty-display-name');
+        if (nameEl) nameEl.innerText = state.inchargeName + ' (Academic Incharge)';
+
+        const avatarEl = document.getElementById('faculty-avatar');
+        if (avatarEl) {
+          const initials = state.inchargeName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+          avatarEl.innerText = initials || 'AI';
+        }
+
+        const navIncharge = document.getElementById('nav-incharge-dashboard');
+        if (navIncharge) navIncharge.style.display = 'flex';
+
+        showScreen('portal');
+        switchView('incharge-dashboard');
+        Toast.show('Access Granted', `Welcome ${state.inchargeName}`, 'success');
+      } else {
+        state._inchargeAttempts['global'] = (state._inchargeAttempts['global'] || 0) + 1;
+        if (state._inchargeAttempts['global'] >= 3) {
+          state._inchargeLocked['global'] = true;
+          hideInchargePinPrompt();
+          Toast.show('Account Locked', 'Too many failed PIN attempts (3/3). Access locked until app restart.', 'danger');
+        } else {
+          Toast.show('Access Denied', res.error || 'Incorrect security PIN code.', 'danger');
+        }
+      }
+    } catch(e) {
+      Toast.show('Network Error', e.message, 'danger');
     }
   }
 
@@ -467,9 +654,16 @@ const App = (() => {
 
   function doLogout() {
     state.facultyName = '';
+    state.inchargeName = '';
+    state.isAcademicIncharge = false;
+    state.inchargeDashboard = null;
+    state._inchargeAttempts = {};
+    state._inchargeLocked = {};
     state.teachingPlan = { theory: [], practical: [] };
     localStorage.removeItem('acad_faculty');
     document.getElementById('login-pin').value = '';
+    const inchargeNav = document.getElementById('nav-incharge-dashboard');
+    if (inchargeNav) inchargeNav.style.display = 'none';
     showScreen('login');
     Toast.show('Signed Out', 'Academic session closed.', 'success');
   }
@@ -1347,6 +1541,109 @@ const App = (() => {
     document.body.style.overflow = '';
   }
 
+  // ─── ACADEMIC INCHARGE DASHBOARD ─────────────────────
+  async function loadInchargeDashboard() {
+    const container = document.getElementById('incharge-dashboard-content');
+    if (container) {
+      container.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-secondary); font-size: 14px;"><i class="ph ph-spinner spinner" style="font-size: 24px; margin-bottom: 8px; display: block;"></i> Loading Academic Incharge Dashboard analytics...</div>';
+    }
+
+    try {
+      const data = await API.getInchargeDashboard();
+      if (!data || !data.success) {
+        if (container) {
+          container.innerHTML = `<div style="padding: 24px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; color: #f87171; font-size: 13px;">Failed loading dashboard: ${escHtml(data ? data.error : 'Server error')}</div>`;
+        }
+        Toast.show('Dashboard Error', (data && data.error) ? data.error : 'Failed loading incharge dashboard.', 'danger');
+        return;
+      }
+
+      state.inchargeDashboard = data;
+      renderInchargeDashboard();
+    } catch (e) {
+      if (container) {
+        container.innerHTML = `<div style="padding: 24px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; color: #f87171; font-size: 13px;">Network error: ${escHtml(e.message)}</div>`;
+      }
+      Toast.show('Network Error', e.message, 'danger');
+    }
+  }
+
+  function renderInchargeDashboard() {
+    const container = document.getElementById('incharge-dashboard-content');
+    const data = state.inchargeDashboard;
+    if (!container || !data || !data.success) return;
+
+    const stats = data.overallStats || {};
+    const faculties = data.faculties || [];
+
+    const overallHtml = `
+      <div class="incharge-summary-cards">
+        <div class="incharge-stat-card">
+          <div class="stat-label">Total Faculty Members</div>
+          <div class="stat-value">${stats.totalFaculties || 0}</div>
+          <div class="stat-sub">Assigned academic staff</div>
+        </div>
+        <div class="incharge-stat-card">
+          <div class="stat-label">Lectures Conducted</div>
+          <div class="stat-value" style="color: #60a5fa;">${stats.totalConducted || 0} / ${stats.totalLectures || 0}</div>
+          <div class="stat-sub">${stats.totalSubjects || 0} total subjects tracked</div>
+        </div>
+        <div class="incharge-stat-card">
+          <div class="stat-label">Average Syllabus Coverage</div>
+          <div class="stat-value" style="color: #34d399;">${stats.avgCoveragePercent || 0}%</div>
+          <div class="stat-sub">Across all active courses</div>
+        </div>
+      </div>
+    `;
+
+    const facultyCardsHtml = faculties.map(f => {
+      const subjectRows = (f.subjects || []).map(s => {
+        const pctColor = s.percent >= 75 ? '#34d399' : (s.percent >= 40 ? '#f6e05e' : '#f87171');
+        return `
+          <div class="incharge-subject-item">
+            <div class="incharge-subject-top">
+              <span>${escHtml(s.name)} (${escHtml(s.code)})</span>
+              <span style="color: ${pctColor}; font-weight: 700;">${s.percent}% Covered</span>
+            </div>
+            <div class="incharge-subject-sub">
+              <span>Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const barColor = f.overallPercent >= 75 ? '#10b981' : (f.overallPercent >= 40 ? '#f59e0b' : '#ef4444');
+
+      return `
+        <div class="faculty-progress-card">
+          <div class="faculty-card-header">
+            <div class="faculty-card-name"><i class="ph ph-user-circle" style="margin-right: 6px; color: #818cf8;"></i>${escHtml(f.faculty)}</div>
+            <div class="faculty-card-badge">${f.overallPercent}% Overall</div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+            ${f.totalSubjects} assigned subjects • ${f.totalConducted}/${f.totalLectures} total lectures
+          </div>
+          <div class="gf-progress" style="margin-bottom: 12px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+            <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; transition: width 0.3s ease;"></div>
+          </div>
+          <div style="margin-top: 10px;">
+            ${subjectRows}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      ${overallHtml}
+      <div class="dashboard-section-header" style="margin: 24px 0 12px;">
+        <h3 class="section-title" style="font-size: 16px;">Faculty Course Execution Progress</h3>
+      </div>
+      <div class="faculty-progress-grid">
+        ${facultyCardsHtml}
+      </div>
+    `;
+  }
+
   function updateScheduleBadge(badgeState) {
     const badge = document.getElementById('badge-calendar');
     const navDot = document.getElementById('nav-schedule-dot');
@@ -1818,6 +2115,15 @@ Generated: ${formatDisplayDate(new Date())}
     loadAcademicSchedule,
     handleFileCardClick,
     openFilePreview,
-    closeFilePreview
+    closeFilePreview,
+    loadAcademicIncharges,
+    buildInchargeSelector,
+    toggleCustomInchargeDropdown,
+    selectCustomInchargeOption,
+    switchLoginMode,
+    doInchargeLogin,
+    showInchargePinPrompt,
+    hideInchargePinPrompt,
+    loadInchargeDashboard
   };
 })();

@@ -206,11 +206,69 @@ const API = (() => {
           _setCache(cacheKey, data);
           return data;
         }
+        if (data.error && /permission|folder not found|security block|drive|not configured/i.test(data.error)) {
+          return data;
+        }
         const cached = _getCache(cacheKey);
         if (cached) return cached;
         return data;
       } catch (e) {
         console.warn('API.getAcademicSchedule failed:', e.message);
+        if (e.message && /permission|folder not found|security block|drive|not configured/i.test(e.message)) {
+          return { success: false, error: e.message };
+        }
+      }
+    }
+    const cached = _getCache(cacheKey);
+    if (cached) return cached;
+    return { success: false, error: 'Offline.' };
+  }
+
+  async function getAcademicIncharges() {
+    if (navigator.onLine) {
+      try {
+        const data = await _get('getAcademicIncharges');
+        if (data.success) {
+          _setCache('academic_incharges', data);
+          return data;
+        }
+        const cached = _getCache('academic_incharges');
+        if (cached) return cached;
+        return data;
+      } catch (e) {
+        console.warn('API.getAcademicIncharges network failed:', e.message);
+      }
+    }
+    const cached = _getCache('academic_incharges');
+    if (cached) return cached;
+    return { success: false, error: 'Offline.' };
+  }
+
+  async function academicInchargeLogin(name, pin) {
+    if (!navigator.onLine) {
+      return { success: false, error: 'Cannot authenticate offline. Connect to the internet.' };
+    }
+    try {
+      return await _get('academicInchargeLogin', { name, pin });
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function getInchargeDashboard() {
+    const cacheKey = 'incharge_dashboard';
+    if (navigator.onLine) {
+      try {
+        const data = await _get('getInchargeDashboard');
+        if (data.success) {
+          _setCache(cacheKey, data);
+          return data;
+        }
+        const cached = _getCache(cacheKey);
+        if (cached) return cached;
+        return data;
+      } catch (e) {
+        console.warn('API.getInchargeDashboard failed:', e.message);
       }
     }
     const cached = _getCache(cacheKey);
@@ -224,6 +282,9 @@ const API = (() => {
     syncTeachingPlan,
     saveRemark,
     addCustomSyllabusTopic,
-    getAcademicSchedule
+    getAcademicSchedule,
+    getAcademicIncharges,
+    academicInchargeLogin,
+    getInchargeDashboard
   };
 })();
