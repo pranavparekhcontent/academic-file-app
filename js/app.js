@@ -1740,7 +1740,7 @@ const App = (() => {
 
     const avgCoveragePercent = totalSubjectsCount > 0 ? Math.round(sumCoveragePercent / totalSubjectsCount) : 0;
 
-    const overallHtml = `
+          const overallHtml = `
       <div class="incharge-summary-cards">
         <div class="incharge-stat-card">
           <div class="stat-label" style="color: #334155; font-weight: 800; text-transform: uppercase; font-size: 12px;">Total Faculty Members</div>
@@ -1768,135 +1768,82 @@ const App = (() => {
     }
 
     const rainbowGlassPalettes = [
-      { // 1. Electric Violet
-        bg: 'linear-gradient(135deg, rgba(237, 233, 254, 0.94) 0%, rgba(245, 243, 255, 0.88) 100%)',
-        border: 'rgba(139, 92, 246, 0.60)',
-        shadow: 'rgba(139, 92, 246, 0.14)',
-        title: '#4c1d95',
-        icon: '#7c3aed',
-        subText: '#5b21b6',
-        badgeBg: 'rgba(124, 58, 237, 0.18)',
-        badgeColor: '#5b21b6',
-        badgeBorder: 'rgba(124, 58, 237, 0.40)',
-        subBorder: 'rgba(196, 181, 253, 0.75)'
+      { // 1. VIOLET (Purple 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(196, 181, 253, 0.32) 100%)',
+        bottomBorder: 'rgba(139, 92, 246, 0.50)',
+        shadow: 'rgba(139, 92, 246, 0.22)',
+        title: '#4c1d95', icon: '#7c3aed', subText: '#5b21b6',
+        badgeBg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.92), rgba(167, 139, 250, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(196, 181, 253, 0.70)'
       },
-      { // 2. Azure Sky Blue
-        bg: 'linear-gradient(135deg, rgba(219, 234, 254, 0.94) 0%, rgba(239, 246, 255, 0.88) 100%)',
-        border: 'rgba(59, 130, 246, 0.60)',
-        shadow: 'rgba(59, 130, 246, 0.14)',
-        title: '#1e3a8a',
-        icon: '#2563eb',
-        subText: '#1d4ed8',
-        badgeBg: 'rgba(37, 99, 235, 0.18)',
-        badgeColor: '#1e40af',
-        badgeBorder: 'rgba(37, 99, 235, 0.40)',
-        subBorder: 'rgba(147, 197, 253, 0.75)'
+      { // 2. INDIGO (Ultramarine 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(199, 210, 254, 0.32) 100%)',
+        bottomBorder: 'rgba(99, 102, 241, 0.50)',
+        shadow: 'rgba(99, 102, 241, 0.22)',
+        title: '#1e1b4b', icon: '#4f46e5', subText: '#3730a3',
+        badgeBg: 'linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(129, 140, 248, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(199, 210, 254, 0.70)'
       },
-      { // 3. Sunburst Gold / Amber
-        bg: 'linear-gradient(135deg, rgba(254, 243, 199, 0.94) 0%, rgba(255, 251, 235, 0.88) 100%)',
-        border: 'rgba(245, 158, 11, 0.60)',
-        shadow: 'rgba(245, 158, 11, 0.14)',
-        title: '#78350f',
-        icon: '#d97706',
-        subText: '#b45309',
-        badgeBg: 'rgba(217, 119, 6, 0.18)',
-        badgeColor: '#92400e',
-        badgeBorder: 'rgba(217, 119, 6, 0.40)',
-        subBorder: 'rgba(253, 230, 138, 0.75)'
+      { // 3. BLUE (Sapphire Light Blue 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.22) 0%, rgba(186, 230, 253, 0.32) 100%)',
+        bottomBorder: 'rgba(0, 122, 255, 0.50)',
+        shadow: 'rgba(0, 122, 255, 0.22)',
+        title: '#0c4a6e', icon: '#0284c7', subText: '#0369a1',
+        badgeBg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.92), rgba(0, 195, 255, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(186, 230, 253, 0.70)'
       },
-      { // 4. Emerald Mint Green
-        bg: 'linear-gradient(135deg, rgba(209, 250, 229, 0.94) 0%, rgba(236, 253, 245, 0.88) 100%)',
-        border: 'rgba(16, 185, 129, 0.60)',
-        shadow: 'rgba(16, 185, 129, 0.14)',
-        title: '#064e3b',
-        icon: '#059669',
-        subText: '#047857',
-        badgeBg: 'rgba(5, 150, 105, 0.18)',
-        badgeColor: '#065f46',
-        badgeBorder: 'rgba(5, 150, 105, 0.40)',
-        subBorder: 'rgba(167, 243, 208, 0.75)'
+      { // 4. CYAN (Teal 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(6, 182, 212, 0.22) 0%, rgba(165, 243, 252, 0.32) 100%)',
+        bottomBorder: 'rgba(6, 182, 212, 0.50)',
+        shadow: 'rgba(6, 182, 212, 0.22)',
+        title: '#164e63', icon: '#0891b2', subText: '#0e7490',
+        badgeBg: 'linear-gradient(135deg, rgba(13, 148, 136, 0.92), rgba(45, 212, 191, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(165, 243, 252, 0.70)'
       },
-      { // 5. Deep Cyan Teal
-        bg: 'linear-gradient(135deg, rgba(207, 250, 254, 0.94) 0%, rgba(236, 254, 255, 0.88) 100%)',
-        border: 'rgba(6, 182, 212, 0.60)',
-        shadow: 'rgba(6, 182, 212, 0.14)',
-        title: '#164e63',
-        icon: '#0891b2',
-        subText: '#0e7490',
-        badgeBg: 'rgba(8, 145, 178, 0.18)',
-        badgeColor: '#155e75',
-        badgeBorder: 'rgba(8, 145, 178, 0.40)',
-        subBorder: 'rgba(165, 243, 252, 0.75)'
+      { // 5. GREEN (Emerald 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(167, 243, 208, 0.32) 100%)',
+        bottomBorder: 'rgba(16, 185, 129, 0.50)',
+        shadow: 'rgba(16, 185, 129, 0.22)',
+        title: '#064e3b', icon: '#059669', subText: '#047857',
+        badgeBg: 'linear-gradient(135deg, rgba(5, 150, 105, 0.92), rgba(52, 211, 153, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(167, 243, 208, 0.70)'
       },
-      { // 6. Fuchsia Magenta
-        bg: 'linear-gradient(135deg, rgba(250, 232, 255, 0.94) 0%, rgba(253, 244, 255, 0.88) 100%)',
-        border: 'rgba(217, 70, 239, 0.60)',
-        shadow: 'rgba(217, 70, 239, 0.14)',
-        title: '#701a75',
-        icon: '#c026d3',
-        subText: '#a21caf',
-        badgeBg: 'rgba(192, 38, 211, 0.18)',
-        badgeColor: '#86198f',
-        badgeBorder: 'rgba(192, 38, 211, 0.40)',
-        subBorder: 'rgba(245, 208, 254, 0.75)'
+      { // 6. LIME (Spring Lime 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(132, 204, 22, 0.22) 0%, rgba(217, 249, 157, 0.32) 100%)',
+        bottomBorder: 'rgba(132, 204, 22, 0.50)',
+        shadow: 'rgba(132, 204, 22, 0.22)',
+        title: '#365314', icon: '#65a30d', subText: '#4d7c0f',
+        badgeBg: 'linear-gradient(135deg, rgba(101, 163, 13, 0.92), rgba(163, 230, 53, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(217, 249, 157, 0.70)'
       },
-      { // 7. Spring Lime Green
-        bg: 'linear-gradient(135deg, rgba(236, 252, 203, 0.94) 0%, rgba(247, 254, 231, 0.88) 100%)',
-        border: 'rgba(132, 204, 22, 0.60)',
-        shadow: 'rgba(132, 204, 22, 0.14)',
-        title: '#365314',
-        icon: '#65a30d',
-        subText: '#4d7c0f',
-        badgeBg: 'rgba(101, 163, 13, 0.18)',
-        badgeColor: '#3f6212',
-        badgeBorder: 'rgba(101, 163, 13, 0.40)',
-        subBorder: 'rgba(217, 249, 157, 0.75)'
+      { // 7. AMBER / GOLD (Sunburst 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(253, 230, 138, 0.32) 100%)',
+        bottomBorder: 'rgba(245, 158, 11, 0.50)',
+        shadow: 'rgba(245, 158, 11, 0.22)',
+        title: '#78350f', icon: '#d97706', subText: '#b45309',
+        badgeBg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.92), rgba(251, 191, 36, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(253, 230, 138, 0.70)'
       },
-      { // 8. Coral Orange
-        bg: 'linear-gradient(135deg, rgba(254, 237, 213, 0.94) 0%, rgba(255, 247, 237, 0.88) 100%)',
-        border: 'rgba(249, 115, 22, 0.60)',
-        shadow: 'rgba(249, 115, 22, 0.14)',
-        title: '#7c2d12',
-        icon: '#ea580c',
-        subText: '#c2410c',
-        badgeBg: 'rgba(234, 88, 12, 0.18)',
-        badgeColor: '#9a3412',
-        badgeBorder: 'rgba(234, 88, 12, 0.40)',
-        subBorder: 'rgba(253, 186, 116, 0.75)'
-      },
-      { // 9. Royal Ultramarine Indigo
-        bg: 'linear-gradient(135deg, rgba(224, 231, 255, 0.94) 0%, rgba(238, 242, 255, 0.88) 100%)',
-        border: 'rgba(99, 102, 241, 0.60)',
-        shadow: 'rgba(99, 102, 241, 0.14)',
-        title: '#1e1b4b',
-        icon: '#4f46e5',
-        subText: '#4338ca',
-        badgeBg: 'rgba(79, 70, 229, 0.18)',
-        badgeColor: '#3730a3',
-        badgeBorder: 'rgba(79, 70, 229, 0.40)',
-        subBorder: 'rgba(199, 210, 254, 0.75)'
-      },
-      { // 10. Slate Silver Glass
-        bg: 'linear-gradient(135deg, rgba(241, 245, 249, 0.96) 0%, rgba(248, 250, 252, 0.90) 100%)',
-        border: 'rgba(148, 163, 184, 0.60)',
-        shadow: 'rgba(148, 163, 184, 0.14)',
-        title: '#0f172a',
-        icon: '#475569',
-        subText: '#334155',
-        badgeBg: 'rgba(71, 85, 105, 0.18)',
-        badgeColor: '#1e293b',
-        badgeBorder: 'rgba(71, 85, 105, 0.40)',
-        subBorder: 'rgba(203, 213, 225, 0.75)'
+      { // 8. ORANGE (Coral 3D Specular Glass)
+        bg: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22) 0%, rgba(253, 186, 116, 0.32) 100%)',
+        bottomBorder: 'rgba(249, 115, 22, 0.50)',
+        shadow: 'rgba(249, 115, 22, 0.22)',
+        title: '#7c2d12', icon: '#ea580c', subText: '#c2410c',
+        badgeBg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.92), rgba(251, 146, 60, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(253, 186, 116, 0.70)'
       }
     ];
 
     const facultyCardsHtml = faculties.map((f, idx) => {
       const pal = rainbowGlassPalettes[idx % rainbowGlassPalettes.length];
-      const isZero = (f.overallPercent === 0);
-
-      // Progress Bar: Red if 0%, Green if >0%
-      const barBg = isZero ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-      const barColor = isZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
 
       const subjectRows = (f.subjects || []).map(s => {
         const isSubZero = (s.percent === 0);
@@ -1906,7 +1853,7 @@ const App = (() => {
         const sBarColor = isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
 
         return `
-          <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.70); border: 1.5px solid ${pal.subBorder}; border-radius: 14px; padding: 12px 14px;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
+          <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
               <div style="font-weight: 800; color: #0f172a; font-size: 13.5px; line-height: 1.35; flex: 1;">
                 ${escHtml(s.name)} <span style="color: #475569; font-weight: 700; font-size: 12px;">(${escHtml(s.code)})</span>
@@ -1931,10 +1878,10 @@ const App = (() => {
       }).join('');
 
       return `
-        <div class="faculty-progress-card" style="background: ${pal.bg} !important; border: 1.5px solid ${pal.border} !important; box-shadow: 0 8px 24px ${pal.shadow} !important;">
+        <div class="faculty-progress-card" style="background: ${pal.bg} !important; border-top: 1.8px solid #ffffff !important; border-left: 1.8px solid #ffffff !important; border-bottom: 1.8px solid ${pal.bottomBorder} !important; border-right: 1.8px solid ${pal.bottomBorder} !important; box-shadow: inset 0 1.5px 2px #ffffff, 0 10px 28px ${pal.shadow} !important;">
           <div class="faculty-card-header">
             <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge" style="background: ${pal.badgeBg}; color: ${pal.badgeColor}; border: 1.5px solid ${pal.badgeBorder}; padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
+            <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Overall</div>
           </div>
           <div style="font-size: 12.5px; color: ${pal.subText}; font-weight: 700; margin-bottom: 12px; opacity: 0.95;">
             ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
