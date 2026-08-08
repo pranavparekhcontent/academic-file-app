@@ -1701,6 +1701,9 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
     var activeEmail = "";
     try { activeEmail = Session.getActiveUser().getEmail(); } catch(e) {}
+    var folderOwnerEmail = "";
+    var scannedFolderName = "";
+    var scannedFolderId = "";
 
     var academicFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
     if (!academicFolder) {
@@ -1710,6 +1713,13 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
         files: []
       };
     }
+
+    try { scannedFolderName = academicFolder.getName(); } catch(e) {}
+    try { scannedFolderId = academicFolder.getId(); } catch(e) {}
+    try {
+      var owner = academicFolder.getOwner();
+      if (owner) folderOwnerEmail = owner.getEmail();
+    } catch(e) {}
 
     var allFiles = [];
     var seenIds = {};
@@ -1782,8 +1792,8 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
       effectiveEmail: effectiveEmail,
       activeEmail: activeEmail,
       folderOwnerEmail: folderOwnerEmail,
-      scannedFolderName: academicFolder.getName(),
-      scannedFolderId: academicFolder.getId(),
+      scannedFolderName: scannedFolderName || (academicFolder ? academicFolder.getName() : ''),
+      scannedFolderId: scannedFolderId || (academicFolder ? academicFolder.getId() : ''),
       files: allFiles,
       timetable: allFiles.find(function(f) { return /(timetable|time\s*table|schedule)s?/i.test(f.name); }) || null,
       calendar: allFiles.find(function(f) { return /(calen[da]r|event|academic)s?/i.test(f.name); }) || null
