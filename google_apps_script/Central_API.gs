@@ -1628,6 +1628,63 @@ function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
   return '';
 }
 
+function _getCollegeAcademicFolder(targetSpreadsheetId) {
+  if (!targetSpreadsheetId) return null;
+
+  var targetFile = null;
+  try {
+    targetFile = DriveApp.getFileById(targetSpreadsheetId);
+  } catch(e) {
+    Logger.log("_getCollegeAcademicFolder getFileById error: " + e.message);
+  }
+
+  // 1. Check parent folder of the college spreadsheet
+  if (targetFile) {
+    try {
+      var parents = targetFile.getParents();
+      while (parents.hasNext()) {
+        var parentFolder = parents.next();
+        var childFolders = parentFolder.getFoldersByName("Academic Calendars & Timetable");
+        if (childFolders.hasNext()) {
+          return childFolders.next();
+        }
+        var allChildren = parentFolder.getFolders();
+        while (allChildren.hasNext()) {
+          var f = allChildren.next();
+          var fn = f.getName().toLowerCase();
+          if (fn.indexOf('academic') !== -1 || fn.indexOf('timetable') !== -1 || fn.indexOf('calendar') !== -1 || fn.indexOf('calender') !== -1 || fn.indexOf('schedule') !== -1) {
+            return f;
+          }
+        }
+        // Auto-create "Academic Calendars & Timetable" inside parent folder
+        try {
+          return parentFolder.createFolder("Academic Calendars & Timetable");
+        } catch(ex) {
+          return parentFolder;
+        }
+      }
+    } catch(e) {
+      Logger.log("_getCollegeAcademicFolder parent scan error: " + e.message);
+    }
+  }
+
+  // 2. Approach #1: Global Drive search for "Academic Calendars & Timetable"
+  try {
+    var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
+    if (globalFolders.hasNext()) {
+      return globalFolders.next();
+    }
+  } catch(e) {}
+
+  // 3. Auto-create "Academic Calendars & Timetable" folder in Drive on the fly
+  try {
+    return DriveApp.createFolder("Academic Calendars & Timetable");
+  } catch(e) {
+    Logger.log("_getCollegeAcademicFolder createFolder error: " + e.message);
+    return null;
+  }
+}
+
 function getAcademicSchedule(sheetId, teachingPlanLink) {
   var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
   try {
@@ -1645,44 +1702,11 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     var activeEmail = "";
     try { activeEmail = Session.getActiveUser().getEmail(); } catch(e) {}
 
-    var parentFolder = null;
-    var scannedFolderName = "";
-    var scannedFolderId = "";
-    var folderOwnerEmail = "";
-    var targetFile = null;
-
-    try {
-      targetFile = DriveApp.getFileById(targetSpreadsheetId);
-      if (targetFile) {
-        try {
-          var fileOwner = targetFile.getOwner();
-          if (fileOwner) folderOwnerEmail = fileOwner.getEmail();
-        } catch(e) {}
-        
-        var parents = targetFile.getParents();
-        if (parents.hasNext()) {
-          parentFolder = parents.next();
-          scannedFolderName = parentFolder.getName();
-          scannedFolderId = parentFolder.getId();
-          try {
-            var folderOwner = parentFolder.getOwner();
-            if (folderOwner && !folderOwnerEmail) folderOwnerEmail = folderOwner.getEmail();
-          } catch(e) {}
-        }
-      }
-    } catch(e) {
-      return { success: false, error: "Drive Permission Error: Unable to access Teaching Plan file (ID: " + targetSpreadsheetId + ") using Service Account (" + effectiveEmail + "). Please share the file with " + effectiveEmail + "." };
-    }
-
-    if (!parentFolder) {
-      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
-    }
-
-    var academicFolder = _findAcademicFolder(parentFolder);
+    var academicFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
     if (!academicFolder) {
       return {
         success: false,
-        error: "Folder Not Found / Permission Error: 'Academic Calendars & Timetable' folder NOT FOUND inside '" + (scannedFolderName || 'Parent Folder') + "' (Owner: " + (folderOwnerEmail || "Unknown") + "). Fix: Create folder exactly 'Academic Calendars & Timetable' inside same folder as Teaching Plan sheet, share both with " + (effectiveEmail || "Service Account") + ".",
+        error: "Folder Error: Unable to locate or create 'Academic Calendars & Timetable' folder.",
         files: []
       };
     }
@@ -1975,31 +1999,9 @@ function uploadAcademicDocument(data, sheetId) {
       return { success: false, error: "SECURITY BLOCK: Access to Master Config sheet for Drive upload is prohibited." };
     }
 
-    var effectiveEmail = "";
-    try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
-
-    var parentFolder = null;
-    var targetFile = null;
-
-    try {
-      targetFile = DriveApp.getFileById(targetSpreadsheetId);
-      if (targetFile) {
-        var parents = targetFile.getParents();
-        if (parents.hasNext()) {
-          parentFolder = parents.next();
-        }
-      }
-    } catch(e) {
-      return { success: false, error: "Drive Permission Error: Unable to access Teaching Plan folder using Service Account (" + effectiveEmail + ")." };
-    }
-
-    if (!parentFolder) {
-      return { success: false, error: "Drive Permission Error: Parent Google Drive folder for Teaching Plan spreadsheet could not be located using Service Account (" + effectiveEmail + ")." };
-    }
-
-    var academicFolder = _findAcademicFolder(parentFolder);
+    var academicFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
     if (!academicFolder) {
-      return { success: false, error: "Folder Not Found / Permission Error: Could not locate or create 'Academic Calendars & Timetable' folder inside college Drive." };
+      return { success: false, error: "Folder Error: Could not locate or auto-create 'Academic Calendars & Timetable' folder." };
     }
 
     var bytes = Utilities.base64Decode(data.fileData);
