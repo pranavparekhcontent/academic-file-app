@@ -2353,12 +2353,15 @@ button, [role='button'] {
   gap: 16px;
   padding: 16px 20px;
   margin-bottom: 20px;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--radius-lg, 16px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  background: var(--card-glass-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border-radius: var(--radius-xl);
+  border-top: var(--crystal-rim-top);
+  border-left: var(--crystal-rim-top);
+  border-bottom: var(--crystal-rim-bottom);
+  border-right: var(--crystal-rim-bottom);
+  box-shadow: var(--water-shadow-standard);
   box-sizing: border-box;
   max-width: 100%;
   overflow: hidden;
@@ -3077,11 +3080,16 @@ button, [role='button'] {
 }
 
 .incharge-stat-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--colorless-glass-base) !important;
+  backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate)) !important;
+  border-top: var(--crystal-rim-top);
+  border-left: var(--crystal-rim-top);
+  border-bottom: var(--crystal-rim-bottom);
+  border-right: var(--crystal-rim-bottom);
+  box-shadow: var(--water-shadow-standard);
   border-radius: 14px;
   padding: 18px;
-  backdrop-filter: blur(12px);
 }
 
 .incharge-stat-card .stat-label {
@@ -3095,7 +3103,7 @@ button, [role='button'] {
 .incharge-stat-card .stat-value {
   font-size: 26px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--text-main, #ffffff);
   margin: 6px 0;
 }
 
@@ -3111,11 +3119,16 @@ button, [role='button'] {
 }
 
 .faculty-progress-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--card-glass-bg) !important;
+  backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate)) !important;
+  border-top: var(--crystal-rim-top);
+  border-left: var(--crystal-rim-top);
+  border-bottom: var(--crystal-rim-bottom);
+  border-right: var(--crystal-rim-bottom);
+  box-shadow: var(--water-shadow-standard);
   border-radius: 16px;
   padding: 20px;
-  backdrop-filter: blur(16px);
 }
 
 .faculty-card-header {
@@ -3128,7 +3141,7 @@ button, [role='button'] {
 .faculty-card-name {
   font-size: 15px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-main, #ffffff);
 }
 
 .faculty-card-badge {
@@ -3142,7 +3155,12 @@ button, [role='button'] {
 
 .incharge-subject-item {
   padding: 10px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--colorless-glass-base);
+  border-top: var(--crystal-rim-top);
+  border-left: var(--crystal-rim-top);
+  border-bottom: var(--crystal-rim-bottom);
+  border-right: var(--crystal-rim-bottom);
+  box-shadow: var(--water-shadow-inset);
   border-radius: 8px;
   margin-top: 8px;
 }

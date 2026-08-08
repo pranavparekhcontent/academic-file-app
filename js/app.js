@@ -373,6 +373,12 @@ const App = (() => {
       compileBtn.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
+    // Hide subject select dropdown in incharge dashboard, as it is only for faculty
+    const subjWrapper = document.getElementById('custom-subject-wrapper');
+    if (subjWrapper) {
+      subjWrapper.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
+    }
+
     // Hide download syllabus completion button for Academic Incharge (not faculty task)
     const dlBtn = document.querySelector('.d5-glass-btn');
     if (dlBtn) {
@@ -1652,6 +1658,9 @@ const App = (() => {
     const subFilter = document.getElementById('incharge-subject-filter') ? document.getElementById('incharge-subject-filter').value : 'all';
     const periodFilter = document.getElementById('incharge-period-filter') ? document.getElementById('incharge-period-filter').value : 'all';
 
+    // ── 0. Remove Unassigned Faculty ──
+    faculties = faculties.filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+
     // ── 1. Apply Faculty Filter ──
     if (facFilter !== 'all') {
       faculties = faculties.filter(f => f.faculty === facFilter);
@@ -1709,7 +1718,7 @@ const App = (() => {
         ${overallHtml}
         <div style="padding: 40px; text-align: center; background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">
           <i class="ph ph-funnel" style="font-size: 40px; color: var(--accent-blue); opacity: 0.5; margin-bottom: 8px;"></i>
-          <h4 style="margin: 0 0 6px; font-size: 15px; color: #ffffff;">No Matching Records</h4>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-main, #ffffff);">No Matching Records</h4>
           <p style="margin: 0; font-size: 12px; color: #cbd5e1;">Try clearing or adjusting your Faculty/Subject dropdown filters.</p>
         </div>
       `;
@@ -1722,7 +1731,7 @@ const App = (() => {
         return `
           <div class="incharge-subject-item" style="cursor: pointer;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top">
-              <span style="font-weight: 700; color: #ffffff;">${escHtml(s.name)} (${escHtml(s.code)})</span>
+              <span style="font-weight: 700; color: var(--text-main, #ffffff);">${escHtml(s.name)} (${escHtml(s.code)})</span>
               <span style="color: ${pctColor}; font-weight: 800; font-size: 13px;">${s.percent}% Covered</span>
             </div>
             <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">

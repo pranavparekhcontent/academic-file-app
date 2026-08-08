@@ -415,23 +415,7 @@
 
         <!-- ── VIEW: ACADEMIC INCHARGE DASHBOARD ── -->
         <div id="view-incharge-dashboard" class="app-view">
-          <div class="dashboard-section-header" style="margin-bottom: 16px;">
-            <div>
-              <h2 class="section-title">Academic Incharge Overview</h2>
-              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                Real-time monitoring of syllabus coverage, conducted lectures, and faculty progress across all course subjects.
-              </p>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <button class="btn btn-outline" onclick="App.openUploadDocModal()" title="Upload Timetable or Academic Calendar to College Drive">
-                <i class="ph ph-cloud-arrow-up"></i> Upload Document
-              </button>
-              <button class="btn btn-primary" onclick="App.loadInchargeDashboard()">
-                <i class="ph ph-arrows-clockwise"></i> Refresh Dashboard
-              </button>
-            </div>
-          </div>
-
+          <!-- Removed redundant dashboard-section-header per user request -->
           <!-- ── Interactive Glass Filter Bar (Faculty, Subject & Period Selection) ── -->
           <div class="incharge-glass-filter-bar">
             <div class="filter-group">
@@ -464,6 +448,12 @@
                 <span style="color: rgba(255,255,255,0.6); font-size: 11px;">to</span>
                 <input type="date" id="incharge-date-to" class="glass-filter-date" onchange="App.onInchargeFilterChange()">
               </div>
+            </div>
+
+            <div class="filter-group" style="flex: 0 0 auto; justify-content: flex-end; padding-top: 20px;">
+              <button class="btn btn-primary" onclick="App.loadInchargeDashboard()" style="padding: 8px 16px; font-size: 13px;">
+                <i class="ph ph-arrows-clockwise"></i> Refresh
+              </button>
             </div>
           </div>
 

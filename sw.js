@@ -3,7 +3,7 @@
  * Cache-first for app shell, network-first for API
  */
 
-const CACHE_NAME = 'acad-file-v23';
+const CACHE_NAME = 'acad-file-v24';
 const APP_SHELL = [
   './',
   './index.html',
