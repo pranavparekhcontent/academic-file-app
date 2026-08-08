@@ -1654,24 +1654,34 @@ const App = (() => {
     const rawStats = data.overallStats || {};
     let faculties = data.faculties || [];
 
-    const facFilter = document.getElementById('incharge-faculty-filter') ? document.getElementById('incharge-faculty-filter').value : 'all';
-    const subFilter = document.getElementById('incharge-subject-filter') ? document.getElementById('incharge-subject-filter').value : 'all';
-    const periodFilter = document.getElementById('incharge-period-filter') ? document.getElementById('incharge-period-filter').value : 'all';
-
     // ── 0. Remove Unassigned Faculty ──
     faculties = faculties.filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
-    // ── 1. Apply Faculty Filter ──
-    if (facFilter !== 'all') {
-      faculties = faculties.filter(f => f.faculty === facFilter);
-    }
+    // ── 1. Apply Smart Live Search Filter (Subject & Faculty letter-by-letter) ──
+    const searchEl = document.getElementById('incharge-search-filter');
+    const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
 
-    // ── 2. Apply Subject Filter ──
-    if (subFilter !== 'all') {
+    if (query) {
       faculties = faculties.map(f => {
-        const filteredSubs = (f.subjects || []).filter(s => s.code === subFilter);
-        if (filteredSubs.length === 0) return null;
-        return { ...f, subjects: filteredSubs };
+        const facName = (f.faculty || '').toLowerCase();
+        const facMatches = facName.includes(query);
+
+        if (facMatches) {
+          // Entire faculty matches by name, keep all their subjects
+          return f;
+        }
+
+        // Check if any subject matches letter-by-letter
+        const matchingSubs = (f.subjects || []).filter(s => {
+          const subName = (s.name || '').toLowerCase();
+          const subCode = (s.code || '').toLowerCase();
+          return subName.includes(query) || subCode.includes(query);
+        });
+
+        if (matchingSubs.length > 0) {
+          return { ...f, subjects: matchingSubs };
+        }
+        return null;
       }).filter(Boolean);
     }
 

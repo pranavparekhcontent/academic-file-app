@@ -417,41 +417,20 @@
         <div id="view-incharge-dashboard" class="app-view">
           <!-- Removed redundant dashboard-section-header per user request -->
           <!-- ── Interactive Glass Filter Bar (Faculty, Subject & Period Selection) ── -->
-          <div class="incharge-glass-filter-bar">
-            <div class="filter-group">
-              <label><i class="ph ph-user-circle"></i> Faculty Member</label>
-              <select id="incharge-faculty-filter" class="glass-filter-select" onchange="App.onInchargeFilterChange()">
-                <option value="all">All Faculty Members</option>
-              </select>
-            </div>
-
-            <div class="filter-group">
-              <label><i class="ph ph-books"></i> Subject</label>
-              <select id="incharge-subject-filter" class="glass-filter-select" onchange="App.onInchargeFilterChange()">
-                <option value="all">All Course Subjects</option>
-              </select>
-            </div>
-
-            <div class="filter-group">
-              <label><i class="ph ph-calendar-blank"></i> Execution Period</label>
-              <select id="incharge-period-filter" class="glass-filter-select" onchange="App.onInchargePeriodChange(this.value)">
-                <option value="all">All Time</option>
-                <option value="month">This Month</option>
-                <option value="custom">Custom Date Range...</option>
-              </select>
-            </div>
-
-            <div id="incharge-custom-date-range" class="filter-group date-range-group" style="display: none;">
-              <label><i class="ph ph-clock"></i> Date Range</label>
-              <div style="display: flex; gap: 6px; align-items: center;">
-                <input type="date" id="incharge-date-from" class="glass-filter-date" onchange="App.onInchargeFilterChange()">
-                <span style="color: rgba(255,255,255,0.6); font-size: 11px;">to</span>
-                <input type="date" id="incharge-date-to" class="glass-filter-date" onchange="App.onInchargeFilterChange()">
+          <!-- ── Interactive Glass Filter Bar (Single Smart Live Search Bar & Refresh) ── -->
+          <div class="incharge-glass-filter-bar" style="display: flex; gap: 16px; align-items: flex-end;">
+            <div class="filter-group" style="flex: 1; min-width: 250px;">
+              <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary, #64748b); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                <i class="ph ph-magnifying-glass"></i> Search Subject or Faculty
+              </label>
+              <div class="glass-search-input-wrap" style="position: relative; display: flex; align-items: center;">
+                <i class="ph ph-magnifying-glass" style="position: absolute; left: 14px; font-size: 16px; color: var(--text-muted, #94a3b8); pointer-events: none;"></i>
+                <input type="text" id="incharge-search-filter" class="glass-filter-input" placeholder="Type subject or faculty name letter-by-letter..." oninput="App.onInchargeFilterChange()" style="width: 100%; padding: 10px 14px 10px 40px; background: rgba(255, 255, 255, 0.15); border: 1.5px solid rgba(255, 255, 255, 0.3); border-radius: 12px; color: var(--text-main, #1e293b); font-size: 13px; font-weight: 600; outline: none; backdrop-filter: blur(10px); transition: all 0.2s ease;" />
               </div>
             </div>
 
-            <div class="filter-group" style="flex: 0 0 auto; justify-content: flex-end; padding-top: 20px;">
-              <button class="btn btn-primary" onclick="App.loadInchargeDashboard()" style="padding: 8px 16px; font-size: 13px;">
+            <div class="filter-group" style="flex: 0 0 auto;">
+              <button class="btn btn-primary" onclick="App.loadInchargeDashboard()" style="padding: 10px 20px; font-size: 13px; border-radius: 12px; display: flex; align-items: center; gap: 6px; height: 42px;">
                 <i class="ph ph-arrows-clockwise"></i> Refresh
               </button>
             </div>
