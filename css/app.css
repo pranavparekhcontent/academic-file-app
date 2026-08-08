@@ -3345,21 +3345,18 @@ button, [role='button'] {
 }
 
 .incharge-modal-icon-wrap {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(0, 122, 255, 0.20) 0%, rgba(0, 195, 255, 0.25) 100%);
-  border-top: 1.5px solid #ffffff;
-  border-left: 1.5px solid #ffffff;
-  border-bottom: 1.5px solid rgba(0, 122, 255, 0.40);
-  border-right: 1.5px solid rgba(0, 122, 255, 0.40);
-  box-shadow: inset 0 1.5px 2px #ffffff, 0 6px 16px rgba(0, 122, 255, 0.25);
-  color: #0084ff;
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.95), rgba(0, 195, 255, 0.95)) !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.80) !important;
+  color: #ffffff !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  margin-bottom: 12px;
+  font-size: 26px;
+  margin-bottom: 14px;
 }
 
 .incharge-modal-title {
@@ -3373,6 +3370,9 @@ button, [role='button'] {
 .incharge-modal-subtitle {
   font-size: 12.5px;
   font-weight: 600;
+  color: #334155 !important;
+  margin: 0;
+}
   color: var(--text-muted, #334155) !important;
   margin: 0;
 }
@@ -3500,21 +3500,18 @@ button, [role='button'] {
 }
 
 .incharge-modal-icon-wrap {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.30) 0%, rgba(129, 140, 248, 0.15) 100%);
-  border-top: 1.5px solid #ffffff;
-  border-left: 1.5px solid #ffffff;
-  border-bottom: 1.5px solid rgba(99, 102, 241, 0.40);
-  border-right: 1.5px solid rgba(99, 102, 241, 0.40);
-  box-shadow: inset 0 1.5px 2px #ffffff, 0 6px 16px rgba(99, 102, 241, 0.30);
-  color: #818cf8;
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.95), rgba(0, 195, 255, 0.95)) !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.80) !important;
+  color: #ffffff !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  margin-bottom: 12px;
+  font-size: 26px;
+  margin-bottom: 14px;
 }
 
 .incharge-modal-title {
