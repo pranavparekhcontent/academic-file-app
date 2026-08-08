@@ -1687,22 +1687,26 @@ function _getCollegeAcademicFolder(targetSpreadsheetId) {
     Logger.log("_getCollegeAcademicFolder parent folder scan error: " + e.message);
   }
 
-  // 2. If spreadsheet is loose (no parent folder), search shared folders owned by the college owner
-  if (collegeOwnerEmail) {
-    try {
-      var searchRes = DriveApp.searchFolders("title = 'Academic Calendars & Timetable' and '" + collegeOwnerEmail + "' in owners and trashed = false");
-      if (searchRes.hasNext()) {
-        return { folder: searchRes.next(), ownerEmail: collegeOwnerEmail };
-      }
-    } catch(e) {}
-  }
+  // 2. Search Drive for any folder named "Academic Calendars & Timetable"
+  try {
+    var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
+    if (globalFolders.hasNext()) {
+      var gf = globalFolders.next();
+      return { folder: gf, ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(gf) };
+    }
+  } catch(e) {}
 
-  // 3. STRICT GUARD: DO NOT FALLBACK TO DEV GMAIL!
-  return {
-    folder: null,
-    ownerEmail: collegeOwnerEmail,
-    error: "College Drive Folder Required: Please put your Teaching Plan spreadsheet inside a Google Drive folder on your College account (" + (collegeOwnerEmail || "College Account") + ") or create a folder named 'Academic Calendars & Timetable' on that Drive."
-  };
+  // 3. Automatically create "Academic Calendars & Timetable" folder if not found
+  try {
+    var newFolder = DriveApp.createFolder("Academic Calendars & Timetable");
+    return { folder: newFolder, ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(newFolder) };
+  } catch(e) {
+    return {
+      folder: null,
+      ownerEmail: collegeOwnerEmail,
+      error: "Folder Error: Could not auto-create 'Academic Calendars & Timetable' folder."
+    };
+  }
 }
 
 function _getFolderOwnerEmail(folder) {
