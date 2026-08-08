@@ -2315,12 +2315,12 @@ button, [role='button'] {
 .toast i {
   font-size: 22px;
   flex-shrink: 0;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
 }
 
-.toast.success i { color: #4ade80; }
-.toast.warning i { color: #fbbf24; }
-.toast.danger i  { color: #f87171; }
+.toast.success i { color: #34d399 !important; }
+.toast.warning i { color: #fbbf24 !important; }
+.toast.danger i  { color: #f87171 !important; }
 
 .toast-details {
   flex: 1;
@@ -2330,8 +2330,9 @@ button, [role='button'] {
 .toast-details h5 {
   margin: 0;
   font-size: 14px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-weight: 800;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.60) !important;
   letter-spacing: 0.2px;
 }
 
@@ -2339,8 +2340,9 @@ button, [role='button'] {
   margin: 3px 0 0;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  color: #cbd5e1 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.40) !important;
+  line-height: 1.35;
 }
 
 .toast-subject-picker {
