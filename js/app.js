@@ -1852,6 +1852,9 @@ const App = (() => {
         const pctBorder = isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)';
         const sBarColor = isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
 
+        const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
+        const unitLabel = isPractical ? 'practicals' : 'lectures';
+
         return `
           <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
@@ -1870,7 +1873,7 @@ const App = (() => {
             </div>
 
             <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
-              <span style="font-size: 11.5px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+              <span style="font-size: 11.5px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed</span>
               <span style="font-size: 12px; color: #0284c7 !important; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important;"></i></span>
             </div>
           </div>
@@ -1879,14 +1882,11 @@ const App = (() => {
 
       return `
         <div class="faculty-progress-card" style="background: ${pal.bg} !important; border-top: 1.8px solid #ffffff !important; border-left: 1.8px solid #ffffff !important; border-bottom: 1.8px solid ${pal.bottomBorder} !important; border-right: 1.8px solid ${pal.bottomBorder} !important; box-shadow: inset 0 1.5px 2px #ffffff, 0 10px 28px ${pal.shadow} !important;">
-          <div class="faculty-card-header">
+          <div class="faculty-card-header" style="margin-bottom: 12px;">
             <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
             <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Overall</div>
           </div>
-          <div style="font-size: 12.5px; color: ${pal.subText}; font-weight: 700; margin-bottom: 12px; opacity: 0.95;">
-            ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
-          </div>
-          <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
             ${subjectRows}
           </div>
         </div>
