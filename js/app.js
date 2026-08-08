@@ -1612,43 +1612,7 @@ const App = (() => {
   }
 
   function populateInchargeFilterDropdowns() {
-    const data = state.inchargeDashboard;
-    if (!data || !data.faculties) return;
-
-    const facSelect = document.getElementById('incharge-faculty-filter');
-    const subSelect = document.getElementById('incharge-subject-filter');
-
-    if (facSelect) {
-      const curFac = facSelect.value || 'all';
-      facSelect.innerHTML = '<option value="all">All Faculty Members</option>';
-      (data.faculties || []).forEach(f => {
-        const opt = document.createElement('option');
-        opt.value = f.faculty;
-        opt.textContent = `${f.faculty} (${f.overallPercent}% Covered)`;
-        facSelect.appendChild(opt);
-      });
-      facSelect.value = curFac;
-    }
-
-    if (subSelect) {
-      const curSub = subSelect.value || 'all';
-      subSelect.innerHTML = '<option value="all">All Course Subjects</option>';
-      const allSubjectsMap = new Map();
-      (data.faculties || []).forEach(f => {
-        (f.subjects || []).forEach(s => {
-          if (!allSubjectsMap.has(s.code)) {
-            allSubjectsMap.set(s.code, s.name);
-          }
-        });
-      });
-      allSubjectsMap.forEach((name, code) => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = `${name} (${code})`;
-        subSelect.appendChild(opt);
-      });
-      subSelect.value = curSub;
-    }
+    // No-op: Filter dropdowns replaced with single live search bar input field
   }
 
   function onInchargePeriodChange(periodVal) {
