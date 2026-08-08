@@ -1768,34 +1768,53 @@ const App = (() => {
     }
 
     const facultyCardsHtml = faculties.map(f => {
+      const isZero = (f.overallPercent === 0);
+
+      // Tinted Glass Colors based on 0% vs >0% progress
+      const cardBg = isZero ? 'rgba(254, 242, 242, 0.70)' : 'rgba(236, 253, 245, 0.70)';
+      const cardBorder = isZero ? 'rgba(248, 113, 113, 0.45)' : 'rgba(52, 211, 153, 0.45)';
+      const cardShadow = isZero ? 'rgba(220, 38, 38, 0.08)' : 'rgba(16, 185, 129, 0.08)';
+
+      const titleColor = isZero ? '#991b1b' : '#064e3b';
+      const iconColor = isZero ? '#dc2626' : '#059669';
+      const subTextColor = isZero ? '#7f1d1d' : '#064e3b';
+
+      const badgeBg = isZero ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+      const badgeColor = isZero ? '#dc2626' : '#047857';
+      const badgeBorder = isZero ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)';
+
+      const barBg = isZero ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+      const barColor = isZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
+
+      const subBorder = isZero ? 'rgba(252, 165, 165, 0.50)' : 'rgba(167, 243, 208, 0.50)';
+      const viewLinkColor = isZero ? '#dc2626' : '#059669';
+
       const subjectRows = (f.subjects || []).map(s => {
-        const pctColor = s.percent >= 75 ? '#059669' : (s.percent >= 40 ? '#d97706' : '#dc2626');
+        const pctColor = s.percent === 0 ? '#dc2626' : '#059669';
         return `
-          <div class="incharge-subject-item" style="cursor: pointer;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
+          <div class="incharge-subject-item" style="cursor: pointer; background: rgba(255, 255, 255, 0.65); border: 1.5px solid ${subBorder};" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top">
               <span style="font-weight: 800; color: #0f172a;">${escHtml(s.name)} (${escHtml(s.code)})</span>
               <span style="color: ${pctColor}; font-weight: 800; font-size: 13px;">${s.percent}% Covered</span>
             </div>
             <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
               <span style="font-size: 12px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
-              <span style="font-size: 12px; color: #0284c7; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
+              <span style="font-size: 12px; color: ${viewLinkColor}; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
             </div>
           </div>
         `;
       }).join('');
 
-      const barColor = f.overallPercent >= 75 ? 'linear-gradient(90deg, #10b981, #059669)' : (f.overallPercent >= 40 ? 'linear-gradient(90deg, #f59e0b, #d97706)' : 'linear-gradient(90deg, #ef4444, #dc2626)');
-
       return `
-        <div class="faculty-progress-card">
+        <div class="faculty-progress-card" style="background: ${cardBg} !important; border: 1.5px solid ${cardBorder} !important; box-shadow: 0 8px 24px ${cardShadow} !important;">
           <div class="faculty-card-header">
-            <div class="faculty-card-name" style="color: #0f172a; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: #0284c7;"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge" style="background: rgba(2,132,199,0.12); color: #0284c7; border: 1.5px solid rgba(2,132,199,0.3); padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
+            <div class="faculty-card-name" style="color: ${titleColor}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${iconColor};"></i>${escHtml(f.faculty)}</div>
+            <div class="faculty-card-badge" style="background: ${badgeBg}; color: ${badgeColor}; border: 1.5px solid ${badgeBorder}; padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
           </div>
-          <div style="font-size: 12px; color: #475569; font-weight: 600; margin-bottom: 10px;">
+          <div style="font-size: 12.5px; color: ${subTextColor}; font-weight: 700; margin-bottom: 10px; opacity: 0.9;">
             ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
           </div>
-          <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden;">
+          <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: ${barBg}; border-radius: 4px; overflow: hidden;">
             <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; border-radius: 4px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
           </div>
           <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
@@ -1808,7 +1827,7 @@ const App = (() => {
     container.innerHTML = `
       ${overallHtml}
       <div class="dashboard-section-header" style="margin: 24px 0 12px;">
-        <h3 class="section-title" style="font-size: 16px; color: #ffffff;">Faculty Course Execution Progress</h3>
+        <h3 class="section-title" style="font-size: 16px; color: #0f172a; font-weight: 800;">Faculty Course Execution Progress</h3>
       </div>
       <div class="faculty-progress-grid">
         ${facultyCardsHtml}
