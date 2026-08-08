@@ -1629,60 +1629,88 @@ function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
 }
 
 function _getCollegeAcademicFolder(targetSpreadsheetId) {
-  if (!targetSpreadsheetId) return null;
+  if (!targetSpreadsheetId) return { folder: null, ownerEmail: "", error: "No college spreadsheet configured." };
 
   var targetFile = null;
+  var collegeOwnerEmail = "";
   try {
     targetFile = DriveApp.getFileById(targetSpreadsheetId);
+    if (targetFile) {
+      try {
+        var owner = targetFile.getOwner();
+        if (owner) collegeOwnerEmail = owner.getEmail();
+      } catch(e) {}
+    }
   } catch(e) {
-    Logger.log("_getCollegeAcademicFolder getFileById error: " + e.message);
+    return {
+      folder: null,
+      ownerEmail: "",
+      error: "Drive Access Error: Cannot access college Teaching Plan spreadsheet (ID: " + targetSpreadsheetId + "). Ensure the spreadsheet is shared with Editor permission."
+    };
   }
 
-  // 1. Check parent folder of the college spreadsheet
-  if (targetFile) {
-    try {
-      var parents = targetFile.getParents();
-      while (parents.hasNext()) {
-        var parentFolder = parents.next();
-        var childFolders = parentFolder.getFoldersByName("Academic Calendars & Timetable");
-        if (childFolders.hasNext()) {
-          return childFolders.next();
-        }
-        var allChildren = parentFolder.getFolders();
-        while (allChildren.hasNext()) {
-          var f = allChildren.next();
-          var fn = f.getName().toLowerCase();
-          if (fn.indexOf('academic') !== -1 || fn.indexOf('timetable') !== -1 || fn.indexOf('calendar') !== -1 || fn.indexOf('calender') !== -1 || fn.indexOf('schedule') !== -1) {
-            return f;
-          }
-        }
-        // Auto-create "Academic Calendars & Timetable" inside parent folder
-        try {
-          return parentFolder.createFolder("Academic Calendars & Timetable");
-        } catch(ex) {
-          return parentFolder;
+  if (!targetFile) {
+    return { folder: null, ownerEmail: "", error: "Drive Error: College spreadsheet not found." };
+  }
+
+  // 1. Inspect parent folders of the college spreadsheet on the College Drive
+  try {
+    var parents = targetFile.getParents();
+    while (parents.hasNext()) {
+      var parentFolder = parents.next();
+      
+      // Check if "Academic Calendars & Timetable" exists inside parent folder
+      var childFolders = parentFolder.getFoldersByName("Academic Calendars & Timetable");
+      if (childFolders.hasNext()) {
+        return { folder: childFolders.next(), ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(parentFolder) };
+      }
+      
+      // Check for any folder with academic/timetable/calendar in name
+      var allChildren = parentFolder.getFolders();
+      while (allChildren.hasNext()) {
+        var f = allChildren.next();
+        var fn = f.getName().toLowerCase();
+        if (fn.indexOf('academic') !== -1 || fn.indexOf('timetable') !== -1 || fn.indexOf('calendar') !== -1 || fn.indexOf('calender') !== -1 || fn.indexOf('schedule') !== -1) {
+          return { folder: f, ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(f) };
         }
       }
-    } catch(e) {
-      Logger.log("_getCollegeAcademicFolder parent scan error: " + e.message);
+      
+      // Auto-create "Academic Calendars & Timetable" inside parent folder on College Drive
+      try {
+        var newSub = parentFolder.createFolder("Academic Calendars & Timetable");
+        return { folder: newSub, ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(parentFolder) };
+      } catch(ex) {
+        return { folder: parentFolder, ownerEmail: collegeOwnerEmail || _getFolderOwnerEmail(parentFolder) };
+      }
     }
-  }
-
-  // 2. Approach #1: Global Drive search for "Academic Calendars & Timetable"
-  try {
-    var globalFolders = DriveApp.getFoldersByName("Academic Calendars & Timetable");
-    if (globalFolders.hasNext()) {
-      return globalFolders.next();
-    }
-  } catch(e) {}
-
-  // 3. Auto-create "Academic Calendars & Timetable" folder in Drive on the fly
-  try {
-    return DriveApp.createFolder("Academic Calendars & Timetable");
   } catch(e) {
-    Logger.log("_getCollegeAcademicFolder createFolder error: " + e.message);
-    return null;
+    Logger.log("_getCollegeAcademicFolder parent folder scan error: " + e.message);
   }
+
+  // 2. If spreadsheet is loose (no parent folder), search shared folders owned by the college owner
+  if (collegeOwnerEmail) {
+    try {
+      var searchRes = DriveApp.searchFolders("title = 'Academic Calendars & Timetable' and '" + collegeOwnerEmail + "' in owners and trashed = false");
+      if (searchRes.hasNext()) {
+        return { folder: searchRes.next(), ownerEmail: collegeOwnerEmail };
+      }
+    } catch(e) {}
+  }
+
+  // 3. STRICT GUARD: DO NOT FALLBACK TO DEV GMAIL!
+  return {
+    folder: null,
+    ownerEmail: collegeOwnerEmail,
+    error: "College Drive Folder Required: Please put your Teaching Plan spreadsheet inside a Google Drive folder on your College account (" + (collegeOwnerEmail || "College Account") + ") or create a folder named 'Academic Calendars & Timetable' on that Drive."
+  };
+}
+
+function _getFolderOwnerEmail(folder) {
+  try {
+    var o = folder.getOwner();
+    if (o) return o.getEmail();
+  } catch(e) {}
+  return "";
 }
 
 function getAcademicSchedule(sheetId, teachingPlanLink) {
@@ -1701,25 +1729,21 @@ function getAcademicSchedule(sheetId, teachingPlanLink) {
     try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
     var activeEmail = "";
     try { activeEmail = Session.getActiveUser().getEmail(); } catch(e) {}
-    var folderOwnerEmail = "";
-    var scannedFolderName = "";
-    var scannedFolderId = "";
 
-    var academicFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
+    var resFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
+    var academicFolder = resFolder ? resFolder.folder : null;
+    var folderOwnerEmail = resFolder ? (resFolder.ownerEmail || "") : "";
+    var scannedFolderName = academicFolder ? academicFolder.getName() : "";
+    var scannedFolderId = academicFolder ? academicFolder.getId() : "";
+
     if (!academicFolder) {
       return {
         success: false,
-        error: "Folder Error: Unable to locate or create 'Academic Calendars & Timetable' folder.",
+        folderOwnerEmail: folderOwnerEmail,
+        error: resFolder ? resFolder.error : "Folder Error: Unable to locate 'Academic Calendars & Timetable' folder on College Drive.",
         files: []
       };
     }
-
-    try { scannedFolderName = academicFolder.getName(); } catch(e) {}
-    try { scannedFolderId = academicFolder.getId(); } catch(e) {}
-    try {
-      var owner = academicFolder.getOwner();
-      if (owner) folderOwnerEmail = owner.getEmail();
-    } catch(e) {}
 
     var allFiles = [];
     var seenIds = {};
