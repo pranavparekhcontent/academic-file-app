@@ -1856,30 +1856,44 @@ const App = (() => {
         const unitLabel = isPractical ? 'practicals' : 'lectures';
 
         return `
-          <div class="incharge-subject-item" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-              <div style="flex: 1; min-width: 180px;">
-                <div style="font-weight: 800; color: #0f172a; font-size: 13.5px; line-height: 1.35;">
-                  ${escHtml(s.name)} <span style="color: #475569; font-weight: 700; font-size: 12px;">(${escHtml(s.code)})</span>
+          <div class="incharge-subject-item" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;">
+            <!-- Row 1: Subject Name -->
+            <div style="font-weight: 800; color: #0f172a; font-size: 14px; line-height: 1.3;">
+              ${escHtml(s.name)}
+            </div>
+
+            <!-- Row 2: Code, % Covered badge, View Plan button in same row -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+              <span style="color: #475569; font-weight: 700; font-size: 12.5px;">Code: (${escHtml(s.code)})</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                <div style="display: inline-flex; align-items: center; gap: 4px; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 3px 9px; border-radius: 9999px; height: 28px;">
+                  <span style="font-size: 12px; font-weight: 900; color: ${pctColor};">${s.percent}%</span>
+                  <span style="font-size: 9.5px; font-weight: 800; color: ${pctColor}; text-transform: uppercase; letter-spacing: 0.3px;">Covered</span>
                 </div>
-                <div style="font-size: 11.5px; color: #475569; font-weight: 600; margin-top: 2px;">
-                  Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed
-                </div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                <div style="display: inline-flex; align-items: center; gap: 4px; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 4px 10px; border-radius: 9999px; height: 32px;">
-                  <span style="font-size: 13px; font-weight: 900; color: ${pctColor};">${s.percent}%</span>
-                  <span style="font-size: 10px; font-weight: 800; color: ${pctColor}; text-transform: uppercase; letter-spacing: 0.3px;">Covered</span>
-                </div>
-                <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 12px; font-weight: 800; padding: 0 12px; height: 32px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+                <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                   View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
                 </button>
               </div>
             </div>
 
-            <!-- Subject-wise Progress Bar -->
-            <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden;">
+            <!-- Row 3: Status Bar -->
+            <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden; margin-top: 8px;">
               <div style="width: ${s.percent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+            </div>
+
+            <!-- Row 4: Sem and Total Lectures / Practicals Row -->
+            <div style="font-size: 11.5px; color: #475569; font-weight: 600; margin-top: 6px;">
+              Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed
+            </div>
+
+            <!-- Row 5: Average % Attendance of Students & Faculty Report Row -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
+              <span style="font-size: 11.5px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">--%</span>
+              </span>
+              <button type="button" class="btn-faculty-report-link" title="Faculty Report (Unwired placeholder)" style="background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.30); color: #475569; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
+                Faculty Report <i class="ph ph-file-text" style="color: #475569;"></i>
+              </button>
             </div>
           </div>
         `;
