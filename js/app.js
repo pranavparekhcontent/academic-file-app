@@ -1743,14 +1743,14 @@ const App = (() => {
     const overallHtml = `
       <div class="incharge-summary-cards">
         <div class="incharge-stat-card">
-          <div class="stat-label">Total Faculty Members</div>
-          <div class="stat-value">${totalFaculties}</div>
-          <div class="stat-sub">Assigned academic staff</div>
+          <div class="stat-label" style="color: #334155; font-weight: 800; text-transform: uppercase; font-size: 12px;">Total Faculty Members</div>
+          <div class="stat-value" style="color: #0f172a; font-weight: 900; font-size: 32px; margin: 4px 0;">${totalFaculties}</div>
+          <div class="stat-sub" style="color: #475569; font-weight: 600; font-size: 12px;">Assigned academic staff</div>
         </div>
         <div class="incharge-stat-card">
-          <div class="stat-label">Total Course Subjects</div>
-          <div class="stat-value" style="color: var(--accent-blue, #0071e3);">${totalSubjectsCount}</div>
-          <div class="stat-sub">Tracked academic subjects</div>
+          <div class="stat-label" style="color: #334155; font-weight: 800; text-transform: uppercase; font-size: 12px;">Total Course Subjects</div>
+          <div class="stat-value" style="color: #0284c7; font-weight: 900; font-size: 32px; margin: 4px 0;">${totalSubjectsCount}</div>
+          <div class="stat-sub" style="color: #475569; font-weight: 600; font-size: 12px;">Tracked academic subjects</div>
         </div>
       </div>
     `;
@@ -1758,10 +1758,10 @@ const App = (() => {
     if (faculties.length === 0) {
       container.innerHTML = `
         ${overallHtml}
-        <div style="padding: 40px; text-align: center; background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">
-          <i class="ph ph-funnel" style="font-size: 40px; color: var(--accent-blue); opacity: 0.5; margin-bottom: 8px;"></i>
-          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--text-main, #ffffff);">No Matching Records</h4>
-          <p style="margin: 0; font-size: 12px; color: #cbd5e1;">Try clearing or adjusting your Faculty/Subject dropdown filters.</p>
+        <div style="padding: 40px; text-align: center; background: rgba(255,255,255,0.4); border-radius: 16px; border: 1px solid rgba(255,255,255,0.8); margin-top: 20px;">
+          <i class="ph ph-funnel" style="font-size: 40px; color: #0284c7; opacity: 0.8; margin-bottom: 8px;"></i>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: #0f172a; font-weight: 800;">No Matching Records</h4>
+          <p style="margin: 0; font-size: 13px; color: #475569; font-weight: 600;">Try clearing or adjusting your search input filter.</p>
         </div>
       `;
       return;
@@ -1769,33 +1769,33 @@ const App = (() => {
 
     const facultyCardsHtml = faculties.map(f => {
       const subjectRows = (f.subjects || []).map(s => {
-        const pctColor = s.percent >= 75 ? '#34d399' : (s.percent >= 40 ? '#f6e05e' : '#f87171');
+        const pctColor = s.percent >= 75 ? '#059669' : (s.percent >= 40 ? '#d97706' : '#dc2626');
         return `
           <div class="incharge-subject-item" style="cursor: pointer;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top">
-              <span style="font-weight: 700; color: var(--text-main, #ffffff);">${escHtml(s.name)} (${escHtml(s.code)})</span>
+              <span style="font-weight: 800; color: #0f172a;">${escHtml(s.name)} (${escHtml(s.code)})</span>
               <span style="color: ${pctColor}; font-weight: 800; font-size: 13px;">${s.percent}% Covered</span>
             </div>
             <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-              <span style="font-size: 12px; color: #cbd5e1;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
-              <span style="font-size: 11px; color: #60a5fa; font-weight: 600; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
+              <span style="font-size: 12px; color: #475569; font-weight: 600;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+              <span style="font-size: 12px; color: #0284c7; font-weight: 800; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
             </div>
           </div>
         `;
       }).join('');
 
-      const barColor = f.overallPercent >= 75 ? 'linear-gradient(90deg, #6366f1, #818cf8)' : (f.overallPercent >= 40 ? 'linear-gradient(90deg, #60a5fa, #93c5fd)' : 'linear-gradient(90deg, #f87171, #fca5a5)');
+      const barColor = f.overallPercent >= 75 ? 'linear-gradient(90deg, #10b981, #059669)' : (f.overallPercent >= 40 ? 'linear-gradient(90deg, #f59e0b, #d97706)' : 'linear-gradient(90deg, #ef4444, #dc2626)');
 
       return `
         <div class="faculty-progress-card">
           <div class="faculty-card-header">
-            <div class="faculty-card-name" style="color: #ffffff; font-weight: 800;"><i class="ph ph-user-circle" style="margin-right: 6px; color: #818cf8;"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge" style="background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); padding: 4px 10px; border-radius: 20px; font-weight: 700;">${f.overallPercent}% Overall</div>
+            <div class="faculty-card-name" style="color: #0f172a; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: #0284c7;"></i>${escHtml(f.faculty)}</div>
+            <div class="faculty-card-badge" style="background: rgba(2,132,199,0.12); color: #0284c7; border: 1.5px solid rgba(2,132,199,0.3); padding: 4px 12px; border-radius: 20px; font-weight: 800;">${f.overallPercent}% Overall</div>
           </div>
-          <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 10px;">
+          <div style="font-size: 12px; color: #475569; font-weight: 600; margin-bottom: 10px;">
             ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
           </div>
-          <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+          <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden;">
             <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; border-radius: 4px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
           </div>
           <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
