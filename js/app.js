@@ -88,6 +88,16 @@ const App = (() => {
     show(title, msg, type = 'success') {
       const stack = document.getElementById('toast-stack');
       if (!stack) return;
+
+      // Deduplicate: Don't show duplicate toasts if identical toast is already active
+      const activeToasts = stack.querySelectorAll('.toast');
+      for (let t of activeToasts) {
+        const h5 = t.querySelector('h5');
+        const p = t.querySelector('p');
+        if (h5 && p && h5.innerText === String(title) && p.innerText === String(msg)) {
+          return; // Skip duplicate toast
+        }
+      }
       
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -586,7 +596,10 @@ const App = (() => {
   }
 
   async function doInchargeLogin(providedPin) {
-    const pin = providedPin !== undefined ? String(providedPin).trim() : (document.getElementById('login-incharge-pin-input') ? document.getElementById('login-incharge-pin-input').value.trim() : '');
+    if (state._isAuthenticatingIncharge) return;
+
+    const pinInput = document.getElementById('login-incharge-pin-input');
+    const pin = providedPin !== undefined ? String(providedPin).trim() : (pinInput ? pinInput.value.trim() : '');
     const selName = document.getElementById('login-incharge-select') ? document.getElementById('login-incharge-select').value : '';
 
     if (!pin) {
@@ -598,6 +611,18 @@ const App = (() => {
       Toast.show('Account Locked', 'Too many failed PIN attempts (3/3). Access locked until app restart.', 'danger');
       return;
     }
+
+    state._isAuthenticatingIncharge = true;
+
+    const btn = document.getElementById('btn-incharge-login') || document.querySelector('.btn-incharge');
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '0.75';
+      btn.style.cursor = 'not-allowed';
+      btn.innerHTML = '<i class="ph ph-spinner spinner" style="font-size: 18px;"></i> Authenticating...';
+    }
+    if (pinInput) pinInput.disabled = true;
 
     Toast.show('Authenticating...', 'Verifying incharge credentials with college sheet...', 'warning');
 
@@ -645,6 +670,15 @@ const App = (() => {
       }
     } catch(e) {
       Toast.show('Network Error', e.message, 'danger');
+    } finally {
+      state._isAuthenticatingIncharge = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+        btn.innerHTML = origHtml || '<i class="ph ph-key-return" style="font-size: 18px;"></i> Enter Dashboard';
+      }
+      if (pinInput) pinInput.disabled = false;
     }
   }
 
