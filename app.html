@@ -509,13 +509,13 @@
 </div>
 
 <!-- Modal confirmation box -->
-<div class="modal-overlay" id="modal-confirm">
-  <div class="modal-content">
-    <h3 style="font-family: 'Inter', sans-serif; font-size:16px; font-weight:600;" id="modal-title">Confirm Action</h3>
-    <p style="font-size:13px; color: var(--text-secondary);" id="modal-message">Do you want to continue?</p>
-    <div style="display: flex; gap: 12px; align-self: flex-end; margin-top: 10px;">
-      <button class="btn btn-outline" id="modal-cancel-btn">Cancel</button>
-      <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+<div class="modal-overlay" id="modal-confirm" style="display: none; z-index: 2000;">
+  <div class="incharge-modal-card" style="max-width: 420px; padding: 26px;">
+    <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; color: var(--text-main, #0f172a); letter-spacing: -0.3px;" id="modal-title">Confirm Action</h3>
+    <p style="font-size: 13px; color: var(--text-muted, #334155); line-height: 1.5; margin-bottom: 20px; font-weight: 500;" id="modal-message">Do you want to continue?</p>
+    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 10px;">
+      <button class="btn btn-outline" id="modal-cancel-btn" style="padding: 9px 20px; font-size: 13.5px;">Cancel</button>
+      <button class="btn btn-incharge" id="modal-confirm-btn" style="margin-top: 0; width: auto; height: 38px; padding: 9px 24px; font-size: 13.5px;">Confirm</button>
     </div>
   </div>
 </div>
