@@ -1939,6 +1939,26 @@ function sendFCMPushNotification(title, body, topic, customData) {
   }
 }
 
+function _findAcademicFolder(parentFolder) {
+  if (!parentFolder) return null;
+  try {
+    var folders = parentFolder.getFolders();
+    while (folders.hasNext()) {
+      var folder = folders.next();
+      var name = folder.getName().toLowerCase();
+      if (name.indexOf('academic') !== -1 || name.indexOf('timetable') !== -1 || name.indexOf('calendar') !== -1 || name.indexOf('calender') !== -1 || name.indexOf('schedule') !== -1) {
+        return folder;
+      }
+    }
+  } catch(e) {}
+
+  try {
+    return parentFolder.createFolder("Academic Calendars & Timetable");
+  } catch(e) {
+    return parentFolder;
+  }
+}
+
 function uploadAcademicDocument(data, sheetId) {
   var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
   try {
@@ -1979,14 +1999,11 @@ function uploadAcademicDocument(data, sheetId) {
 
     var academicFolder = _findAcademicFolder(parentFolder);
     if (!academicFolder) {
-      return {
-        success: false,
-        error: "Folder Not Found / Permission Error: 'Academic Calendars & Timetable' folder NOT FOUND inside '" + parentFolder.getName() + "'. Please create folder 'Academic Calendars & Timetable' inside college Drive and share with " + (effectiveEmail || "Service Account") + "."
-      };
+      academicFolder = parentFolder;
     }
 
     var bytes = Utilities.base64Decode(data.fileData);
-    var blob = Utilities.newBlob(bytes, data.mimeType || 'application/pdf', data.fileName);
+    var blob = Utilities.newBlob(bytes, data.mimeType || 'application/octet-stream', data.fileName);
 
     var uploadedFile = academicFolder.createFile(blob);
     try {
