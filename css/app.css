@@ -2232,56 +2232,53 @@ button, [role='button'] {
 
 .toast-stack {
   position: fixed;
-  inset: 0;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  z-index: 9990;
+  justify-content: flex-start;
+  gap: 10px;
+  z-index: 99999;
   pointer-events: none;
-  transition: backdrop-filter 0.3s ease;
+  width: max-content;
+  max-width: 90vw;
 }
 
 .toast-stack.has-toasts {
   background: transparent;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .toast {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 28px;
-  max-width: 420px;
+  padding: 14px 22px;
+  max-width: 440px;
   width: 90vw;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.15) 0%,
-    rgba(255, 255, 255, 0.03) 100%
-  );
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  border-radius: var(--radius-xl);
-  border-top: 1.5px solid rgba(255, 255, 255, 0.7);
-  border-left: 1.5px solid rgba(255, 255, 255, 0.7);
-  border-bottom: 1.5px solid rgba(255, 255, 255, 0.25);
-  border-right: 1.5px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.92) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border-radius: var(--radius-lg, 16px);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.40);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.40);
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.40);
+  border-right: 1.5px solid rgba(0, 0, 0, 0.40);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.15),
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    inset 0 1.5px 2px rgba(255, 255, 255, 0.85);
-  color: var(--text-main);
+    0 16px 40px rgba(0, 0, 0, 0.50),
+    0 4px 12px rgba(0, 0, 0, 0.25),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.25);
+  color: #ffffff;
   font-size: 13px;
   font-weight: 600;
   pointer-events: auto;
   position: relative;
   overflow: hidden;
   opacity: 0;
-  transform: scale(0.9) translateY(12px);
-  transition: opacity 0.35s cubic-bezier(.22,1,.36,1), transform 0.35s cubic-bezier(.22,1,.36,1);
+  transform: translateY(-16px) scale(0.96);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 /* Glass shimmer highlight */

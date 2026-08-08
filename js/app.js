@@ -117,7 +117,7 @@ const App = (() => {
             stack.classList.remove('has-toasts');
           }
         }, 350);
-      }, 4000);
+      }, 3000);
     },
 
     showSubjectPicker(facultySubs, onSelect) {
