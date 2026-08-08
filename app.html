@@ -532,18 +532,18 @@
     </div>
 
     <div>
-      <p style="font-size: 13px; color: var(--text-muted, #334155); line-height: 1.5; margin-bottom: 20px; font-weight: 500;">
-        Upload Timetables, Calendars, or Academic documents directly to your <strong style="color: #0084ff; font-weight: 800;">College Google Drive Folder</strong>.
+      <p style="font-size: 13.5px; color: #0f172a !important; line-height: 1.5; margin-bottom: 20px; font-weight: 600;">
+        Upload Timetables, Calendars, or Academic documents directly to your <strong style="color: #0284c7; font-weight: 800;">College Google Drive Folder</strong>.
       </p>
 
       <div class="form-group" style="margin-bottom: 22px;">
-        <label class="incharge-field-label">Select File (PDF, Word, Excel, Images, Any Format)</label>
-        <input type="file" id="upload-doc-file" class="incharge-glass-input" accept="*/*" style="padding: 11px 14px !important; letter-spacing: normal !important; font-size: 13.5px !important; border-style: dashed !important;">
+        <label class="incharge-field-label" style="color: #0f172a !important; font-weight: 800 !important;">Select File (PDF, Word, Excel, Images, Any Format)</label>
+        <input type="file" id="upload-doc-file" class="incharge-glass-file-input" accept="*/*">
       </div>
 
-      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
-        <button class="btn btn-outline" onclick="App.closeUploadDocModal()" style="padding: 10px 22px; font-size: 14px;">Cancel</button>
-        <button class="btn btn-primary" id="btn-do-upload-doc" onclick="App.doUploadAcademicDocument()" style="padding: 10px 24px; font-size: 14px;">
+      <div style="display: flex; gap: 12px; align-items: center; width: 100%; margin-top: 24px;">
+        <button type="button" class="btn btn-glass-cancel" onclick="App.closeUploadDocModal()" style="flex: 1; height: 46px; border-radius: 9999px; background: rgba(255, 255, 255, 0.60); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid rgba(165, 185, 210, 0.40); border-right: 1.5px solid rgba(165, 185, 210, 0.40); color: #0f172a; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">Cancel</button>
+        <button type="button" class="btn btn-incharge" id="btn-do-upload-doc" onclick="App.doUploadAcademicDocument()" style="flex: 1; height: 46px; margin-top: 0; border-radius: 9999px; padding: 0 16px; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
           <i class="ph ph-cloud-arrow-up" style="font-size: 18px;"></i> Upload File
         </button>
       </div>
