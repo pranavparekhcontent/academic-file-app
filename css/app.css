@@ -2345,6 +2345,73 @@ button, [role='button'] {
   line-height: 1.35;
 }
 
+/* Academic Incharge Interactive Filter Bar */
+.incharge-glass-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.incharge-glass-filter-bar .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.incharge-glass-filter-bar label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.incharge-glass-filter-bar label i {
+  font-size: 14px;
+  color: #60a5fa;
+}
+
+.glass-filter-select,
+.glass-filter-date {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.25s ease;
+}
+
+.glass-filter-select:focus,
+.glass-filter-date:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.glass-filter-select option {
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px;
+}
+
 .toast-subject-picker {
   max-width: 480px;
   width: 92vw;

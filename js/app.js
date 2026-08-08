@@ -367,6 +367,12 @@ const App = (() => {
     };
     document.getElementById('portal-view-title').innerText = titles[viewId] || 'Portal';
 
+    // Toggle compile course file button visibility (Requirement 4)
+    const compileBtn = document.querySelector('.topbar-right');
+    if (compileBtn) {
+      compileBtn.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
+    }
+
     // Synchronize views with current data
     if (viewId === 'teaching-plan') populateTeachingPlan();
     else if (viewId === 'academic-schedule') loadAcademicSchedule();
@@ -1542,6 +1548,7 @@ const App = (() => {
   }
 
   // ─── ACADEMIC INCHARGE DASHBOARD ─────────────────────
+  // ─── ACADEMIC INCHARGE DASHBOARD ─────────────────────
   async function loadInchargeDashboard() {
     const container = document.getElementById('incharge-dashboard-content');
     if (container) {
@@ -1559,6 +1566,7 @@ const App = (() => {
       }
 
       state.inchargeDashboard = data;
+      populateInchargeFilterDropdowns();
       renderInchargeDashboard();
     } catch (e) {
       if (container) {
@@ -1568,45 +1576,146 @@ const App = (() => {
     }
   }
 
+  function populateInchargeFilterDropdowns() {
+    const data = state.inchargeDashboard;
+    if (!data || !data.faculties) return;
+
+    const facSelect = document.getElementById('incharge-faculty-filter');
+    const subSelect = document.getElementById('incharge-subject-filter');
+
+    if (facSelect) {
+      const curFac = facSelect.value || 'all';
+      facSelect.innerHTML = '<option value="all">All Faculty Members</option>';
+      (data.faculties || []).forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.faculty;
+        opt.textContent = `${f.faculty} (${f.overallPercent}% Covered)`;
+        facSelect.appendChild(opt);
+      });
+      facSelect.value = curFac;
+    }
+
+    if (subSelect) {
+      const curSub = subSelect.value || 'all';
+      subSelect.innerHTML = '<option value="all">All Course Subjects</option>';
+      const allSubjectsMap = new Map();
+      (data.faculties || []).forEach(f => {
+        (f.subjects || []).forEach(s => {
+          if (!allSubjectsMap.has(s.code)) {
+            allSubjectsMap.set(s.code, s.name);
+          }
+        });
+      });
+      allSubjectsMap.forEach((name, code) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = `${name} (${code})`;
+        subSelect.appendChild(opt);
+      });
+      subSelect.value = curSub;
+    }
+  }
+
+  function onInchargePeriodChange(periodVal) {
+    const rangeDiv = document.getElementById('incharge-custom-date-range');
+    if (rangeDiv) {
+      rangeDiv.style.display = (periodVal === 'custom') ? 'flex' : 'none';
+    }
+    renderInchargeDashboard();
+  }
+
+  function onInchargeFilterChange() {
+    renderInchargeDashboard();
+  }
+
   function renderInchargeDashboard() {
     const container = document.getElementById('incharge-dashboard-content');
     const data = state.inchargeDashboard;
     if (!container || !data || !data.success) return;
 
-    const stats = data.overallStats || {};
-    const faculties = data.faculties || [];
+    const rawStats = data.overallStats || {};
+    let faculties = data.faculties || [];
+
+    const facFilter = document.getElementById('incharge-faculty-filter') ? document.getElementById('incharge-faculty-filter').value : 'all';
+    const subFilter = document.getElementById('incharge-subject-filter') ? document.getElementById('incharge-subject-filter').value : 'all';
+    const periodFilter = document.getElementById('incharge-period-filter') ? document.getElementById('incharge-period-filter').value : 'all';
+
+    // ── 1. Apply Faculty Filter ──
+    if (facFilter !== 'all') {
+      faculties = faculties.filter(f => f.faculty === facFilter);
+    }
+
+    // ── 2. Apply Subject Filter ──
+    if (subFilter !== 'all') {
+      faculties = faculties.map(f => {
+        const filteredSubs = (f.subjects || []).filter(s => s.code === subFilter);
+        if (filteredSubs.length === 0) return null;
+        return { ...f, subjects: filteredSubs };
+      }).filter(Boolean);
+    }
+
+    // ── 3. Calculate Overall Filtered Stats ──
+    let totalFaculties = faculties.length;
+    let totalLectures = 0;
+    let totalConducted = 0;
+    let totalSubjectsCount = 0;
+    let sumCoveragePercent = 0;
+
+    faculties.forEach(f => {
+      (f.subjects || []).forEach(s => {
+        totalSubjectsCount++;
+        totalLectures += (s.totalLectures || 0);
+        totalConducted += (s.totalConducted || 0);
+        sumCoveragePercent += (s.percent || 0);
+      });
+    });
+
+    const avgCoveragePercent = totalSubjectsCount > 0 ? Math.round(sumCoveragePercent / totalSubjectsCount) : 0;
 
     const overallHtml = `
       <div class="incharge-summary-cards">
         <div class="incharge-stat-card">
-          <div class="stat-label">Total Faculty Members</div>
-          <div class="stat-value">${stats.totalFaculties || 0}</div>
-          <div class="stat-sub">Assigned academic staff</div>
+          <div class="stat-label">${facFilter !== 'all' ? 'Active Faculty' : 'Total Faculty Members'}</div>
+          <div class="stat-value">${totalFaculties}</div>
+          <div class="stat-sub">${facFilter !== 'all' ? escHtml(facFilter) : 'Assigned academic staff'}</div>
         </div>
         <div class="incharge-stat-card">
           <div class="stat-label">Lectures Conducted</div>
-          <div class="stat-value" style="color: #60a5fa;">${stats.totalConducted || 0} / ${stats.totalLectures || 0}</div>
-          <div class="stat-sub">${stats.totalSubjects || 0} total subjects tracked</div>
+          <div class="stat-value" style="color: #60a5fa;">${totalConducted} / ${totalLectures}</div>
+          <div class="stat-sub">${totalSubjectsCount} subject${totalSubjectsCount === 1 ? '' : 's'} tracked</div>
         </div>
         <div class="incharge-stat-card">
           <div class="stat-label">Average Syllabus Coverage</div>
-          <div class="stat-value" style="color: #34d399;">${stats.avgCoveragePercent || 0}%</div>
-          <div class="stat-sub">Across all active courses</div>
+          <div class="stat-value" style="color: #34d399;">${avgCoveragePercent}%</div>
+          <div class="stat-sub">${periodFilter === 'all' ? 'All Time' : (periodFilter === 'month' ? 'This Month' : 'Custom Period')}</div>
         </div>
       </div>
     `;
+
+    if (faculties.length === 0) {
+      container.innerHTML = `
+        ${overallHtml}
+        <div style="padding: 40px; text-align: center; background: rgba(15,23,42,0.4); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">
+          <i class="ph ph-funnel" style="font-size: 40px; color: var(--accent-blue); opacity: 0.5; margin-bottom: 8px;"></i>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: #ffffff;">No Matching Records</h4>
+          <p style="margin: 0; font-size: 12px; color: #cbd5e1;">Try clearing or adjusting your Faculty/Subject dropdown filters.</p>
+        </div>
+      `;
+      return;
+    }
 
     const facultyCardsHtml = faculties.map(f => {
       const subjectRows = (f.subjects || []).map(s => {
         const pctColor = s.percent >= 75 ? '#34d399' : (s.percent >= 40 ? '#f6e05e' : '#f87171');
         return `
-          <div class="incharge-subject-item">
+          <div class="incharge-subject-item" style="cursor: pointer;" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}">
             <div class="incharge-subject-top">
-              <span>${escHtml(s.name)} (${escHtml(s.code)})</span>
-              <span style="color: ${pctColor}; font-weight: 700;">${s.percent}% Covered</span>
+              <span style="font-weight: 700; color: #ffffff;">${escHtml(s.name)} (${escHtml(s.code)})</span>
+              <span style="color: ${pctColor}; font-weight: 800; font-size: 13px;">${s.percent}% Covered</span>
             </div>
-            <div class="incharge-subject-sub">
-              <span>Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+            <div class="incharge-subject-sub" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span style="font-size: 12px; color: #cbd5e1;">Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} lectures executed</span>
+              <span style="font-size: 11px; color: #60a5fa; font-weight: 600; display: flex; align-items: center; gap: 4px;">View Plan <i class="ph ph-caret-right"></i></span>
             </div>
           </div>
         `;
@@ -1617,16 +1726,16 @@ const App = (() => {
       return `
         <div class="faculty-progress-card">
           <div class="faculty-card-header">
-            <div class="faculty-card-name"><i class="ph ph-user-circle" style="margin-right: 6px; color: #818cf8;"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge">${f.overallPercent}% Overall</div>
+            <div class="faculty-card-name" style="color: #ffffff; font-weight: 800;"><i class="ph ph-user-circle" style="margin-right: 6px; color: #818cf8;"></i>${escHtml(f.faculty)}</div>
+            <div class="faculty-card-badge" style="background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); padding: 4px 10px; border-radius: 20px; font-weight: 700;">${f.overallPercent}% Overall</div>
           </div>
-          <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
-            ${f.totalSubjects} assigned subjects • ${f.totalConducted}/${f.totalLectures} total lectures
+          <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 10px;">
+            ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
           </div>
-          <div class="gf-progress" style="margin-bottom: 12px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+          <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
             <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; transition: width 0.3s ease;"></div>
           </div>
-          <div style="margin-top: 10px;">
+          <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
             ${subjectRows}
           </div>
         </div>
@@ -1636,12 +1745,86 @@ const App = (() => {
     container.innerHTML = `
       ${overallHtml}
       <div class="dashboard-section-header" style="margin: 24px 0 12px;">
-        <h3 class="section-title" style="font-size: 16px;">Faculty Course Execution Progress</h3>
+        <h3 class="section-title" style="font-size: 16px; color: #ffffff;">Faculty Course Execution Progress</h3>
       </div>
       <div class="faculty-progress-grid">
         ${facultyCardsHtml}
       </div>
     `;
+  }
+
+  function selectSubjectForDrilldown(code, name) {
+    selectCustomSubjectOption(code, name || code);
+    switchView('teaching-plan');
+  }
+
+  // ─── DOCUMENT UPLOAD HANDLERS ─────────────────────────
+  function openUploadDocModal() {
+    const modal = document.getElementById('upload-doc-modal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeUploadDocModal() {
+    const modal = document.getElementById('upload-doc-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function doUploadAcademicDocument() {
+    const fileInput = document.getElementById('upload-doc-file');
+    const docTypeSelect = document.getElementById('upload-doc-type');
+    const btn = document.getElementById('btn-do-upload-doc');
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      Toast.show('File Required', 'Please select a document file to upload.', 'warning');
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const docType = docTypeSelect ? docTypeSelect.value : 'timetable';
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ph ph-spinner spinner"></i> Uploading to College Drive...';
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const result = e.target.result;
+        const base64Data = result.split(',')[1];
+
+        const res = await API.uploadAcademicDocument(base64Data, file.name, file.type, docType);
+
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i> Upload to College Drive';
+        }
+
+        if (res.success) {
+          Toast.show('Upload Successful', `File "${file.name}" saved to College Drive.`, 'success');
+          closeUploadDocModal();
+          fileInput.value = '';
+          loadAcademicSchedule();
+        } else {
+          // Strictly display error toast if upload fails — no fallback!
+          Toast.show('Drive Upload Failed', res.error || 'Permission Error: Access to College Drive folder denied.', 'danger');
+        }
+      };
+      reader.onerror = () => {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i> Upload to College Drive';
+        }
+        Toast.show('File Read Error', 'Failed reading selected file.', 'danger');
+      };
+      reader.readAsDataURL(file);
+    } catch(err) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i> Upload to College Drive';
+      }
+      Toast.show('Upload Error', err.message, 'danger');
+    }
   }
 
   function updateScheduleBadge(badgeState) {
@@ -2124,6 +2307,12 @@ Generated: ${formatDisplayDate(new Date())}
     doInchargeLogin,
     showInchargePinPrompt,
     hideInchargePinPrompt,
-    loadInchargeDashboard
+    loadInchargeDashboard,
+    onInchargeFilterChange,
+    onInchargePeriodChange,
+    selectSubjectForDrilldown,
+    openUploadDocModal,
+    closeUploadDocModal,
+    doUploadAcademicDocument
   };
 })();

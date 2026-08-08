@@ -276,6 +276,21 @@ const API = (() => {
     return { success: false, error: 'Offline.' };
   }
 
+  async function uploadAcademicDocument(fileData, fileName, mimeType, docType, teachingPlanLink) {
+    if (!navigator.onLine) return { success: false, error: 'Offline. Connect to internet to upload documents.' };
+    try {
+      return await _post('uploadAcademicDocument', {
+        fileData,
+        fileName,
+        mimeType,
+        docType: docType || 'timetable',
+        teachingPlanLink: teachingPlanLink || ''
+      });
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
   return {
     getAllData,
     getTeachingPlan,
@@ -285,6 +300,7 @@ const API = (() => {
     getAcademicSchedule,
     getAcademicIncharges,
     academicInchargeLogin,
-    getInchargeDashboard
+    getInchargeDashboard,
+    uploadAcademicDocument
   };
 })();

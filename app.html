@@ -374,9 +374,14 @@
                   Files synced from your Google Drive folder. Click any file to preview.
                 </p>
               </div>
-              <button class="btn btn-primary" onclick="App.loadAcademicSchedule()" style="flex-shrink: 0;">
-                <i class="ph ph-arrows-clockwise"></i> Refresh
-              </button>
+              <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                <button class="btn btn-primary" onclick="App.openUploadDocModal()">
+                  <i class="ph ph-cloud-arrow-up"></i> Upload Document
+                </button>
+                <button class="btn btn-outline" onclick="App.loadAcademicSchedule()">
+                  <i class="ph ph-arrows-clockwise"></i> Refresh
+                </button>
+              </div>
             </div>
 
             <div id="schedule-files-grid" class="schedule-files-grid" style="padding: 24px;">
@@ -414,9 +419,49 @@
                 Real-time monitoring of syllabus coverage, conducted lectures, and faculty progress across all course subjects.
               </p>
             </div>
-            <button class="btn btn-primary" onclick="App.loadInchargeDashboard()">
-              <i class="ph ph-arrows-clockwise"></i> Refresh Dashboard
-            </button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn btn-outline" onclick="App.openUploadDocModal()" title="Upload Timetable or Academic Calendar to College Drive">
+                <i class="ph ph-cloud-arrow-up"></i> Upload Document
+              </button>
+              <button class="btn btn-primary" onclick="App.loadInchargeDashboard()">
+                <i class="ph ph-arrows-clockwise"></i> Refresh Dashboard
+              </button>
+            </div>
+          </div>
+
+          <!-- ── Interactive Glass Filter Bar (Faculty, Subject & Period Selection) ── -->
+          <div class="incharge-glass-filter-bar">
+            <div class="filter-group">
+              <label><i class="ph ph-user-circle"></i> Faculty Member</label>
+              <select id="incharge-faculty-filter" class="glass-filter-select" onchange="App.onInchargeFilterChange()">
+                <option value="all">All Faculty Members</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label><i class="ph ph-books"></i> Subject</label>
+              <select id="incharge-subject-filter" class="glass-filter-select" onchange="App.onInchargeFilterChange()">
+                <option value="all">All Course Subjects</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label><i class="ph ph-calendar-blank"></i> Execution Period</label>
+              <select id="incharge-period-filter" class="glass-filter-select" onchange="App.onInchargePeriodChange(this.value)">
+                <option value="all">All Time</option>
+                <option value="month">This Month</option>
+                <option value="custom">Custom Date Range...</option>
+              </select>
+            </div>
+
+            <div id="incharge-custom-date-range" class="filter-group date-range-group" style="display: none;">
+              <label><i class="ph ph-clock"></i> Date Range</label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="date" id="incharge-date-from" class="glass-filter-date" onchange="App.onInchargeFilterChange()">
+                <span style="color: rgba(255,255,255,0.6); font-size: 11px;">to</span>
+                <input type="date" id="incharge-date-to" class="glass-filter-date" onchange="App.onInchargeFilterChange()">
+              </div>
+            </div>
           </div>
 
           <div id="incharge-dashboard-content">
@@ -499,6 +544,46 @@
     <div style="display: flex; gap: 12px; align-self: flex-end; margin-top: 10px;">
       <button class="btn btn-outline" id="modal-cancel-btn">Cancel</button>
       <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Document Glass Modal -->
+<div class="modal-overlay" id="upload-doc-modal" style="display: none; z-index: 1600;">
+  <div class="incharge-modal-card" style="max-width: 480px;">
+    <div class="incharge-modal-header" style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <i class="ph ph-cloud-arrow-up" style="font-size: 22px; color: #60a5fa;"></i>
+        <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: #ffffff;">Upload Academic Document</h3>
+      </div>
+      <button type="button" class="btn-close-glass" onclick="App.closeUploadDocModal()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer;">&times;</button>
+    </div>
+
+    <div style="margin-top: 14px;">
+      <p style="font-size: 12px; color: #cbd5e1; line-height: 1.4; margin-bottom: 16px;">
+        Upload Timetable or Academic Calendar directly to your <strong>College Google Drive Server Folder</strong> ("Academic Calendars & Timetable").
+      </p>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label style="color: #cbd5e1; font-size: 12px; font-weight: 600;">Document Category</label>
+        <select id="upload-doc-type" class="incharge-glass-input" style="cursor: pointer;">
+          <option value="timetable">📅 Timetable (Schedule)</option>
+          <option value="calendar">📆 Academic Calendar</option>
+          <option value="other">📄 Other Academic File</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 18px;">
+        <label style="color: #cbd5e1; font-size: 12px; font-weight: 600;">Select Document File (PDF / Image / Doc)</label>
+        <input type="file" id="upload-doc-file" class="incharge-glass-input" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx">
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <button class="btn btn-outline" onclick="App.closeUploadDocModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-do-upload-doc" onclick="App.doUploadAcademicDocument()">
+          <i class="ph ph-cloud-arrow-up"></i> Upload to College Drive
+        </button>
+      </div>
     </div>
   </div>
 </div>
