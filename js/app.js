@@ -379,6 +379,12 @@ const App = (() => {
       subjWrapper.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
+    // Hide Index button (nav-dashboard) totally for Academic Incharge
+    const navIndex = document.getElementById('nav-dashboard');
+    if (navIndex) {
+      navIndex.style.display = state.isAcademicIncharge ? 'none' : 'flex';
+    }
+
     // Hide download syllabus completion button for Academic Incharge (not faculty task)
     const dlBtn = document.querySelector('.d5-glass-btn');
     if (dlBtn) {
@@ -614,6 +620,9 @@ const App = (() => {
         const navIncharge = document.getElementById('nav-incharge-dashboard');
         if (navIncharge) navIncharge.style.display = 'flex';
 
+        const navIndex = document.getElementById('nav-dashboard');
+        if (navIndex) navIndex.style.display = 'none';
+
         showScreen('portal');
         switchView('incharge-dashboard');
         Toast.show('Access Granted', `Welcome ${state.inchargeName}`, 'success');
@@ -649,9 +658,15 @@ const App = (() => {
     }
 
     state.facultyName = name;
+    state.isAcademicIncharge = false;
     state.activeCode = '';
     state.activeSubject = null;
     localStorage.setItem('acad_faculty', name);
+
+    const navIncharge = document.getElementById('nav-incharge-dashboard');
+    if (navIncharge) navIncharge.style.display = 'none';
+    const navIndex = document.getElementById('nav-dashboard');
+    if (navIndex) navIndex.style.display = 'flex';
     
     // Profile Header values
     document.getElementById('faculty-display-name').innerText = name;
@@ -688,6 +703,8 @@ const App = (() => {
     document.getElementById('login-pin').value = '';
     const inchargeNav = document.getElementById('nav-incharge-dashboard');
     if (inchargeNav) inchargeNav.style.display = 'none';
+    const navIndex = document.getElementById('nav-dashboard');
+    if (navIndex) navIndex.style.display = 'flex';
     showScreen('login');
     Toast.show('Signed Out', 'Academic session closed.', 'success');
   }
@@ -1706,19 +1723,14 @@ const App = (() => {
     const overallHtml = `
       <div class="incharge-summary-cards">
         <div class="incharge-stat-card">
-          <div class="stat-label">${facFilter !== 'all' ? 'Active Faculty' : 'Total Faculty Members'}</div>
+          <div class="stat-label">Total Faculty Members</div>
           <div class="stat-value">${totalFaculties}</div>
-          <div class="stat-sub">${facFilter !== 'all' ? escHtml(facFilter) : 'Assigned academic staff'}</div>
+          <div class="stat-sub">Assigned academic staff</div>
         </div>
         <div class="incharge-stat-card">
-          <div class="stat-label">Lectures Conducted</div>
-          <div class="stat-value" style="color: #60a5fa;">${totalConducted} / ${totalLectures}</div>
-          <div class="stat-sub">${totalSubjectsCount} subject${totalSubjectsCount === 1 ? '' : 's'} tracked</div>
-        </div>
-        <div class="incharge-stat-card">
-          <div class="stat-label">Average Syllabus Coverage</div>
-          <div class="stat-value" style="color: #34d399;">${avgCoveragePercent}%</div>
-          <div class="stat-sub">${periodFilter === 'all' ? 'All Time' : (periodFilter === 'month' ? 'This Month' : 'Custom Period')}</div>
+          <div class="stat-label">Total Course Subjects</div>
+          <div class="stat-value" style="color: var(--accent-blue, #0071e3);">${totalSubjectsCount}</div>
+          <div class="stat-sub">Tracked academic subjects</div>
         </div>
       </div>
     `;

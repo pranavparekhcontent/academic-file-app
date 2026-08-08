@@ -3074,9 +3074,15 @@ button, [role='button'] {
 
 .incharge-summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   margin-bottom: 24px;
+}
+
+@media (max-width: 600px) {
+  .incharge-summary-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .incharge-stat-card {
