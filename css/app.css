@@ -3091,3 +3091,200 @@ button, [role='button'] {
   font-size: 11px;
   color: #94a3b8;
 }
+
+/* ══════════════════════════════════════
+   3D LIQUID INDIGO CRYSTAL INCHARGE BUTTON
+   ══════════════════════════════════════ */
+.btn-incharge {
+  margin-top: 14px;
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-lg, 20px);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.88) 0%, rgba(129, 140, 248, 0.95) 100%) !important;
+  border-top: 1.5px solid #ffffff !important;
+  border-left: 1.5px solid #ffffff !important;
+  border-bottom: 1.5px solid rgba(67, 56, 202, 0.50) !important;
+  border-right: 1.5px solid rgba(67, 56, 202, 0.50) !important;
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.90),
+    0 8px 24px rgba(99, 102, 241, 0.35) !important;
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: var(--transition-glow);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.30);
+}
+
+.btn-incharge:hover {
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.95) 0%, rgba(99, 102, 241, 1) 100%) !important;
+  box-shadow:
+    inset 0 1.5px 3px #ffffff,
+    0 12px 30px rgba(99, 102, 241, 0.50) !important;
+  transform: translateY(-1px);
+}
+
+.btn-incharge-icon {
+  font-size: 20px;
+}
+
+/* ══════════════════════════════════════
+   ACADEMIC INCHARGE 3D CRYSTAL GLASS MODAL
+   ══════════════════════════════════════ */
+.incharge-modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(4, 6, 12, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.incharge-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  padding: 32px 28px 28px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(200, 220, 255, 0.08) 100%) !important;
+  backdrop-filter: blur(36px) saturate(220%) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(220%) !important;
+  border-radius: var(--radius-xl, 28px) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.90) !important;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.90) !important;
+  border-bottom: 1.5px solid rgba(165, 185, 210, 0.35) !important;
+  border-right: 1.5px solid rgba(165, 185, 210, 0.35) !important;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 10px 25px rgba(99, 102, 241, 0.20),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.95) !important;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  animation: modalPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.incharge-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  color: var(--text-main, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.incharge-modal-close:hover {
+  background: rgba(255, 255, 255, 0.30);
+  transform: scale(1.08);
+}
+
+.incharge-modal-header {
+  text-align: center;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.incharge-modal-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.30) 0%, rgba(129, 140, 248, 0.15) 100%);
+  border-top: 1.5px solid #ffffff;
+  border-left: 1.5px solid #ffffff;
+  border-bottom: 1.5px solid rgba(99, 102, 241, 0.40);
+  border-right: 1.5px solid rgba(99, 102, 241, 0.40);
+  box-shadow: inset 0 1.5px 2px #ffffff, 0 6px 16px rgba(99, 102, 241, 0.30);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.incharge-modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.50);
+  margin-bottom: 4px;
+}
+
+.incharge-modal-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8 !important;
+  margin: 0;
+}
+
+.incharge-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #cbd5e1 !important;
+  margin-bottom: 8px;
+}
+
+.incharge-glass-input {
+  width: 100%;
+  padding: 13px 18px;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.60) !important;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.60) !important;
+  border-bottom: 1.5px solid rgba(165, 185, 210, 0.30) !important;
+  border-right: 1.5px solid rgba(165, 185, 210, 0.30) !important;
+  border-radius: var(--radius-lg, 16px) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+  color: #ffffff !important;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  outline: none;
+  transition: all 0.25s ease;
+}
+
+.incharge-glass-input::placeholder {
+  color: rgba(255, 255, 255, 0.40) !important;
+  letter-spacing: normal;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.incharge-glass-input:focus {
+  background: rgba(255, 255, 255, 0.20) !important;
+  border-color: #818cf8 !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.20), 0 0 16px rgba(129, 140, 248, 0.40) !important;
+}
