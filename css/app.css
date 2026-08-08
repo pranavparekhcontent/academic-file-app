@@ -2260,18 +2260,18 @@ button, [role='button'] {
   max-width: 460px;
   width: auto;
   min-width: 280px;
-  background: rgba(255, 255, 255, 0.88) !important;
-  backdrop-filter: blur(28px) saturate(200%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  background: rgba(255, 255, 255, 0.45) !important;
+  backdrop-filter: blur(28px) saturate(210%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(210%) !important;
   border-radius: var(--radius-lg, 18px);
-  border-top: 1.5px solid #ffffff !important;
-  border-left: 1.5px solid #ffffff !important;
-  border-bottom: 1.5px solid rgba(165, 185, 210, 0.50) !important;
-  border-right: 1.5px solid rgba(165, 185, 210, 0.50) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1.5px solid rgba(165, 185, 210, 0.40) !important;
+  border-right: 1.5px solid rgba(165, 185, 210, 0.40) !important;
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.15),
-    0 4px 14px rgba(0, 120, 255, 0.12),
-    inset 0 1.5px 2px #ffffff !important;
+    0 16px 40px rgba(0, 0, 0, 0.12),
+    0 4px 14px rgba(0, 120, 255, 0.10),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.95) !important;
   color: #0f172a !important;
   font-size: 13px;
   font-weight: 600;

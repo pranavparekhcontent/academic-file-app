@@ -1768,65 +1768,65 @@ const App = (() => {
     }
 
     const facultyPalettes = [
-      {
-        bg: 'rgba(238, 242, 255, 0.75)',
-        border: 'rgba(99, 102, 241, 0.40)',
-        shadow: 'rgba(99, 102, 241, 0.08)',
+      { // Royal Sapphire Tint
+        bg: 'linear-gradient(135deg, rgba(224, 231, 255, 0.88) 0%, rgba(238, 242, 255, 0.75) 100%)',
+        border: 'rgba(99, 102, 241, 0.50)',
+        shadow: 'rgba(99, 102, 241, 0.12)',
         title: '#1e1b4b',
-        icon: '#4f46e5',
+        icon: '#4338ca',
         subText: '#3730a3',
-        badgeBg: 'rgba(79, 70, 229, 0.12)',
-        badgeColor: '#4338ca',
-        badgeBorder: 'rgba(79, 70, 229, 0.30)',
-        subBorder: 'rgba(199, 210, 254, 0.60)'
+        badgeBg: 'rgba(79, 70, 229, 0.18)',
+        badgeColor: '#312e81',
+        badgeBorder: 'rgba(79, 70, 229, 0.40)',
+        subBorder: 'rgba(165, 180, 252, 0.70)'
       },
-      {
-        bg: 'rgba(240, 253, 250, 0.75)',
-        border: 'rgba(20, 184, 166, 0.40)',
-        shadow: 'rgba(20, 184, 166, 0.08)',
+      { // Emerald Teal Tint
+        bg: 'linear-gradient(135deg, rgba(204, 251, 241, 0.88) 0%, rgba(240, 253, 250, 0.75) 100%)',
+        border: 'rgba(20, 184, 166, 0.50)',
+        shadow: 'rgba(20, 184, 166, 0.12)',
         title: '#042f2e',
-        icon: '#0d9488',
+        icon: '#0f766e',
         subText: '#115e59',
-        badgeBg: 'rgba(13, 148, 136, 0.12)',
-        badgeColor: '#0f766e',
-        badgeBorder: 'rgba(13, 148, 136, 0.30)',
-        subBorder: 'rgba(153, 246, 228, 0.60)'
+        badgeBg: 'rgba(13, 148, 136, 0.18)',
+        badgeColor: '#134e4a',
+        badgeBorder: 'rgba(13, 148, 136, 0.40)',
+        subBorder: 'rgba(153, 246, 228, 0.70)'
       },
-      {
-        bg: 'rgba(250, 245, 255, 0.75)',
-        border: 'rgba(168, 85, 247, 0.40)',
-        shadow: 'rgba(168, 85, 247, 0.08)',
+      { // Imperial Purple Tint
+        bg: 'linear-gradient(135deg, rgba(243, 232, 255, 0.88) 0%, rgba(250, 245, 255, 0.75) 100%)',
+        border: 'rgba(168, 85, 247, 0.50)',
+        shadow: 'rgba(168, 85, 247, 0.12)',
         title: '#3b0764',
-        icon: '#9333ea',
+        icon: '#7e22ce',
         subText: '#6b21a8',
-        badgeBg: 'rgba(147, 51, 234, 0.12)',
-        badgeColor: '#7e22ce',
-        badgeBorder: 'rgba(147, 51, 234, 0.30)',
-        subBorder: 'rgba(233, 213, 255, 0.60)'
+        badgeBg: 'rgba(147, 51, 234, 0.18)',
+        badgeColor: '#581c87',
+        badgeBorder: 'rgba(147, 51, 234, 0.40)',
+        subBorder: 'rgba(216, 180, 254, 0.70)'
       },
-      {
-        bg: 'rgba(255, 241, 242, 0.75)',
-        border: 'rgba(244, 63, 94, 0.40)',
-        shadow: 'rgba(244, 63, 94, 0.08)',
+      { // Crimson Rose Tint
+        bg: 'linear-gradient(135deg, rgba(255, 228, 230, 0.88) 0%, rgba(255, 241, 242, 0.75) 100%)',
+        border: 'rgba(244, 63, 94, 0.50)',
+        shadow: 'rgba(244, 63, 94, 0.12)',
         title: '#4c0519',
-        icon: '#e11d48',
+        icon: '#be123c',
         subText: '#9f1239',
-        badgeBg: 'rgba(225, 29, 72, 0.12)',
-        badgeColor: '#be123c',
-        badgeBorder: 'rgba(225, 29, 72, 0.30)',
-        subBorder: 'rgba(254, 205, 211, 0.60)'
+        badgeBg: 'rgba(225, 29, 72, 0.18)',
+        badgeColor: '#881337',
+        badgeBorder: 'rgba(225, 29, 72, 0.40)',
+        subBorder: 'rgba(254, 163, 170, 0.70)'
       },
-      {
-        bg: 'rgba(240, 249, 255, 0.75)',
-        border: 'rgba(56, 189, 248, 0.40)',
-        shadow: 'rgba(56, 189, 248, 0.08)',
+      { // Ocean Sky Tint
+        bg: 'linear-gradient(135deg, rgba(224, 242, 254, 0.88) 0%, rgba(240, 249, 255, 0.75) 100%)',
+        border: 'rgba(56, 189, 248, 0.50)',
+        shadow: 'rgba(56, 189, 248, 0.12)',
         title: '#0c4a6e',
-        icon: '#0284c7',
+        icon: '#0369a1',
         subText: '#075985',
-        badgeBg: 'rgba(2, 132, 199, 0.12)',
-        badgeColor: '#0369a1',
-        badgeBorder: 'rgba(2, 132, 199, 0.30)',
-        subBorder: 'rgba(186, 230, 253, 0.60)'
+        badgeBg: 'rgba(2, 132, 199, 0.18)',
+        badgeColor: '#0c4a6e',
+        badgeBorder: 'rgba(2, 132, 199, 0.40)',
+        subBorder: 'rgba(147, 197, 253, 0.70)'
       }
     ];
 
