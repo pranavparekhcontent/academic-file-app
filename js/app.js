@@ -373,6 +373,18 @@ const App = (() => {
       compileBtn.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
+    // Hide download syllabus completion button for Academic Incharge (not faculty task)
+    const dlBtn = document.querySelector('.d5-glass-btn');
+    if (dlBtn) {
+      dlBtn.style.display = (state.isAcademicIncharge && viewId === 'teaching-plan') ? 'none' : '';
+    }
+
+    // Show/hide back-to-incharge-dashboard button
+    const backBtn = document.getElementById('btn-back-incharge');
+    if (backBtn) {
+      backBtn.style.display = (state.isAcademicIncharge && viewId === 'teaching-plan') ? 'flex' : 'none';
+    }
+
     // Synchronize views with current data
     if (viewId === 'teaching-plan') populateTeachingPlan();
     else if (viewId === 'academic-schedule') loadAcademicSchedule();
@@ -1721,7 +1733,7 @@ const App = (() => {
         `;
       }).join('');
 
-      const barColor = f.overallPercent >= 75 ? '#10b981' : (f.overallPercent >= 40 ? '#f59e0b' : '#ef4444');
+      const barColor = f.overallPercent >= 75 ? 'linear-gradient(90deg, #6366f1, #818cf8)' : (f.overallPercent >= 40 ? 'linear-gradient(90deg, #60a5fa, #93c5fd)' : 'linear-gradient(90deg, #f87171, #fca5a5)');
 
       return `
         <div class="faculty-progress-card">
@@ -1733,7 +1745,7 @@ const App = (() => {
             ${f.totalSubjects} assigned subject${f.totalSubjects === 1 ? '' : 's'} • ${f.totalConducted}/${f.totalLectures} total lectures
           </div>
           <div class="gf-progress" style="margin-bottom: 14px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-            <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; transition: width 0.3s ease;"></div>
+            <div style="width: ${f.overallPercent}%; height: 100%; background: ${barColor}; border-radius: 4px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
           </div>
           <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
             ${subjectRows}
@@ -1756,6 +1768,10 @@ const App = (() => {
   function selectSubjectForDrilldown(code, name) {
     selectCustomSubjectOption(code, name || code);
     switchView('teaching-plan');
+  }
+
+  function goBackToInchargeDashboard() {
+    switchView('incharge-dashboard');
   }
 
   // ─── DOCUMENT UPLOAD HANDLERS ─────────────────────────
@@ -2311,6 +2327,7 @@ Generated: ${formatDisplayDate(new Date())}
     onInchargeFilterChange,
     onInchargePeriodChange,
     selectSubjectForDrilldown,
+    goBackToInchargeDashboard,
     openUploadDocModal,
     closeUploadDocModal,
     doUploadAcademicDocument

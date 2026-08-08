@@ -2258,18 +2258,18 @@ button, [role='button'] {
   padding: 14px 22px;
   max-width: 440px;
   width: 90vw;
-  background: rgba(15, 23, 42, 0.92) !important;
-  backdrop-filter: blur(24px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
   border-radius: var(--radius-lg, 16px);
-  border-top: 1.5px solid rgba(255, 255, 255, 0.40);
-  border-left: 1.5px solid rgba(255, 255, 255, 0.40);
-  border-bottom: 1.5px solid rgba(0, 0, 0, 0.40);
-  border-right: 1.5px solid rgba(0, 0, 0, 0.40);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.20);
+  border-right: 1.5px solid rgba(0, 0, 0, 0.20);
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.50),
-    0 4px 12px rgba(0, 0, 0, 0.25),
-    inset 0 1.5px 2px rgba(255, 255, 255, 0.25);
+    0 16px 40px rgba(0, 0, 0, 0.30),
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.20);
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
@@ -2359,6 +2359,9 @@ button, [role='button'] {
   border: 1.5px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-lg, 16px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .incharge-glass-filter-bar .filter-group {
@@ -2366,7 +2369,7 @@ button, [role='button'] {
   flex-direction: column;
   gap: 6px;
   flex: 1;
-  min-width: 200px;
+  min-width: 140px;
 }
 
 .incharge-glass-filter-bar label {
