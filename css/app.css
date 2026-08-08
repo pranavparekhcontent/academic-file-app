@@ -3076,11 +3076,13 @@ button, [role='button'] {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  margin-bottom: 2/* ══════════════════════════════════════
+  margin-bottom: 24px;
+}
+
+/* ══════════════════════════════════════
    STANDARD VIBRANT LIGHT BLUE PILL BUTTON
    ══════════════════════════════════════ */
 .btn-incharge,
-.btn-primary,
 #btn-do-upload-doc,
 #btn-incharge-login {
   margin-top: 14px;
@@ -3108,7 +3110,6 @@ button, [role='button'] {
 }
 
 .btn-incharge:hover,
-.btn-primary:hover,
 #btn-do-upload-doc:hover,
 #btn-incharge-login:hover {
   background: linear-gradient(135deg, rgba(0, 140, 255, 0.98) 0%, rgba(0, 215, 255, 1) 100%) !important;
