@@ -370,7 +370,7 @@ const App = (() => {
     // Toggle compile course file button visibility (Requirement 4)
     const compileBtn = document.querySelector('.topbar-right');
     if (compileBtn) {
-      compileBtn.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
+      compileBtn.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
     // Hide subject select dropdown in incharge dashboard, as it is only for faculty
@@ -379,10 +379,14 @@ const App = (() => {
       subjWrapper.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
-    // Hide Index button (nav-dashboard) totally for Academic Incharge
+    // Hide Index button (nav-dashboard) & Syllabus/Plan button (nav-teaching-plan) for Academic Incharge
     const navIndex = document.getElementById('nav-dashboard');
     if (navIndex) {
       navIndex.style.display = state.isAcademicIncharge ? 'none' : 'flex';
+    }
+    const navTeachingPlan = document.getElementById('nav-teaching-plan');
+    if (navTeachingPlan) {
+      navTeachingPlan.style.display = state.isAcademicIncharge ? 'none' : 'flex';
     }
 
     // Hide download syllabus completion button for Academic Incharge (not faculty task)
@@ -623,6 +627,9 @@ const App = (() => {
         const navIndex = document.getElementById('nav-dashboard');
         if (navIndex) navIndex.style.display = 'none';
 
+        const navTeachingPlan = document.getElementById('nav-teaching-plan');
+        if (navTeachingPlan) navTeachingPlan.style.display = 'none';
+
         showScreen('portal');
         switchView('incharge-dashboard');
         Toast.show('Access Granted', `Welcome ${state.inchargeName}`, 'success');
@@ -667,6 +674,8 @@ const App = (() => {
     if (navIncharge) navIncharge.style.display = 'none';
     const navIndex = document.getElementById('nav-dashboard');
     if (navIndex) navIndex.style.display = 'flex';
+    const navTeachingPlan = document.getElementById('nav-teaching-plan');
+    if (navTeachingPlan) navTeachingPlan.style.display = 'flex';
     
     // Profile Header values
     document.getElementById('faculty-display-name').innerText = name;
@@ -705,6 +714,8 @@ const App = (() => {
     if (inchargeNav) inchargeNav.style.display = 'none';
     const navIndex = document.getElementById('nav-dashboard');
     if (navIndex) navIndex.style.display = 'flex';
+    const navTeachingPlan = document.getElementById('nav-teaching-plan');
+    if (navTeachingPlan) navTeachingPlan.style.display = 'flex';
     showScreen('login');
     Toast.show('Signed Out', 'Academic session closed.', 'success');
   }
