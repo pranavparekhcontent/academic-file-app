@@ -2618,14 +2618,10 @@ Generated: ${formatDisplayDate(new Date())}
       });
 
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
-      const totalLec = classKeys.reduce((a, k) => a + classMap[k].totalLectures, 0);
-      const totalCond = classKeys.reduce((a, k) => a + classMap[k].totalConducted, 0);
-      const overallPct = totalLec > 0 ? Math.round((totalCond / totalLec) * 100) : 0;
 
       let classNodesHtml = '';
       classKeys.forEach(clsName => {
         const item = classMap[clsName];
-        const pct = item.totalLectures > 0 ? Math.min(100, Math.round((item.totalConducted / item.totalLectures) * 100)) : 0;
         const avgAtt = item.subjectsCount > 0 ? Math.round(item.totalAttPctSum / item.subjectsCount) : 0;
         const isExpanded = activeClassMindmap === clsName;
 
@@ -2732,7 +2728,7 @@ Generated: ${formatDisplayDate(new Date())}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 16px; font-weight: 900; color: var(--text-main);">${escHtml(clsName)}</div>
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
-                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
+                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${avgAtt}% avg student attendance
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
@@ -2765,7 +2761,7 @@ Generated: ${formatDisplayDate(new Date())}
               </button>
             </div>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-              ${escHtml(periodLabel)} · ${classKeys.length} Classes · ${totalSubs} assigned subjects · ${overallPct}% overall conduction
+              ${escHtml(periodLabel)} · ${classKeys.length} Active Classes · ${totalSubs} assigned subjects
             </span>
           </div>
           <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
