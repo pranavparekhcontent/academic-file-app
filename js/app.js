@@ -1942,19 +1942,16 @@ const App = (() => {
               ${escHtml(s.name)}
             </div>
 
-            <!-- Row 2: Code, % Covered badge, View Plan & Student's Feedback in same row -->
+            <!-- Row 2: Code, % Covered badge, View Plan button -->
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
               <span style="color: #475569; font-weight: 700; font-size: 12.5px;">Code: (${escHtml(s.code)})</span>
-              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <div style="display: inline-flex; align-items: center; gap: 4px; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 3px 9px; border-radius: 9999px; height: 28px;">
                   <span style="font-size: 12px; font-weight: 900; color: ${pctColor};">${s.percent}%</span>
                   <span style="font-size: 9.5px; font-weight: 800; color: ${pctColor}; text-transform: uppercase; letter-spacing: 0.3px;">Covered</span>
                 </div>
                 <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                   View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
-                </button>
-                <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(167, 139, 250, 0.18)); border: 1.5px solid rgba(139, 92, 246, 0.35); color: #7c3aed !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
-                  Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: #7c3aed !important; font-weight: 800;"></i>
                 </button>
               </div>
             </div>
@@ -1970,12 +1967,12 @@ const App = (() => {
             </div>
 
             <!-- Row 5: Average % Attendance of Students & Student's Feedback Row -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08); flex-wrap: wrap;">
               <span style="font-size: 11.5px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
                 <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
               </span>
-              <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback" style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.30); color: #7c3aed; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
-                Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: #7c3aed;"></i>
+              <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(167, 139, 250, 0.18)); border: 1.5px solid rgba(139, 92, 246, 0.35); color: #7c3aed !important; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; flex-shrink: 0; box-shadow: inset 0 1px 1px #ffffff;">
+                Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: #7c3aed !important;"></i>
               </button>
             </div>
           </div>
