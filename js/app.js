@@ -1652,6 +1652,53 @@ const App = (() => {
     document.body.style.overflow = '';
   }
 
+  // ─── LIVE ATTENDANCE STATS HELPERS ───────────────────────
+  async function fetchLiveAttendanceStats() {
+    if (state.liveAttendanceMap) return state.liveAttendanceMap;
+    try {
+      const attRes = await API.getAttendance('', '');
+      if (attRes && attRes.success && Array.isArray(attRes.records)) {
+        const statsMap = {};
+        attRes.records.forEach(r => {
+          const rawCode = String(r.code || '').trim().toUpperCase();
+          const cleanCode = rawCode.replace(/[^A-Z0-9]/g, '');
+          if (!cleanCode) return;
+          if (!statsMap[cleanCode]) statsMap[cleanCode] = { present: 0, total: 0 };
+          statsMap[cleanCode].total++;
+          const stUpper = String(r.status || '').toUpperCase().trim();
+          if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
+            statsMap[cleanCode].present++;
+          }
+        });
+        state.liveAttendanceMap = statsMap;
+        return statsMap;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch live attendance stats:', e);
+    }
+    return {};
+  }
+
+  function getLiveSubjectAttendancePct(subCode) {
+    if (!state.liveAttendanceMap || !subCode) return null;
+    const cleanCode = String(subCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleanCode) return null;
+    
+    let stat = state.liveAttendanceMap[cleanCode];
+    if (!stat) {
+      for (const k in state.liveAttendanceMap) {
+        if (k === cleanCode || k.includes(cleanCode) || cleanCode.includes(k)) {
+          stat = state.liveAttendanceMap[k];
+          break;
+        }
+      }
+    }
+    if (stat && stat.total > 0) {
+      return Math.round((stat.present / stat.total) * 100);
+    }
+    return null;
+  }
+
   // ─── ACADEMIC INCHARGE DASHBOARD ─────────────────────
   // ─── ACADEMIC INCHARGE DASHBOARD ─────────────────────
   async function loadInchargeDashboard() {
@@ -1661,7 +1708,10 @@ const App = (() => {
     }
 
     try {
-      const data = await API.getInchargeDashboard();
+      const [data] = await Promise.all([
+        API.getInchargeDashboard(),
+        fetchLiveAttendanceStats().catch(() => ({}))
+      ]);
       if (!data || !data.success) {
         if (container) {
           container.innerHTML = `<div style="padding: 24px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; color: #f87171; font-size: 13px;">Failed loading dashboard: ${escHtml(data ? data.error : 'Server error')}</div>`;
@@ -1882,6 +1932,9 @@ const App = (() => {
         const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
         const unitLabel = isPractical ? 'practicals' : 'lectures';
 
+        const liveSubAtt = getLiveSubjectAttendancePct(s.code || s.name);
+        const liveSubAttText = (liveSubAtt !== null) ? `${liveSubAtt}%` : '--%';
+
         return `
           <div class="incharge-subject-item" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;">
             <!-- Row 1: Subject Name -->
@@ -1889,7 +1942,7 @@ const App = (() => {
               ${escHtml(s.name)}
             </div>
 
-            <!-- Row 2: Code, % Covered badge, View Plan button in same row -->
+            <!-- Row 2: Code, % Covered badge, View Plan & Student's Feedback in same row -->
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
               <span style="color: #475569; font-weight: 700; font-size: 12.5px;">Code: (${escHtml(s.code)})</span>
               <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
@@ -1899,6 +1952,9 @@ const App = (() => {
                 </div>
                 <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                   View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
+                </button>
+                <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(167, 139, 250, 0.18)); border: 1.5px solid rgba(139, 92, 246, 0.35); color: #7c3aed !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+                  Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: #7c3aed !important; font-weight: 800;"></i>
                 </button>
               </div>
             </div>
@@ -1913,13 +1969,13 @@ const App = (() => {
               Sem ${escHtml(s.semester)} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed
             </div>
 
-            <!-- Row 5: Average % Attendance of Students & Faculty Report Row -->
+            <!-- Row 5: Average % Attendance of Students & Student's Feedback Row -->
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
               <span style="font-size: 11.5px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-                <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">--%</span>
+                <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
               </span>
-              <button type="button" class="btn-faculty-report-link" title="Faculty Report (Unwired placeholder)" style="background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.30); color: #475569; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
-                Faculty Report <i class="ph ph-file-text" style="color: #475569;"></i>
+              <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback" style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.30); color: #7c3aed; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
+                Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: #7c3aed;"></i>
               </button>
             </div>
           </div>
@@ -2491,6 +2547,7 @@ Generated: ${formatDisplayDate(new Date())}
   let activeReportType = 'class';
 
   function renderReportsPage() {
+    fetchLiveAttendanceStats().catch(() => ({}));
     if (!state.inchargeDashboard || !state.inchargeDashboard.success) {
       loadInchargeDashboard().then(() => {
         generateReportType(activeReportType);
@@ -2600,16 +2657,19 @@ Generated: ${formatDisplayDate(new Date())}
             };
           }
 
-          const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
+          const liveSubAtt = getLiveSubjectAttendancePct(s.code || s.name);
           classMap[className].subjectsCount++;
           classMap[className].totalLectures += (s.totalLectures || 0);
           classMap[className].totalConducted += (s.totalConducted || 0);
-          classMap[className].totalAttPctSum += subAttPct;
+          if (liveSubAtt !== null) {
+            classMap[className].totalAttPctSum += liveSubAtt;
+            classMap[className].validAttCount = (classMap[className].validAttCount || 0) + 1;
+          }
 
           classMap[className].semesters[semKey].subjectsList.push({
             ...s,
             facultyName: facultyName,
-            attendancePct: subAttPct
+            attendancePct: liveSubAtt
           });
         });
       });
@@ -2623,7 +2683,8 @@ Generated: ${formatDisplayDate(new Date())}
       let classNodesHtml = '';
       classKeys.forEach(clsName => {
         const item = classMap[clsName];
-        const avgAtt = item.subjectsCount > 0 ? Math.round(item.totalAttPctSum / item.subjectsCount) : 0;
+        const avgAtt = (item.validAttCount > 0) ? Math.round(item.totalAttPctSum / item.validAttCount) : null;
+        const avgAttText = (avgAtt !== null) ? `${avgAtt}%` : '--%';
         const isExpanded = activeClassMindmap === clsName;
 
         // Render Semesters under this Class
@@ -2638,10 +2699,11 @@ Generated: ${formatDisplayDate(new Date())}
           semObj.subjectsList.forEach(s => {
             const sp = s.percent || 0;
             const barColor = 'var(--success, #34c759)';
-            const attVal = s.attendancePct || 75;
-            const attBadgeBg = attVal >= 80 ? 'rgba(52, 199, 89, 0.14)' : attVal >= 70 ? 'rgba(0, 113, 227, 0.14)' : 'rgba(255, 59, 48, 0.14)';
-            const attBadgeBorder = attVal >= 80 ? 'rgba(52, 199, 89, 0.3)' : attVal >= 70 ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
-            const attBadgeColor = attVal >= 80 ? 'var(--success, #34c759)' : attVal >= 70 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
+            const attVal = s.attendancePct;
+            const attText = (attVal !== null) ? `${attVal}%` : '--%';
+            const attBadgeBg = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.14)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.14)' : 'rgba(255, 59, 48, 0.14)';
+            const attBadgeBorder = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.3)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
+            const attBadgeColor = (attVal !== null && attVal >= 80) ? 'var(--success, #34c759)' : (attVal !== null && attVal >= 70) ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
 
             const subCode = String(s.code || '').trim().toUpperCase();
             const subName = String(s.name || '').trim().toLowerCase();
@@ -2684,7 +2746,7 @@ Generated: ${formatDisplayDate(new Date())}
                     </div>
                   </div>
                   <span style="font-size: 11px; font-weight: 800; color: ${attBadgeColor}; background: ${attBadgeBg}; border: 1px solid ${attBadgeBorder}; padding: 4px 10px; border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">
-                    ${attVal}% Avg Student Attendance
+                    ${attText} Avg Student Attendance
                   </span>
                   <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
                     display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
@@ -2735,7 +2797,7 @@ Generated: ${formatDisplayDate(new Date())}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 16px; font-weight: 900; color: var(--text-main);">${escHtml(clsName)}</div>
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
-                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${avgAtt}% avg student attendance
+                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${avgAttText} avg student attendance
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
