@@ -468,14 +468,37 @@
           <!-- Timeperiod Selection Control Bar -->
           <div class="incharge-glass-filter-bar" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 24px; background: rgba(255, 255, 255, 0.55); padding: 18px 22px; border-radius: 16px; border: 1.5px solid rgba(255, 255, 255, 0.90);">
             
-            <div class="filter-group" style="flex: 1; min-width: 220px;">
+            <div class="filter-group" style="flex: 1; min-width: 240px;">
               <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #334155; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
                 <i class="ph ph-calendar" style="color: #6366f1;"></i> Select Timeperiod
               </label>
-              <select id="reports-period-filter" class="glass-select" onchange="App.onReportsPeriodChange(this.value)" style="width: 100%; padding: 10px 14px;">
-                <option value="all" selected>All Time (Entire Academic Year)</option>
-                <option value="custom">Custom Date Range...</option>
-              </select>
+              <div class="period-select-wrapper" id="custom-period-wrapper" style="position: relative; width: 100%; z-index: 9999;">
+                <div class="custom-glass-trigger" id="custom-period-trigger" onclick="App.toggleCustomPeriodDropdown(event)">
+                  <i class="ph ph-calendar trigger-icon" style="color: #6366f1;"></i>
+                  <span class="trigger-text" id="custom-period-label">All Time (Entire Academic Year)</span>
+                  <i class="ph ph-caret-down trigger-arrow"></i>
+                </div>
+                <select id="reports-period-filter" style="display: none;" onchange="App.onReportsPeriodChange(this.value)">
+                  <option value="all" selected>All Time (Entire Academic Year)</option>
+                  <option value="custom">Custom Date Range...</option>
+                </select>
+                <div class="custom-glass-dropdown-menu" id="custom-period-menu" style="display: none;">
+                  <div class="custom-glass-option selected" data-value="all" onclick="App.selectCustomPeriodOption('all', 'All Time (Entire Academic Year)')">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <i class="ph ph-clock" style="font-size: 18px; color: #6366f1;"></i>
+                      <span style="font-weight: 700;">All Time (Entire Academic Year)</span>
+                    </div>
+                    <i class="ph ph-check item-check" style="display: inline-block; font-weight: 800; font-size: 14px;"></i>
+                  </div>
+                  <div class="custom-glass-option" data-value="custom" onclick="App.selectCustomPeriodOption('custom', 'Custom Date Range...')">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <i class="ph ph-calendar-blank" style="font-size: 18px; color: #6366f1;"></i>
+                      <span style="font-weight: 700;">Custom Date Range...</span>
+                    </div>
+                    <i class="ph ph-check item-check" style="display: none; font-weight: 800; font-size: 14px;"></i>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Custom Date Range Inputs (Hidden by default) -->

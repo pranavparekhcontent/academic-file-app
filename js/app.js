@@ -990,6 +990,57 @@ const App = (() => {
     changeActiveSubject(code);
   }
 
+  // ─── REPORTS PERIOD FILTER (CUSTOM 3D GLASS DROPDOWN) ──────────────────────
+  function toggleCustomPeriodDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('custom-period-menu');
+    const trigger = document.getElementById('custom-period-trigger');
+    const wrapper = document.getElementById('custom-period-wrapper');
+    if (!menu) return;
+
+    const isVisible = menu.style.display === 'block';
+    menu.style.display = isVisible ? 'none' : 'block';
+    if (trigger) {
+      if (isVisible) {
+        trigger.classList.remove('open');
+        if (wrapper) wrapper.classList.remove('open');
+      } else {
+        trigger.classList.add('open');
+        if (wrapper) wrapper.classList.add('open');
+      }
+    }
+  }
+
+  function selectCustomPeriodOption(val, labelText) {
+    const select = document.getElementById('reports-period-filter');
+    const labelEl = document.getElementById('custom-period-label');
+    const menu = document.getElementById('custom-period-menu');
+    const trigger = document.getElementById('custom-period-trigger');
+    const wrapper = document.getElementById('custom-period-wrapper');
+
+    if (select) {
+      select.value = val;
+      onReportsPeriodChange(val);
+    }
+    if (labelEl) labelEl.innerText = labelText;
+    if (menu) menu.style.display = 'none';
+    if (trigger) trigger.classList.remove('open');
+    if (wrapper) wrapper.classList.remove('open');
+
+    if (menu) {
+      menu.querySelectorAll('.custom-glass-option').forEach(opt => {
+        const check = opt.querySelector('.item-check');
+        if (opt.dataset.value === val) {
+          opt.classList.add('selected');
+          if (check) check.style.display = 'inline-block';
+        } else {
+          opt.classList.remove('selected');
+          if (check) check.style.display = 'none';
+        }
+      });
+    }
+  }
+
   // Close dropdown menus when clicking anywhere outside
   document.addEventListener('click', (e) => {
     const subjectWrapper = document.getElementById('custom-subject-wrapper');
@@ -1009,6 +1060,15 @@ const App = (() => {
       facultyWrapper.classList.remove('open');
       const fg = facultyWrapper.closest('.form-group');
       if (fg) fg.classList.remove('dropdown-open');
+    }
+
+    const periodWrapper = document.getElementById('custom-period-wrapper');
+    const periodMenu = document.getElementById('custom-period-menu');
+    const periodTrigger = document.getElementById('custom-period-trigger');
+    if (periodWrapper && !periodWrapper.contains(e.target)) {
+      if (periodMenu) periodMenu.style.display = 'none';
+      if (periodTrigger) periodTrigger.classList.remove('open');
+      periodWrapper.classList.remove('open');
     }
   });
 
@@ -3331,6 +3391,8 @@ Generated: ${formatDisplayDate(new Date())}
     selectCustomFacultyOption,
     toggleCustomSubjectDropdown,
     selectCustomSubjectOption,
+    toggleCustomPeriodDropdown,
+    selectCustomPeriodOption,
     changeActiveSubject,
     switchView,
     triggerManualSync,
