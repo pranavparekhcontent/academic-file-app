@@ -2935,6 +2935,7 @@ Generated: ${formatDisplayDate(new Date())}
     try {
       // 1. Identify all subject codes for this class from inchargeDashboard
       const data = state.inchargeDashboard || {};
+      const eligibilityThreshold = (state.allData && state.allData.attendanceLimit) ? state.allData.attendanceLimit : 75;
       const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
       let classSubjects = [];
       const subCodeSet = {};
@@ -3020,7 +3021,7 @@ Generated: ${formatDisplayDate(new Date())}
             name: st.name,
             batch: st.batch,
             pct: avgPct,
-            isDefaulter: avgPct < 75,
+            isDefaulter: avgPct < eligibilityThreshold,
             subjectMap: st.subjectMap || {}
           };
         });
@@ -3032,7 +3033,7 @@ Generated: ${formatDisplayDate(new Date())}
             name: st.name || st.studentName || 'Student',
             batch: st.batch || st.batchGroup || 'General',
             pct: avgPct,
-            isDefaulter: avgPct < 75,
+            isDefaulter: avgPct < eligibilityThreshold,
             subjectMap: {} // Make sure this exists to prevent undefined errors
           };
         });
@@ -3079,8 +3080,8 @@ Generated: ${formatDisplayDate(new Date())}
           let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
           if (subData && subData.total > 0) {
             const subPct = Math.round((subData.present / subData.total) * 100);
-            const color = subPct < 75 ? '#ff3b30' : 'var(--text-main)';
-            cellHtml = `<span style="color: ${color}; font-weight: ${subPct < 75 ? '800' : '600'};">${subPct}%</span>`;
+            const color = subPct < eligibilityThreshold ? '#ff3b30' : 'var(--text-main)';
+            cellHtml = `<span style="color: ${color}; font-weight: ${subPct < eligibilityThreshold ? '800' : '600'};">${subPct}%</span>`;
           }
           subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
         });
@@ -3113,7 +3114,7 @@ Generated: ${formatDisplayDate(new Date())}
             Total Students: <strong>${studentList.length}</strong> · Subjects Scanned: <strong>${classSubjects.length > 0 ? classSubjects.length : 'All'}</strong>
           </span>
           <span style="font-size: 12px; font-weight: 800; color: ${defaulterCount > 0 ? '#ff3b30' : 'var(--success)'};">
-            ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below 75%` : '✅ All Students Eligible (≥ 75%)'}
+            ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below ${eligibilityThreshold}%` : `✅ All Students Eligible (≥ ${eligibilityThreshold}%)`}
           </span>
         </div>
         <div style="overflow-x: auto;">
