@@ -3117,29 +3117,48 @@ Generated: ${formatDisplayDate(new Date())}
 
       // 4. Render Table Headers and Rows
       // Get unique subject columns based on classSubjects
-      const subjectColumns = classSubjects.filter(s => s.code).map(s => ({ code: s.code, name: s.subject || s.code }));
+      const subjectColumns = classSubjects.filter(s => s.code).map(s => ({ code: s.code, name: s.subject || s.name || s.code }));
       
-      let subjectHeadersHtml = subjectColumns.map(sc => 
-        `<th style="padding: 10px 16px; text-align: center;" title="${escHtml(sc.name)}">${escHtml(sc.code)} %</th>`
-      ).join('');
+      let subjectHeadersHtml = subjectColumns.map(sc => {
+        const subName = (sc.name && sc.name !== sc.code) ? sc.name : '';
+        return `
+          <th style="padding: 10px 14px; text-align: center; vertical-align: middle; min-width: 110px;" title="${escHtml(sc.name || sc.code)} (${escHtml(sc.code)})">
+            ${subName ? `
+              <div style="font-size: 11px; font-weight: 800; color: var(--text-main); line-height: 1.25; margin-bottom: 2px;">${escHtml(subName)}</div>
+              <div style="font-size: 10px; font-weight: 700; color: var(--accent-purple, #8b5cf6);">(${escHtml(sc.code)}) %</div>
+            ` : `
+              <div style="font-size: 12px; font-weight: 800; color: var(--text-main);">${escHtml(sc.code)} %</div>
+            `}
+          </th>
+        `;
+      }).join('');
 
       let rowsHtml = '';
       let defaulterCount = 0;
 
       studentList.forEach(st => {
-        if (st.isDefaulter) defaulterCount++;
-        
+        let sumPct = 0;
+        let validSubCount = 0;
         let subjectCellsHtml = '';
+
         subjectColumns.forEach(sc => {
           const subData = st.subjectMap[sc.code];
           let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
           if (subData && subData.total > 0) {
             const subPct = Math.round((subData.present / subData.total) * 100);
+            sumPct += subPct;
+            validSubCount++;
             const color = subPct < eligibilityThreshold ? '#ff3b30' : 'var(--text-main)';
             cellHtml = `<span style="color: ${color}; font-weight: ${subPct < eligibilityThreshold ? '800' : '600'};">${subPct}%</span>`;
           }
           subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
         });
+
+        // Compute average attendance as sum of valid subject percentages / number of valid subjects
+        const avgPct = validSubCount > 0 ? Math.round(sumPct / validSubCount) : (st.pct || 0);
+        st.pct = avgPct;
+        st.isDefaulter = avgPct < eligibilityThreshold;
+        if (st.isDefaulter) defaulterCount++;
 
         const statusBadge = st.isDefaulter ?
           `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Defaulter)</span>` :
