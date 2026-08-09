@@ -3578,6 +3578,91 @@ button, [role='button'] {
   display: inline-block;
 }
 
+/* ══════════════════════════════════════
+   NOTEBOOKLM MIND MAP STYLES
+   ══════════════════════════════════════ */
+.notebooklm-mindmap-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 520px;
+  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.03) 70%);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 26px;
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.notebooklm-svg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.notebooklm-nucleus {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%);
+  color: #ffffff;
+  padding: 20px 28px;
+  border-radius: 22px;
+  box-shadow: 0 16px 40px rgba(99, 102, 241, 0.40), inset 0 2px 2px rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  text-align: center;
+  margin-bottom: 24px;
+  animation: nucleusPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes nucleusPulse {
+  0% { box-shadow: 0 16px 40px rgba(99, 102, 241, 0.35), inset 0 2px 2px rgba(255, 255, 255, 0.8); }
+  100% { box-shadow: 0 20px 50px rgba(99, 102, 241, 0.60), 0 0 30px rgba(168, 85, 247, 0.4), inset 0 2px 2px #ffffff; }
+}
+
+.notebooklm-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  position: relative;
+  z-index: 4;
+}
+
+.notebooklm-node-card {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
+  border-radius: 20px !important;
+  padding: 20px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06), inset 0 1px 1.5px #ffffff !important;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative;
+}
+
+.notebooklm-node-card:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.20), inset 0 1.5px 2px #ffffff !important;
+  border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+.mindmap-class-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+.mindmap-class-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
