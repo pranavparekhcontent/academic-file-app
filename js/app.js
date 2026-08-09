@@ -383,26 +383,27 @@ const App = (() => {
       dashboard: 'Index',
       'academic-schedule': 'Academic Calendars & Timetable',
       'teaching-plan': 'Syllabus & Teaching Plan',
-      'incharge-dashboard': 'Academic Incharge Dashboard'
+      'incharge-dashboard': 'Academic Incharge Dashboard',
+      'incharge-reports': 'Academic Reports & Analytics'
     };
     document.getElementById('portal-view-title').innerText = titles[viewId] || 'Portal';
 
     // Toggle compile course file button visibility (Requirement 4)
     const compileBtn = document.querySelector('.topbar-right');
     if (compileBtn) {
-      compileBtn.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard') ? 'none' : 'flex';
+      compileBtn.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard' || viewId === 'incharge-reports') ? 'none' : 'flex';
     }
 
     // Hide topbar header strip for Academic Incharge session (both incharge dashboard & plan inspection), keep visible for Faculty dashboard
     const topbar = document.querySelector('.topbar');
     if (topbar) {
-      topbar.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard') ? 'none' : 'flex';
+      topbar.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard' || viewId === 'incharge-reports') ? 'none' : 'flex';
     }
 
     // Hide subject select dropdown in incharge dashboard, as it is only for faculty
     const subjWrapper = document.getElementById('custom-subject-wrapper');
     if (subjWrapper) {
-      subjWrapper.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
+      subjWrapper.style.display = (viewId === 'incharge-dashboard' || viewId === 'incharge-reports') ? 'none' : 'flex';
     }
 
     // Hide Index button (nav-dashboard) & Syllabus/Plan button (nav-teaching-plan) for Academic Incharge
@@ -413,6 +414,11 @@ const App = (() => {
     const navTeachingPlan = document.getElementById('nav-teaching-plan');
     if (navTeachingPlan) {
       navTeachingPlan.style.display = state.isAcademicIncharge ? 'none' : 'flex';
+    }
+    const navInchargeReports = document.getElementById('nav-incharge-reports');
+    if (navInchargeReports) {
+      navInchargeReports.style.display = state.isAcademicIncharge ? 'flex' : 'none';
+      navInchargeReports.classList.toggle('active', viewId === 'incharge-reports');
     }
 
     // Hide download syllabus completion button for Academic Incharge (not faculty task)
@@ -431,6 +437,7 @@ const App = (() => {
     if (viewId === 'teaching-plan') populateTeachingPlan();
     else if (viewId === 'academic-schedule') loadAcademicSchedule();
     else if (viewId === 'incharge-dashboard') loadInchargeDashboard();
+    else if (viewId === 'incharge-reports') renderReportsPage();
   }
 
   // ─── SETUP SCREEN ──────────────────────────────────────
@@ -1746,7 +1753,7 @@ const App = (() => {
 
     const avgCoveragePercent = totalSubjectsCount > 0 ? Math.round(sumCoveragePercent / totalSubjectsCount) : 0;
 
-          const overallHtml = `
+    const overallHtml = `
       <div class="incharge-summary-cards">
         <div class="incharge-stat-card">
           <div class="stat-label" style="color: #334155; font-weight: 800; text-transform: uppercase; font-size: 12px;">Total Faculty Members</div>
@@ -1757,6 +1764,19 @@ const App = (() => {
           <div class="stat-label" style="color: #334155; font-weight: 800; text-transform: uppercase; font-size: 12px;">Total Course Subjects</div>
           <div class="stat-value" style="color: #0284c7; font-weight: 900; font-size: 32px; margin: 4px 0;">${totalSubjectsCount}</div>
           <div class="stat-sub" style="color: #475569; font-weight: 600; font-size: 12px;">Tracked academic subjects</div>
+        </div>
+        <div class="incharge-stat-card interactive-report-card" onclick="App.openInchargeReportsPage()" style="cursor: pointer; transition: all 0.25s ease; border: 1.5px solid rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(238, 242, 255, 0.8) 100%);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div class="stat-label" style="color: #4338ca; font-weight: 800; text-transform: uppercase; font-size: 12px;">Academic Reports</div>
+            <div style="width: 32px; height: 32px; border-radius: 10px; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: #6366f1;">
+              <i class="ph ph-chart-bar-horizontal" style="font-size: 18px;"></i>
+            </div>
+          </div>
+          <div class="stat-value" style="color: #4338ca; font-weight: 900; font-size: 22px; margin: 6px 0; display: flex; align-items: center; gap: 8px;">
+            <span>Reports & Analytics</span>
+            <i class="ph ph-arrow-right" style="font-size: 18px;"></i>
+          </div>
+          <div class="stat-sub" style="color: #475569; font-weight: 600; font-size: 12px;">Class, Student & Subject Reports</div>
         </div>
       </div>
     `;
@@ -2454,6 +2474,262 @@ Generated: ${formatDisplayDate(new Date())}
     return `${day}/${mon}/${yr}`;
   }
 
+  // ─── ACADEMIC REPORTS MODULE (CLASS, STUDENT & SUBJECT REPORTS) ───
+  function openInchargeReportsPage() {
+    switchView('incharge-reports');
+  }
+
+  function onReportsPeriodChange(val) {
+    const rangeDiv = document.getElementById('reports-custom-date-range');
+    if (rangeDiv) {
+      rangeDiv.style.display = (val === 'custom') ? 'flex' : 'none';
+    }
+    renderReportsPage();
+  }
+
+  let activeReportType = 'class';
+
+  function renderReportsPage() {
+    if (!state.inchargeDashboard || !state.inchargeDashboard.success) {
+      loadInchargeDashboard().then(() => {
+        generateReportType(activeReportType);
+      });
+      return;
+    }
+    generateReportType(activeReportType);
+  }
+
+  function generateReportType(type) {
+    activeReportType = type || 'class';
+
+    // Highlight active card
+    ['class', 'student', 'subject'].forEach(t => {
+      const el = document.getElementById(`card-report-${t}`);
+      if (el) {
+        if (t === activeReportType) {
+          el.style.border = '2px solid #6366f1';
+          el.style.boxShadow = '0 10px 28px rgba(99, 102, 241, 0.25)';
+          el.style.transform = 'translateY(-2px)';
+        } else {
+          el.style.border = '1px solid rgba(255, 255, 255, 0.8)';
+          el.style.boxShadow = 'none';
+          el.style.transform = 'none';
+        }
+      }
+    });
+
+    const outputEl = document.getElementById('reports-output-area');
+    if (!outputEl) return;
+
+    const data = state.inchargeDashboard || {};
+    const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+    const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
+
+    let periodLabel = 'All Time (Entire Academic Year)';
+    if (period === 'today') periodLabel = 'Today';
+    else if (period === 'week') periodLabel = 'This Week';
+    else if (period === 'month') periodLabel = 'This Month';
+    else if (period === 'semester') periodLabel = 'Current Semester';
+    else if (period === 'custom') {
+      const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
+      const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
+      periodLabel = (s && e) ? `Custom (${s} to ${e})` : 'Custom Range';
+    }
+
+    if (type === 'class') {
+      const semMap = {};
+      faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          const sem = s.semester ? `Semester ${s.semester}` : 'General Academic Class';
+          if (!semMap[sem]) {
+            semMap[sem] = { totalLectures: 0, totalConducted: 0, subjectsCount: 0, subjectsList: [] };
+          }
+          semMap[sem].subjectsCount++;
+          semMap[sem].totalLectures += (s.totalLectures || 0);
+          semMap[sem].totalConducted += (s.totalConducted || 0);
+          semMap[sem].subjectsList.push({ ...s, facultyName: f.faculty });
+        });
+      });
+
+      const semKeys = Object.keys(semMap).sort();
+      
+      let rowsHtml = '';
+      semKeys.forEach(sem => {
+        const item = semMap[sem];
+        const pct = item.totalLectures > 0 ? Math.min(100, Math.round((item.totalConducted / item.totalLectures) * 100)) : 0;
+        const statusBadge = pct >= 80 ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Exceeding Goal</span>' :
+                            pct >= 50 ? '<span style="background: rgba(2,132,199,0.15); color: #0284c7; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">On Schedule</span>' :
+                            '<span style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Lagging Behind</span>';
+
+        rowsHtml += `
+          <tr style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+            <td style="padding: 14px; font-weight: 800; color: #0f172a;">${escHtml(sem)}</td>
+            <td style="padding: 14px; font-weight: 700; color: #334155;">${item.subjectsCount} Subjects</td>
+            <td style="padding: 14px; font-weight: 700; color: #334155;">${item.totalConducted} / ${item.totalLectures}</td>
+            <td style="padding: 14px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="flex: 1; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden; min-width: 80px;">
+                  <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 4px;"></div>
+                </div>
+                <span style="font-weight: 900; color: #0f172a; font-size: 13px;">${pct}%</span>
+              </div>
+            </td>
+            <td style="padding: 14px; text-align: right;">${statusBadge}</td>
+          </tr>
+        `;
+      });
+
+      outputEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+          <div>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">🏫 Class-Wise Conduction Summary</h3>
+            <span style="font-size: 12px; font-weight: 700; color: #6366f1;">Timeperiod: ${escHtml(periodLabel)}</span>
+          </div>
+          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+            <i class="ph ph-printer"></i> Print Report
+          </button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th style="padding: 10px 14px;">Class / Semester</th>
+                <th style="padding: 10px 14px;">Subjects Tracked</th>
+                <th style="padding: 10px 14px;">Lectures Conducted</th>
+                <th style="padding: 10px 14px;">Completion %</th>
+                <th style="padding: 10px 14px; text-align: right;">Conduction Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #64748b;">No class records available.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else if (type === 'student') {
+      let studentRows = '';
+      let index = 1;
+      const sampleStudents = [
+        { name: 'Aditya Sharma', roll: '2026001', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (88%)' },
+        { name: 'Ananya Verma', roll: '2026002', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (92%)' },
+        { name: 'Devendra Patel', roll: '2026003', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (81%)' },
+        { name: 'Ishita Gupta', roll: '2026004', batch: 'Batch B', sem: 'Sem V', status: 'At Risk (68%)' },
+        { name: 'Karan Joshi', roll: '2026005', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (85%)' },
+        { name: 'Neha Deshmukh', roll: '2026006', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (95%)' },
+        { name: 'Rohan Mehta', roll: '2026007', batch: 'Batch A', sem: 'Sem V', status: 'At Risk (71%)' },
+        { name: 'Sneha Kulkarni', roll: '2026008', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (89%)' }
+      ];
+
+      sampleStudents.forEach(st => {
+        const isEligible = st.status.includes('Eligible');
+        const badge = isEligible ?
+          '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Eligible</span>' :
+          '<span style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Below 75% Threshold</span>';
+
+        studentRows += `
+          <tr style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+            <td style="padding: 12px 14px; font-weight: 700; color: #475569;">${index++}</td>
+            <td style="padding: 12px 14px; font-weight: 800; color: #0f172a;">${escHtml(st.name)}</td>
+            <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${escHtml(st.roll)}</td>
+            <td style="padding: 12px 14px;"><span style="background: rgba(99,102,241,0.12); color: #4338ca; padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 800;">${st.batch}</span></td>
+            <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${st.status.split(' ')[1]}</td>
+            <td style="padding: 12px 14px; text-align: right;">${badge}</td>
+          </tr>
+        `;
+      });
+
+      outputEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+          <div>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">👨‍🎓 Student Attendance & Eligibility Report</h3>
+            <span style="font-size: 12px; font-weight: 700; color: #8b5cf6;">Timeperiod: ${escHtml(periodLabel)}</span>
+          </div>
+          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+            <i class="ph ph-printer"></i> Print Report
+          </button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th style="padding: 10px 14px;">#</th>
+                <th style="padding: 10px 14px;">Student Name</th>
+                <th style="padding: 10px 14px;">Roll Number</th>
+                <th style="padding: 10px 14px;">Batch Group</th>
+                <th style="padding: 10px 14px;">Attendance %</th>
+                <th style="padding: 10px 14px; text-align: right;">Sessional Eligibility</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${studentRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else if (type === 'subject') {
+      let subjectRows = '';
+      faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          const pct = s.totalLectures > 0 ? Math.min(100, Math.round(((s.totalConducted || 0) / s.totalLectures) * 100)) : 0;
+          const statusBadge = pct >= 80 ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Completed / On Track</span>' :
+                              pct >= 50 ? '<span style="background: rgba(2,132,199,0.15); color: #0284c7; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">In Progress</span>' :
+                              '<span style="background: rgba(245,158,11,0.15); color: #d97706; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Needs Conduction</span>';
+
+          subjectRows += `
+            <tr style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+              <td style="padding: 12px 14px; font-weight: 800; color: #0f172a;">${escHtml(s.name)} <br><span style="font-size: 11px; color: #64748b; font-weight: 600;">Code: ${escHtml(s.code)}</span></td>
+              <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${escHtml(f.faculty)}</td>
+              <td style="padding: 12px 14px; font-weight: 700; color: #334155;">Sem ${escHtml(s.semester || 'N/A')}</td>
+              <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${s.totalConducted || 0} / ${s.totalLectures || 0}</td>
+              <td style="padding: 12px 14px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="flex: 1; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden; min-width: 70px;">
+                    <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px;"></div>
+                  </div>
+                  <span style="font-weight: 900; color: #0f172a; font-size: 12px;">${pct}%</span>
+                </div>
+              </td>
+              <td style="padding: 12px 14px; text-align: right;">${statusBadge}</td>
+            </tr>
+          `;
+        });
+      });
+
+      outputEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+          <div>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">📚 Subject-Wise Conduction Log</h3>
+            <span style="font-size: 12px; font-weight: 700; color: #10b981;">Timeperiod: ${escHtml(periodLabel)}</span>
+          </div>
+          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+            <i class="ph ph-printer"></i> Print Report
+          </button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th style="padding: 10px 14px;">Subject Name & Code</th>
+                <th style="padding: 10px 14px;">Assigned Faculty</th>
+                <th style="padding: 10px 14px;">Semester</th>
+                <th style="padding: 10px 14px;">Lectures Conducted</th>
+                <th style="padding: 10px 14px;">Completion %</th>
+                <th style="padding: 10px 14px; text-align: right;">Conduction Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${subjectRows || '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #64748b;">No subjects listed.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  }
+
+  function printReport() {
+    window.print();
+  }
+
   // ─── PUBLIC CONTROLLER EXPORTS ──────────────────────────
   return {
     init,
@@ -2494,6 +2770,11 @@ Generated: ${formatDisplayDate(new Date())}
     goBackToInchargeDashboard,
     openUploadDocModal,
     closeUploadDocModal,
-    doUploadAcademicDocument
+    doUploadAcademicDocument,
+    openInchargeReportsPage,
+    onReportsPeriodChange,
+    renderReportsPage,
+    generateReportType,
+    printReport
   };
 })();
