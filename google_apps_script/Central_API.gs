@@ -1351,14 +1351,65 @@ function getTeachingPlan(code, teacher, sheetId) {
     var colIdxExecuted = 4;
     var colIdxRemark = 5;
 
+    // Detect column indexes from header row if available
+    if (headerRowIdx !== -1 && data[headerRowIdx]) {
+      var hRow = data[headerRowIdx];
+      for (var c = 0; c < hRow.length; c++) {
+        var hStr = String(hRow[c]).toLowerCase().trim();
+        if (hStr.indexOf('lecture') !== -1 || hStr.indexOf('sr. no') !== -1 || hStr.indexOf('sr no') !== -1 || hStr.indexOf('s.n.') !== -1 || hStr.indexOf('sr.') !== -1) {
+          colIdxLectureNo = c;
+        } else if (hStr.indexOf('topic') !== -1 || hStr.indexOf('syllabus') !== -1 || hStr.indexOf('details') !== -1 || hStr.indexOf('unit') !== -1 || hStr.indexOf('particular') !== -1 || hStr.indexOf('content') !== -1) {
+          colIdxSyllabus = c;
+        } else if (hStr.indexOf('plan') !== -1 || hStr.indexOf('proposed') !== -1 || hStr.indexOf('schedule') !== -1) {
+          colIdxPlanned = c;
+        } else if (hStr.indexOf('execut') !== -1 || hStr.indexOf('actual') !== -1 || hStr.indexOf('conduct') !== -1 || hStr.indexOf('taught') !== -1 || hStr.indexOf('date of') !== -1) {
+          colIdxExecuted = c;
+        } else if (hStr.indexOf('remark') !== -1 || hStr.indexOf('sign') !== -1) {
+          colIdxRemark = c;
+        }
+      }
+    }
+
+    var isDateLikeStr = function(val) {
+      if (!val) return false;
+      if (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]') return true;
+      var s = String(val).trim();
+      if (s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i)) return true;
+      if (s.match(/^\d{4}-\d{2}-\d{2}/)) return true;
+      if (s.match(/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/)) return true;
+      if (s.match(/\d{2}:\d{2}:\d{2}/)) return true;
+      return false;
+    };
+
     for (var i = startRow; i < data.length; i++) {
       var row = data[i];
       var syllabus = row[colIdxSyllabus] ? String(row[colIdxSyllabus]).trim() : '';
+      var plannedRaw = row[colIdxPlanned] !== undefined ? row[colIdxPlanned] : '';
+      var executedRaw = row[colIdxExecuted] !== undefined ? row[colIdxExecuted] : '';
+
+      // If syllabus cell was populated with a date string/Date object (because column B had topic and column C had date), auto-correct:
+      if (isDateLikeStr(syllabus)) {
+        var foundTopic = '';
+        for (var c = 0; c < row.length; c++) {
+          var cStr = String(row[c]).trim();
+          if (cStr && !isDateLikeStr(cStr) && cStr.length > 5 && cStr.indexOf('Total') === -1 && cStr.indexOf('Signature') === -1) {
+            foundTopic = cStr;
+            break;
+          }
+        }
+        if (foundTopic) {
+          if (!plannedRaw || !isDateLikeStr(plannedRaw)) {
+            plannedRaw = syllabus;
+          }
+          syllabus = foundTopic;
+        }
+      }
+
       if (!syllabus) {
         var altSyllabus = '';
         for (var c = 0; c < row.length; c++) {
           var strCell = String(row[c]).trim();
-          if (strCell.length > 10 && strCell.indexOf('Total') === -1) {
+          if (strCell.length > 10 && !isDateLikeStr(strCell) && strCell.indexOf('Total') === -1) {
             altSyllabus = strCell;
             break;
           }
@@ -1371,8 +1422,8 @@ function getTeachingPlan(code, teacher, sheetId) {
         var lectNo = parseInt(lectNoRaw);
         if (isNaN(lectNo)) lectNo = topics.length + 1;
 
-        var plannedDate = parseAndFormatDate(row[colIdxPlanned], tpSs.getSpreadsheetTimeZone());
-        var executedDate = parseAndFormatDate(row[colIdxExecuted], tpSs.getSpreadsheetTimeZone());
+        var plannedDate = parseAndFormatDate(plannedRaw, tpSs.getSpreadsheetTimeZone());
+        var executedDate = parseAndFormatDate(executedRaw, tpSs.getSpreadsheetTimeZone());
         var remark = row[colIdxRemark] !== undefined ? String(row[colIdxRemark]).trim() : '';
 
         topics.push({
@@ -1462,35 +1513,85 @@ function syncTeachingPlan(code, teacher, sheetId) {
       return { success: false, error: 'Attendance matrix sheet contains insufficient rows' };
     }
 
+    var hdrRowIdx = -1;
+    for (var r = 0; r < Math.min(outData.length, 30); r++) {
+      var rowStr = outData[r].map(function(cell) { return String(cell).toLowerCase().trim(); }).join('|');
+      if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
+        hdrRowIdx = r;
+        break;
+      }
+    }
+    if (hdrRowIdx === -1) hdrRowIdx = 5;
+
+    var nameColIdx = 1;
+    var totalPColIdx = outData[hdrRowIdx].length;
+    for (var c = 0; c < outData[hdrRowIdx].length; c++) {
+      var hVal = String(outData[hdrRowIdx][c]).toLowerCase().trim();
+      if (hVal.indexOf('name') !== -1) nameColIdx = c;
+      if (hVal.indexOf('total p') !== -1 || hVal.indexOf('% att') !== -1) {
+        totalPColIdx = c;
+        break;
+      }
+    }
+
+    var firstDateCol = nameColIdx + 1;
     var topicDatesMap = {};
-    for (var r = 0; r < 2; r++) {
-      var row = outData[r];
-      for (var c = 3; c < row.length; c++) {
-        var cellVal = String(row[c]).trim();
-        if (cellVal) {
-          var normTopic = cellVal.toLowerCase();
+
+    for (var c = firstDateCol; c < totalPColIdx; c++) {
+      var dateRaw = outData[hdrRowIdx][c];
+      var dateStr = parseAndFormatDate(dateRaw, outSs.getSpreadsheetTimeZone());
+      if (!dateStr) continue;
+
+      var topicCell = (hdrRowIdx + 1 < outData.length) ? String(outData[hdrRowIdx + 1][c] || '').trim() : '';
+      var topicCellNorm = topicCell.toLowerCase();
+
+      var matchedTopicIndex = -1;
+
+      if (topicCellNorm) {
+        for (var t = 0; t < planResult.topics.length; t++) {
+          var tpSyllabus = planResult.topics[t].syllabus.trim().toLowerCase();
+          if (tpSyllabus && (topicCellNorm.indexOf(tpSyllabus) !== -1 || tpSyllabus.indexOf(topicCellNorm) !== -1)) {
+            matchedTopicIndex = t;
+            break;
+          }
+        }
+      }
+
+      if (matchedTopicIndex === -1 && topicCellNorm) {
+        var numMatch = topicCellNorm.match(/\d+/);
+        if (numMatch) {
+          var lNum = parseInt(numMatch[0], 10);
           for (var t = 0; t < planResult.topics.length; t++) {
-            var tpTopic = planResult.topics[t].syllabus.trim().toLowerCase();
-            if (normTopic.indexOf(tpTopic) !== -1 || tpTopic.indexOf(normTopic) !== -1) {
-              for (var dr = 0; dr < outData.length; dr++) {
-                var dVal = String(outData[dr][c]).trim();
-                var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
-                if (ymdRegex.test(dVal)) {
-                  topicDatesMap[planResult.topics[t].rowIndex] = dVal;
-                  break;
-                }
-              }
+            if (planResult.topics[t].lectureNo === lNum) {
+              matchedTopicIndex = t;
+              break;
             }
           }
         }
       }
+
+      if (matchedTopicIndex === -1) {
+        var seqIdx = c - firstDateCol;
+        if (seqIdx >= 0 && seqIdx < planResult.topics.length) {
+          matchedTopicIndex = seqIdx;
+        }
+      }
+
+      if (matchedTopicIndex !== -1) {
+        var targetRowIndex = planResult.topics[matchedTopicIndex].rowIndex;
+        if (!topicDatesMap[targetRowIndex]) {
+          topicDatesMap[targetRowIndex] = dateStr;
+        } else if (topicDatesMap[targetRowIndex].indexOf(dateStr) === -1) {
+          topicDatesMap[targetRowIndex] += ', ' + dateStr;
+        }
+      }
     }
 
-    var colExecuted = planResult.metadata.colIdxExecuted + 1;
+    var colExecuted = (planResult.metadata && planResult.metadata.colIdxExecuted !== undefined ? planResult.metadata.colIdxExecuted : 4) + 1;
     var updatedCount = 0;
 
     for (var rowIndexStr in topicDatesMap) {
-      var rIdx = parseInt(rowIndexStr);
+      var rIdx = parseInt(rowIndexStr, 10);
       var execDate = topicDatesMap[rowIndexStr];
       if (rIdx > 0 && execDate) {
         tpWs.getRange(rIdx, colExecuted).setValue(execDate);
@@ -1502,7 +1603,7 @@ function syncTeachingPlan(code, teacher, sheetId) {
     return {
       success: true,
       syncedCount: updatedCount,
-      percent: freshPlan.metadata.percent,
+      percent: freshPlan.metadata ? freshPlan.metadata.percent : 0,
       topics: freshPlan.topics
     };
   } catch (err) {
