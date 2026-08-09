@@ -291,6 +291,30 @@ const API = (() => {
     }
   }
 
+  async function getStudents(sheetName, batchGroup) {
+    if (navigator.onLine) {
+      try {
+        const data = await _get('getStudents', { sheet: sheetName || '', batch: batchGroup || '' });
+        return data;
+      } catch (e) {
+        console.warn('API.getStudents network failed:', e.message);
+      }
+    }
+    return { success: false, error: 'Offline or failed to fetch students.' };
+  }
+
+  async function getAttendance(code, year, date) {
+    if (navigator.onLine) {
+      try {
+        const data = await _get('getAttendance', { code: code || '', year: year || '', date: date || '' });
+        return data;
+      } catch (e) {
+        console.warn('API.getAttendance network failed:', e.message);
+      }
+    }
+    return { success: false, error: 'Offline or failed to fetch attendance.' };
+  }
+
   return {
     getAllData,
     getTeachingPlan,
@@ -301,6 +325,8 @@ const API = (() => {
     getAcademicIncharges,
     academicInchargeLogin,
     getInchargeDashboard,
-    uploadAcademicDocument
+    uploadAcademicDocument,
+    getStudents,
+    getAttendance
   };
 })();

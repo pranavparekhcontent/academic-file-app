@@ -2773,42 +2773,67 @@ Generated: ${formatDisplayDate(new Date())}
         </div>
       `;
     } else if (type === 'student') {
-      let studentRows = '';
-      let index = 1;
-      const sampleStudents = [
-        { name: 'Aditya Sharma', roll: '2026001', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (88%)' },
-        { name: 'Ananya Verma', roll: '2026002', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (92%)' },
-        { name: 'Devendra Patel', roll: '2026003', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (81%)' },
-        { name: 'Ishita Gupta', roll: '2026004', batch: 'Batch B', sem: 'Sem V', status: 'At Risk (68%)' },
-        { name: 'Karan Joshi', roll: '2026005', batch: 'Batch A', sem: 'Sem V', status: 'Eligible (85%)' },
-        { name: 'Neha Deshmukh', roll: '2026006', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (95%)' },
-        { name: 'Rohan Mehta', roll: '2026007', batch: 'Batch A', sem: 'Sem V', status: 'At Risk (71%)' },
-        { name: 'Sneha Kulkarni', roll: '2026008', batch: 'Batch B', sem: 'Sem V', status: 'Eligible (89%)' }
-      ];
+      // 1. Helper to extract class name 100% dynamically from spreadsheet row object
+      function extractLiveClassName(item) {
+        if (!item) return '';
+        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
+        return String(name).trim();
+      }
 
-      sampleStudents.forEach(st => {
-        const isEligible = st.status.includes('Eligible');
-        const badge = isEligible ?
-          '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Eligible</span>' :
-          '<span style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Below 75% Threshold</span>';
+      function resolveSubjectClass(s) {
+        const liveName = extractLiveClassName(s);
+        if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
+          return liveName;
+        }
+        if (s.semester && String(s.semester).trim()) {
+          return `Semester ${String(s.semester).trim()}`;
+        }
+        return 'General Academic Class';
+      }
 
-        studentRows += `
-          <tr style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-            <td style="padding: 12px 14px; font-weight: 700; color: #475569;">${index++}</td>
-            <td style="padding: 12px 14px; font-weight: 800; color: #0f172a;">${escHtml(st.name)}</td>
-            <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${escHtml(st.roll)}</td>
-            <td style="padding: 12px 14px;"><span style="background: rgba(99,102,241,0.12); color: #4338ca; padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 800;">${st.batch}</span></td>
-            <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${st.status.split(' ')[1]}</td>
-            <td style="padding: 12px 14px; text-align: right;">${badge}</td>
-          </tr>
+      // 2. Extract distinct active Class/Year names live
+      const classNamesSet = {};
+      faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          if (!s) return;
+          const cName = resolveSubjectClass(s);
+          if (cName) classNamesSet[cName] = true;
+        });
+      });
+
+      const activeClassNames = Object.keys(classNamesSet);
+      if (activeClassNames.length === 0) {
+        activeClassNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
+      }
+
+      if (!state.activeStudentYear || activeClassNames.indexOf(state.activeStudentYear) === -1) {
+        state.activeStudentYear = activeClassNames[0];
+      }
+
+      // 3. Render Small Year Cards
+      let yearCardsHtml = '';
+      activeClassNames.forEach(clsName => {
+        const isSelected = clsName === state.activeStudentYear;
+        yearCardsHtml += `
+          <button type="button" onclick="App.selectStudentYearCard('${escHtml(clsName)}')" style="
+            padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+            cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;
+            border: ${isSelected ? '2px solid #8b5cf6' : '1px solid var(--colorless-glass-hover)'};
+            background: ${isSelected ? 'rgba(139, 92, 246, 0.15)' : 'var(--colorless-glass-base)'};
+            color: ${isSelected ? '#8b5cf6' : 'var(--text-main)'};
+            box-shadow: ${isSelected ? '0 4px 12px rgba(139, 92, 246, 0.2)' : 'none'};
+          ">
+            <i class="ph ph-student" style="font-size: 15px; color: ${isSelected ? '#8b5cf6' : 'var(--accent-blue)'};"></i>
+            ${escHtml(clsName)}
+          </button>
         `;
       });
 
       outputEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
           <div>
-            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">👨‍🎓 Student Attendance & Eligibility Report</h3>
-            <span style="font-size: 12px; font-weight: 700; color: #8b5cf6;">Timeperiod: ${escHtml(periodLabel)}</span>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">👨‍🎓 Student Attendance & Eligibility Report</h3>
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">${escHtml(periodLabel)} · Class: <strong>${escHtml(state.activeStudentYear)}</strong></span>
           </div>
           <button class="btn btn-primary" onclick="App.generateReportType('student')" style="
             padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
@@ -2818,24 +2843,19 @@ Generated: ${formatDisplayDate(new Date())}
             Generate Student-Wise Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
           </button>
         </div>
-        <div style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <th style="padding: 10px 14px;">#</th>
-                <th style="padding: 10px 14px;">Student Name</th>
-                <th style="padding: 10px 14px;">Roll Number</th>
-                <th style="padding: 10px 14px;">Batch Group</th>
-                <th style="padding: 10px 14px;">Attendance %</th>
-                <th style="padding: 10px 14px; text-align: right;">Sessional Eligibility</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${studentRows}
-            </tbody>
-          </table>
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Select Class / Year:</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            ${yearCardsHtml}
+          </div>
         </div>
+        <div id="student-report-table-container"></div>
       `;
+
+      const targetYear = state.activeStudentYear;
+      setTimeout(() => {
+        loadStudentReportData(targetYear);
+      }, 0);
     } else if (type === 'subject') {
       let subjectRows = '';
       faculties.forEach(f => {
@@ -2896,6 +2916,162 @@ Generated: ${formatDisplayDate(new Date())}
     }
   }
 
+  function selectStudentYearCard(className) {
+    state.activeStudentYear = className;
+    generateReportType('student');
+  }
+
+  async function loadStudentReportData(className) {
+    const container = document.getElementById('student-report-table-container');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="padding: 36px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+        <i class="ph ph-spinner spinner" style="font-size: 26px; margin-bottom: 8px; color: #8b5cf6; display: block;"></i>
+        Fetching live student roster and attendance from college spreadsheet for <strong>${escHtml(className)}</strong>...
+      </div>
+    `;
+
+    try {
+      const [studentsRes, attRes] = await Promise.all([
+        API.getStudents(className).catch(() => ({ success: false })),
+        API.getAttendance('', className).catch(() => ({ success: false }))
+      ]);
+
+      let studentList = [];
+
+      if (attRes && attRes.success && Array.isArray(attRes.records) && attRes.records.length > 0) {
+        const studentMap = {};
+        attRes.records.forEach(r => {
+          const key = String(r.rollNo || r.name).trim();
+          if (!key) return;
+          if (!studentMap[key]) {
+            studentMap[key] = {
+              rollNo: r.rollNo || 'N/A',
+              name: r.name || key,
+              batch: r.batch || 'General',
+              presentCount: 0,
+              totalCount: 0
+            };
+          }
+          studentMap[key].totalCount++;
+          if (r.status === 'P' || r.status === 'Present') {
+            studentMap[key].presentCount++;
+          }
+          if (r.batch && r.batch !== 'General') {
+            studentMap[key].batch = r.batch;
+          }
+        });
+
+        studentList = Object.values(studentMap).map(st => {
+          const pct = st.totalCount > 0 ? Math.round((st.presentCount / st.totalCount) * 100) : 0;
+          return {
+            rollNo: st.rollNo,
+            name: st.name,
+            batch: st.batch,
+            pct: pct,
+            isDefaulter: pct < 75
+          };
+        });
+      } else if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students) && studentsRes.students.length > 0) {
+        studentList = studentsRes.students.map(st => {
+          const pct = typeof st.attendancePct === 'number' ? st.attendancePct : (st.pct || 80);
+          return {
+            rollNo: st.rollNo || st.roll || 'N/A',
+            name: st.name || st.studentName || 'Student',
+            batch: st.batch || st.batchGroup || 'General',
+            pct: pct,
+            isDefaulter: pct < 75
+          };
+        });
+      }
+
+      if (!studentList || studentList.length === 0) {
+        container.innerHTML = `
+          <div style="padding: 30px; text-align: center; color: var(--text-secondary); background: var(--colorless-glass-base); border-radius: var(--radius-md);">
+            <i class="ph ph-warning-circle" style="font-size: 32px; color: var(--accent-blue); margin-bottom: 8px;"></i>
+            <h4 style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: var(--text-main);">Live Student Roster Sync</h4>
+            <p style="margin: 0; font-size: 12px; max-width: 520px; margin: 0 auto; color: var(--text-muted);">
+              No individual student attendance records returned for <strong>${escHtml(className)}</strong> from the college spreadsheet backend.
+              Ensure class student roll numbers & names are entered on the college sheet output tab.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      studentList.sort((a, b) => {
+        const rA = parseInt(a.rollNo, 10) || 0;
+        const rB = parseInt(b.rollNo, 10) || 0;
+        return rA - rB;
+      });
+
+      let rowsHtml = '';
+      let idx = 1;
+      let defaulterCount = 0;
+
+      studentList.forEach(st => {
+        if (st.isDefaulter) defaulterCount++;
+        const statusBadge = st.isDefaulter ?
+          `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 11px; white-space: nowrap;">Below 75% Defaulter (${st.pct}%)</span>` :
+          `<span style="background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 11px; white-space: nowrap;">Eligible (${st.pct}%)</span>`;
+
+        const rowBg = st.isDefaulter ? 'rgba(255, 59, 48, 0.05)' : 'transparent';
+        const nameColor = st.isDefaulter ? '#ff3b30' : 'var(--text-main)';
+
+        rowsHtml += `
+          <tr style="border-bottom: 1px solid var(--colorless-glass-base); background: ${rowBg};">
+            <td style="padding: 12px 14px; font-weight: 700; color: var(--text-secondary);">${idx++}</td>
+            <td style="padding: 12px 14px; font-weight: 800; color: var(--text-main);">${escHtml(st.rollNo)}</td>
+            <td style="padding: 12px 14px; font-weight: 800; color: ${nameColor};">${escHtml(st.name)}</td>
+            <td style="padding: 12px 14px;">
+              <span style="background: var(--colorless-glass-hover); color: var(--accent-purple, #8b5cf6); border: 1px solid rgba(139, 92, 246, 0.25); padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800;">
+                ${escHtml(st.batch || 'General')}
+              </span>
+            </td>
+            <td style="padding: 12px 14px; font-weight: 900; color: ${st.isDefaulter ? '#ff3b30' : 'var(--success, #34c759)'}; font-size: 13px;">
+              ${st.pct}%
+            </td>
+            <td style="padding: 12px 14px; text-align: right;">${statusBadge}</td>
+          </tr>
+        `;
+      });
+
+      container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 10px 14px; background: var(--colorless-glass-base); border-radius: var(--radius-sm);">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
+            Total Students Logged: <strong>${studentList.length}</strong>
+          </span>
+          <span style="font-size: 12px; font-weight: 800; color: ${defaulterCount > 0 ? '#ff3b30' : 'var(--success)'};">
+            ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below 75%` : '✅ All Students Eligible (≥ 75%)'}
+          </span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--colorless-glass-hover); text-align: left; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th style="padding: 10px 14px;">#</th>
+                <th style="padding: 10px 14px;">Roll No</th>
+                <th style="padding: 10px 14px;">Student Name</th>
+                <th style="padding: 10px 14px;">Batch Group</th>
+                <th style="padding: 10px 14px;">% Attendance</th>
+                <th style="padding: 10px 14px; text-align: right;">Status / Defaulter</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      console.error('Error fetching live student report:', err);
+      if (container) {
+        container.innerHTML = `<div style="padding: 20px; color: var(--danger); font-size: 13px;">Failed to load live student attendance: ${escHtml(err.message)}</div>`;
+      }
+    }
+  }
+
   function printReport() {
     window.print();
   }
@@ -2945,6 +3121,7 @@ Generated: ${formatDisplayDate(new Date())}
     onReportsPeriodChange,
     renderReportsPage,
     generateReportType,
+    selectStudentYearCard,
     toggleClassMindmap,
     printReport
   };
