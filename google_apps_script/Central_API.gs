@@ -1138,10 +1138,14 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
     var hdrs = s.getRange(hdrRowNumber, 1, 1, lc).getDisplayValues()[0];
     var raw = s.getRange(hdrRowNumber, 1, 1, lc).getValues()[0];
     
+    var rollColIdx = -1;
     var nameColIdx = -1;
     var totalPColIdx = -1;
     for (var c = 0; c < hdrs.length; c++) {
       var val = hdrs[c].toLowerCase().trim();
+      if (val.indexOf('roll') !== -1) {
+        rollColIdx = c;
+      }
       if (val.indexOf('name') !== -1) {
         nameColIdx = c;
       }
@@ -1150,7 +1154,8 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
         break;
       }
     }
-    if (nameColIdx === -1) nameColIdx = 1;
+    if (rollColIdx === -1) rollColIdx = 0;
+    if (nameColIdx === -1) nameColIdx = rollColIdx + 1;
     if (totalPColIdx === -1) {
       for (var c = 0; c < hdrs.length; c++) {
         var val = hdrs[c].toLowerCase().trim();
@@ -1176,7 +1181,7 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
           if (st === 'P' || st === 'A') {
              var dbD = displayToDb(dates[d].disp);
              if (date && dbD.indexOf(date) === -1) continue;
-             res.push({ date: dbD, code: code, year: year, batch: batch, faculty: "Assigned", rollNo: mtx[r][0], name: mtx[r][1], status: st, topic: String(topics[dates[d].index] || '') });
+             res.push({ date: dbD, code: code, year: year, batch: batch, faculty: "Assigned", rollNo: mtx[r][rollColIdx], name: mtx[r][nameColIdx], status: st, topic: String(topics[dates[d].index] || '') });
           }
        }
     }
