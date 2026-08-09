@@ -2642,6 +2642,12 @@ Generated: ${formatDisplayDate(new Date())}
             const attBadgeBorder = attVal >= 80 ? 'rgba(52, 199, 89, 0.3)' : attVal >= 70 ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
             const attBadgeColor = attVal >= 80 ? 'var(--success, #34c759)' : attVal >= 70 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
 
+            const subCode = String(s.code || '').trim().toUpperCase();
+            const subName = String(s.name || '').trim().toLowerCase();
+            const subType = String(s.type || s.category || s.subjectType || '').trim().toLowerCase();
+            const isPractical = subCode.endsWith('P') || subCode.endsWith('PR') || subCode.includes('PRACTICAL') || subCode.includes('LAB') || subName.includes('practical') || subName.includes('lab') || subType === 'practical' || subType === 'lab';
+            const unitLabel = isPractical ? 'practicals' : 'lectures';
+
             subjectItemsHtml += `
               <div style="
                 display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -2668,9 +2674,9 @@ Generated: ${formatDisplayDate(new Date())}
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 16px; flex: 1.8; flex-shrink: 0; justify-content: flex-end;">
-                  <div style="width: 140px;">
+                  <div style="width: 145px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 4px;">
-                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs <span style="color: var(--success, #34c759); font-weight: 900;">(${sp}%)</span></span>
+                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} ${unitLabel} <span style="color: var(--success, #34c759); font-weight: 900;">(${sp}%)</span></span>
                     </div>
                     <div style="position: relative; height: 5px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
                       <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
