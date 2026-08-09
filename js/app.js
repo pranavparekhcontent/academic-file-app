@@ -2540,25 +2540,22 @@ Generated: ${formatDisplayDate(new Date())}
     }
 
     if (type === 'class') {
-      // 1. Helper to extract class name live from subject or class object from college URL
+      // 1. Helper to extract class name 100% dynamically from spreadsheet row object (zero hardcoding)
       function extractLiveClassName(item) {
         if (!item) return '';
-        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || '';
+        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
         return String(name).trim();
       }
 
-      // 2. Helper to resolve Class name live from subject data
+      // 2. Helper to resolve Class name live from subject data (100% dynamic, no hardcoding)
       function resolveSubjectClass(s) {
         const liveName = extractLiveClassName(s);
         if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
           return liveName;
         }
 
-        const semNum = parseInt(s.semester, 10);
-        if (!isNaN(semNum) && semNum > 0) {
-          const yrNum = Math.ceil(semNum / 2);
-          const yrLabels = ['B.Pharm First Year', 'B.Pharm Second Year', 'B.Pharm Third Year', 'B.Pharm Final Year'];
-          return yrLabels[yrNum - 1] || `B.Pharm Year ${yrNum}`;
+        if (s.semester && String(s.semester).trim()) {
+          return `Semester ${String(s.semester).trim()}`;
         }
         return 'General Academic Class';
       }
