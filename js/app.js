@@ -647,8 +647,6 @@ const App = (() => {
     }
     if (pinInput) pinInput.disabled = true;
 
-    Toast.show('Authenticating...', 'Verifying incharge credentials with college sheet...', 'warning');
-
     try {
       const res = await API.academicInchargeLogin(selName, pin);
       if (res && res.success) {
@@ -661,7 +659,10 @@ const App = (() => {
 
         // Update profile header UI
         const nameEl = document.getElementById('faculty-display-name');
-        if (nameEl) nameEl.innerText = state.inchargeName + ' (Academic Incharge)';
+        if (nameEl) {
+          const rawName = state.inchargeName || 'Academic Incharge';
+          nameEl.innerText = (rawName.toLowerCase().indexOf('academic incharge') !== -1) ? rawName : `${rawName} (Academic Incharge)`;
+        }
 
         const avatarEl = document.getElementById('faculty-avatar');
         if (avatarEl) {
@@ -2835,12 +2836,12 @@ Generated: ${formatDisplayDate(new Date())}
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">👨‍🎓 Student Attendance & Eligibility Report</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">${escHtml(periodLabel)} · Class: <strong>${escHtml(state.activeStudentYear)}</strong></span>
           </div>
-          <button class="btn btn-primary" onclick="App.generateReportType('student')" style="
+          <button class="btn btn-primary" onclick="window.print()" style="
             padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
             display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
             background: #8b5cf6; border: none; color: #fff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
           ">
-            Generate Student-Wise Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
+            Generate Defaulters Notice <i class="ph ph-printer" style="font-size: 14px;"></i>
           </button>
         </div>
         <div style="margin-bottom: 20px;">
