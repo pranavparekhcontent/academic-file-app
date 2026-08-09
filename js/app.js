@@ -2560,61 +2560,23 @@ Generated: ${formatDisplayDate(new Date())}
         return 'General Academic Class';
       }
 
-      // 3. Group subjects by live fetched Class (Year) first, then by Semester underneath
+      // 3. Group ONLY ASSIGNED subjects from faculties by Class & Semester
       const classMap = {};
 
-      // Helper to insert a subject into classMap safely without duplicates
-      function addSubjectToClassMap(s, facultyName) {
-        if (!s || (!s.code && !s.name)) return;
-        const className = resolveSubjectClass(s);
-        const rawSem = s.semester ? String(s.semester).trim() : '1';
-        const semKey = `Semester ${rawSem}`;
+      faculties.forEach(f => {
+        const facultyName = String(f.faculty || '').trim();
+        if (!facultyName || facultyName.toLowerCase() === 'unassigned') return;
 
-        if (!classMap[className]) {
-          classMap[className] = {
-            className: className,
-            totalLectures: 0,
-            totalConducted: 0,
-            subjectsCount: 0,
-            totalAttPctSum: 0,
-            semesters: {},
-            codeSet: {}
-          };
-        }
+        (f.subjects || []).forEach(s => {
+          if (!s || (!s.code && !s.name)) return;
 
-        const subCode = s.code || s.name;
-        const subKey = `${subCode}_${facultyName || 'Unassigned'}`;
-        if (classMap[className].codeSet[subKey]) return;
-        classMap[className].codeSet[subKey] = true;
+          const className = resolveSubjectClass(s);
+          const rawSem = s.semester ? String(s.semester).trim() : '1';
+          const semKey = `Semester ${rawSem}`;
 
-        if (!classMap[className].semesters[semKey]) {
-          classMap[className].semesters[semKey] = {
-            semName: semKey,
-            semNum: parseInt(rawSem, 10) || 1,
-            subjectsList: []
-          };
-        }
-
-        const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
-        classMap[className].subjectsCount++;
-        classMap[className].totalLectures += (s.totalLectures || 0);
-        classMap[className].totalConducted += (s.totalConducted || 0);
-        classMap[className].totalAttPctSum += subAttPct;
-
-        classMap[className].semesters[semKey].subjectsList.push({
-          ...s,
-          facultyName: facultyName || s.faculty || s.teacher || 'Assigned Staff',
-          attendancePct: subAttPct
-        });
-      }
-
-      // Initialize explicit live classes array from college server sheet if provided
-      if (Array.isArray(data.classes) && data.classes.length > 0) {
-        data.classes.forEach(c => {
-          const cName = extractLiveClassName(c);
-          if (cName && !classMap[cName]) {
-            classMap[cName] = {
-              className: cName,
+          if (!classMap[className]) {
+            classMap[className] = {
+              className: className,
               totalLectures: 0,
               totalConducted: 0,
               subjectsCount: 0,
@@ -2623,20 +2585,32 @@ Generated: ${formatDisplayDate(new Date())}
               codeSet: {}
             };
           }
-        });
-      }
 
-      // Process inchargeDashboard faculties subjects
-      faculties.forEach(f => {
-        (f.subjects || []).forEach(s => {
-          addSubjectToClassMap(s, f.faculty);
-        });
-      });
+          const subCode = s.code || s.name;
+          const subKey = `${subCode}_${facultyName}`;
+          if (classMap[className].codeSet[subKey]) return;
+          classMap[className].codeSet[subKey] = true;
 
-      // ALSO process master subjects from state.subjects / state.allData to fetch ALL classes/years from Excel!
-      const masterSubjects = (state.subjects || (state.allData && state.allData.subjects) || []);
-      masterSubjects.forEach(s => {
-        addSubjectToClassMap(s, s.faculty || s.teacher);
+          if (!classMap[className].semesters[semKey]) {
+            classMap[className].semesters[semKey] = {
+              semName: semKey,
+              semNum: parseInt(rawSem, 10) || 1,
+              subjectsList: []
+            };
+          }
+
+          const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
+          classMap[className].subjectsCount++;
+          classMap[className].totalLectures += (s.totalLectures || 0);
+          classMap[className].totalConducted += (s.totalConducted || 0);
+          classMap[className].totalAttPctSum += subAttPct;
+
+          classMap[className].semesters[semKey].subjectsList.push({
+            ...s,
+            facultyName: facultyName,
+            attendancePct: subAttPct
+          });
+        });
       });
 
       const classKeys = Object.keys(classMap).sort((a, b) => {
@@ -2661,36 +2635,54 @@ Generated: ${formatDisplayDate(new Date())}
 
         sortedSemKeys.forEach(semKey => {
           const semObj = item.semesters[semKey];
-          let subjectItemsHtml = '';
+          if (!semObj.subjectsList || semObj.subjectsList.length === 0) return;
 
+          let subjectItemsHtml = '';
           semObj.subjectsList.forEach(s => {
             const sp = s.percent || 0;
             const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
             subjectItemsHtml += `
               <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
+                display: flex; align-items: center; justify-content: space-between; gap: 16px;
+                padding: 12px 16px; margin-bottom: 6px;
                 background: var(--colorless-glass-base);
                 backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
                 border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
                 border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
-                border-radius: var(--radius-sm); padding: 14px 16px; cursor: pointer;
-                transition: transform 0.22s ease, box-shadow 0.22s ease;
-              " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--water-shadow-standard-hover)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">${escHtml(s.name)}</span>
-                  <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code || 'SUB')}</span>
+                border-radius: var(--radius-sm); cursor: pointer;
+                transition: transform 0.2s ease, background 0.2s ease;
+              " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='var(--colorless-glass-base)'">
+                
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1.5; min-width: 0;">
+                  <span style="font-size: 11px; font-weight: 800; color: var(--accent-blue); background: var(--colorless-glass-hover); padding: 3px 10px; border-radius: var(--radius-pill); flex-shrink: 0;">
+                    ${escHtml(s.code || 'SUB')}
+                  </span>
+                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escHtml(s.name)}
+                  </span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 10px;">
-                  <i class="ph ph-user-circle" style="font-size: 14px; color: var(--accent-blue);"></i>
-                  ${escHtml(s.facultyName)}
-                  <span style="margin-left: auto; font-weight: 800; color: var(--text-main);">${s.attendancePct}% att.</span>
+
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 700; flex: 1; min-width: 0;">
+                  <i class="ph ph-user-circle" style="font-size: 15px; color: var(--accent-blue); flex-shrink: 0;"></i>
+                  <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escHtml(s.facultyName)}</span>
                 </div>
-                <div style="position: relative; height: 6px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
-                  <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
+
+                <div style="display: flex; align-items: center; gap: 16px; flex: 1.2; flex-shrink: 0; justify-content: flex-end;">
+                  <div style="width: 130px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 3px;">
+                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs</span>
+                      <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
+                    </div>
+                    <div style="position: relative; height: 5px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
+                      <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
+                    </div>
+                  </div>
+                  <span style="font-size: 12px; font-weight: 800; color: var(--text-main); min-width: 60px; text-align: right; background: var(--colorless-glass-hover); padding: 3px 8px; border-radius: var(--radius-pill);">
+                    ${s.attendancePct}% att.
+                  </span>
+                  <i class="ph ph-caret-right" style="font-size: 16px; color: var(--text-secondary);"></i>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700;">
-                  <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lectures</span>
-                  <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
-                </div>
+
               </div>
             `;
           });
@@ -2701,10 +2693,10 @@ Generated: ${formatDisplayDate(new Date())}
                 <i class="ph ph-bookmark-simple" style="font-size: 15px; color: var(--accent-blue);"></i>
                 <span style="font-size: 13px; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.5px;">${escHtml(semKey)}</span>
                 <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill); margin-left: auto;">
-                  ${semObj.subjectsList.length} subjects
+                  ${semObj.subjectsList.length} assigned subjects
                 </span>
               </div>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+              <div style="display: flex; flex-direction: column;">
                 ${subjectItemsHtml}
               </div>
             </div>
@@ -2730,7 +2722,7 @@ Generated: ${formatDisplayDate(new Date())}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 16px; font-weight: 900; color: var(--text-main);">${escHtml(clsName)}</div>
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
-                  ${sortedSemKeys.length} Semesters · ${item.subjectsCount} subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
+                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
@@ -2752,7 +2744,7 @@ Generated: ${formatDisplayDate(new Date())}
               overflow: hidden; transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, padding 0.35s ease;
               padding: ${isExpanded ? '16px 16px 8px 16px' : '0 16px'};
             ">
-              ${sortedSemKeys.length > 0 ? semesterBlocksHtml : '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">No active semester subjects logged for this class tab.</div>'}
+              ${sortedSemKeys.length > 0 ? semesterBlocksHtml : '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">No active assigned subjects logged for this class tab.</div>'}
             </div>
           </div>
         `;
@@ -2763,7 +2755,7 @@ Generated: ${formatDisplayDate(new Date())}
           <div>
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">🧠 Class-Wise Mind Map</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-              ${escHtml(periodLabel)} · ${classKeys.length} Live Classes (B.Pharm & M.Pharm Tabs) · ${totalSubs} subjects · ${overallPct}% overall conduction
+              ${escHtml(periodLabel)} · ${classKeys.length} Classes · ${totalSubs} assigned subjects · ${overallPct}% overall conduction
             </span>
           </div>
           <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
@@ -2771,7 +2763,7 @@ Generated: ${formatDisplayDate(new Date())}
           </button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
-          ${classNodesHtml || '<div style="padding: 20px; color: var(--text-muted);">No class records found from college server.</div>'}
+          ${classNodesHtml || '<div style="padding: 20px; color: var(--text-muted);">No assigned class records found from college server.</div>'}
         </div>
       `;
     } else if (type === 'student') {
