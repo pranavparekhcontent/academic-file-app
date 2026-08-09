@@ -2543,7 +2543,7 @@ Generated: ${formatDisplayDate(new Date())}
       // 1. Helper to extract class name live from subject or class object from college URL
       function extractLiveClassName(item) {
         if (!item) return '';
-        const name = item.className || item.class || item.courseYear || item.year || item.programYear || item.courseClass || item.name || '';
+        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || '';
         return String(name).trim();
       }
 
@@ -2554,13 +2554,11 @@ Generated: ${formatDisplayDate(new Date())}
           return liveName;
         }
 
-        const prog = (s.program || s.course || (state.metadata && state.metadata.course) || 'B.Pharm').trim();
         const semNum = parseInt(s.semester, 10);
         if (!isNaN(semNum) && semNum > 0) {
           const yrNum = Math.ceil(semNum / 2);
-          const yrLabels = ['F.Y.', 'S.Y.', 'T.Y.', 'Final Year'];
-          const yrPrefix = yrLabels[yrNum - 1] || `Year ${yrNum}`;
-          return `${yrPrefix} ${prog}`;
+          const yrLabels = ['B.Pharm First Year', 'B.Pharm Second Year', 'B.Pharm Third Year', 'B.Pharm Final Year'];
+          return yrLabels[yrNum - 1] || `B.Pharm Year ${yrNum}`;
         }
         return 'General Academic Class';
       }
@@ -2568,7 +2566,52 @@ Generated: ${formatDisplayDate(new Date())}
       // 3. Group subjects by live fetched Class (Year) first, then by Semester underneath
       const classMap = {};
 
-      // Initialize any explicit live classes array from college server sheet if provided
+      // Helper to insert a subject into classMap safely without duplicates
+      function addSubjectToClassMap(s, facultyName) {
+        if (!s || (!s.code && !s.name)) return;
+        const className = resolveSubjectClass(s);
+        const rawSem = s.semester ? String(s.semester).trim() : '1';
+        const semKey = `Semester ${rawSem}`;
+
+        if (!classMap[className]) {
+          classMap[className] = {
+            className: className,
+            totalLectures: 0,
+            totalConducted: 0,
+            subjectsCount: 0,
+            totalAttPctSum: 0,
+            semesters: {},
+            codeSet: {}
+          };
+        }
+
+        const subCode = s.code || s.name;
+        const subKey = `${subCode}_${facultyName || 'Unassigned'}`;
+        if (classMap[className].codeSet[subKey]) return;
+        classMap[className].codeSet[subKey] = true;
+
+        if (!classMap[className].semesters[semKey]) {
+          classMap[className].semesters[semKey] = {
+            semName: semKey,
+            semNum: parseInt(rawSem, 10) || 1,
+            subjectsList: []
+          };
+        }
+
+        const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
+        classMap[className].subjectsCount++;
+        classMap[className].totalLectures += (s.totalLectures || 0);
+        classMap[className].totalConducted += (s.totalConducted || 0);
+        classMap[className].totalAttPctSum += subAttPct;
+
+        classMap[className].semesters[semKey].subjectsList.push({
+          ...s,
+          facultyName: facultyName || s.faculty || s.teacher || 'Assigned Staff',
+          attendancePct: subAttPct
+        });
+      }
+
+      // Initialize explicit live classes array from college server sheet if provided
       if (Array.isArray(data.classes) && data.classes.length > 0) {
         data.classes.forEach(c => {
           const cName = extractLiveClassName(c);
@@ -2579,56 +2622,28 @@ Generated: ${formatDisplayDate(new Date())}
               totalConducted: 0,
               subjectsCount: 0,
               totalAttPctSum: 0,
-              semesters: {}
+              semesters: {},
+              codeSet: {}
             };
           }
         });
       }
 
+      // Process inchargeDashboard faculties subjects
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
-          const className = resolveSubjectClass(s);
-          const rawSem = s.semester ? String(s.semester).trim() : '1';
-          const semKey = `Semester ${rawSem}`;
-
-          if (!classMap[className]) {
-            classMap[className] = {
-              className: className,
-              totalLectures: 0,
-              totalConducted: 0,
-              subjectsCount: 0,
-              totalAttPctSum: 0,
-              semesters: {}
-            };
-          }
-
-          if (!classMap[className].semesters[semKey]) {
-            classMap[className].semesters[semKey] = {
-              semName: semKey,
-              semNum: parseInt(rawSem, 10) || 1,
-              subjectsList: []
-            };
-          }
-
-          const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
-          classMap[className].subjectsCount++;
-          classMap[className].totalLectures += (s.totalLectures || 0);
-          classMap[className].totalConducted += (s.totalConducted || 0);
-          classMap[className].totalAttPctSum += subAttPct;
-
-          classMap[className].semesters[semKey].subjectsList.push({
-            ...s,
-            facultyName: f.faculty,
-            attendancePct: subAttPct
-          });
+          addSubjectToClassMap(s, f.faculty);
         });
       });
 
+      // ALSO process master subjects from state.subjects / state.allData to fetch ALL classes/years from Excel!
+      const masterSubjects = (state.subjects || (state.allData && state.allData.subjects) || []);
+      masterSubjects.forEach(s => {
+        addSubjectToClassMap(s, s.faculty || s.teacher);
+      });
+
       const classKeys = Object.keys(classMap).sort((a, b) => {
-        const order = ['F.Y. B.Pharm', 'S.Y. B.Pharm', 'T.Y. B.Pharm', 'Final Year B.Pharm'];
-        const ia = order.indexOf(a), ib = order.indexOf(b);
-        if (ia !== -1 && ib !== -1) return ia - ib;
-        return a.localeCompare(b);
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
       });
 
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
@@ -2655,7 +2670,7 @@ Generated: ${formatDisplayDate(new Date())}
             const sp = s.percent || 0;
             const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
             subjectItemsHtml += `
-              <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code)}')" style="
+              <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
                 background: var(--colorless-glass-base);
                 backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
                 border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
@@ -2665,7 +2680,7 @@ Generated: ${formatDisplayDate(new Date())}
               " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--water-shadow-standard-hover)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">${escHtml(s.name)}</span>
-                  <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code)}</span>
+                  <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code || 'SUB')}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 10px;">
                   <i class="ph ph-user-circle" style="font-size: 14px; color: var(--accent-blue);"></i>
@@ -2740,7 +2755,7 @@ Generated: ${formatDisplayDate(new Date())}
               overflow: hidden; transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, padding 0.35s ease;
               padding: ${isExpanded ? '16px 16px 8px 16px' : '0 16px'};
             ">
-              ${semesterBlocksHtml}
+              ${sortedSemKeys.length > 0 ? semesterBlocksHtml : '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">No active semester subjects logged for this class tab.</div>'}
             </div>
           </div>
         `;
@@ -2751,7 +2766,7 @@ Generated: ${formatDisplayDate(new Date())}
           <div>
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">🧠 Class-Wise Mind Map</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-              ${escHtml(periodLabel)} · ${classKeys.length} Classes (F.Y., S.Y., T.Y., Final Year) · ${totalSubs} subjects · ${overallPct}% overall conduction
+              ${escHtml(periodLabel)} · ${classKeys.length} Live Classes (B.Pharm & M.Pharm Tabs) · ${totalSubs} subjects · ${overallPct}% overall conduction
             </span>
           </div>
           <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
