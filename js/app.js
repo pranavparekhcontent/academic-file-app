@@ -2499,32 +2499,6 @@ Generated: ${formatDisplayDate(new Date())}
     generateReportType(activeReportType);
   }
 
-  function generateReportType(type) {
-    activeReportType = type || 'class';
-
-    // Highlight active card
-    ['class', 'student', 'subject'].forEach(t => {
-      const el = document.getElementById(`card-report-${t}`);
-      if (el) {
-        if (t === activeReportType) {
-          el.style.border = '2px solid #6366f1';
-          el.style.boxShadow = '0 10px 28px rgba(99, 102, 241, 0.25)';
-          el.style.transform = 'translateY(-2px)';
-        } else {
-          el.style.border = '1px solid rgba(255, 255, 255, 0.8)';
-          el.style.boxShadow = 'none';
-          el.style.transform = 'none';
-        }
-      }
-    });
-
-    const outputEl = document.getElementById('reports-output-area');
-    if (!outputEl) return;
-
-    const data = state.inchargeDashboard || {};
-    const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
-    const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
-
   let activeClassMindmap = null;
 
   function openClassMindmap(semKey) {
