@@ -393,10 +393,10 @@ const App = (() => {
       compileBtn.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
-    // Hide topbar header strip on incharge dashboard (only for incharge dashboard, not faculty dashboard)
+    // Hide topbar header strip for Academic Incharge session (both incharge dashboard & plan inspection), keep visible for Faculty dashboard
     const topbar = document.querySelector('.topbar');
     if (topbar) {
-      topbar.style.display = (viewId === 'incharge-dashboard') ? 'none' : 'flex';
+      topbar.style.display = (state.isAcademicIncharge || viewId === 'incharge-dashboard') ? 'none' : 'flex';
     }
 
     // Hide subject select dropdown in incharge dashboard, as it is only for faculty
