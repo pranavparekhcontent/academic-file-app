@@ -942,6 +942,63 @@ button, [role='button'] {
   font-weight: 800;
 }
 
+.custom-glass-option.selected * {
+  color: #ffffff !important;
+}
+
+/* ── Universal 3D Liquid Glass Dropdowns & Select Controls ── */
+select, .glass-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%230284c7' viewBox='0 0 256 256'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,48,88H208a8,8,0,0,1,5.66,13.66Z'%3E%3C/path%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 14px center !important;
+  background-size: 14px 14px !important;
+  padding-right: 36px !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+  border-top: 1.5px solid #ffffff !important;
+  border-left: 1.5px solid #ffffff !important;
+  border-bottom: 1.5px solid rgba(165, 185, 210, 0.45) !important;
+  border-right: 1.5px solid rgba(165, 185, 210, 0.45) !important;
+  border-radius: var(--radius-pill, 9999px) !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: var(--water-shadow-standard), inset 0 1px 1.5px #ffffff !important;
+  outline: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+  z-index: 100 !important;
+}
+
+select:hover, .glass-select:hover {
+  background-color: rgba(255, 255, 255, 0.90) !important;
+  box-shadow: var(--water-shadow-standard-hover), inset 0 1px 1.5px #ffffff !important;
+}
+
+select:focus, .glass-select:focus {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25), inset 0 1px 1.5px #ffffff !important;
+}
+
+select option {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  padding: 10px 14px !important;
+}
+
+/* Guarantee containers of dropdowns never clip popovers */
+.topbar, .topbar-left, .topbar-right,
+.incharge-glass-filter-bar, .filter-group,
+.form-group, .faculty-select-wrapper, .subject-select-wrapper {
+  overflow: visible !important;
+}
+
 .select-cell {
   width: 100%;
   padding: 12px 20px 12px 46px;

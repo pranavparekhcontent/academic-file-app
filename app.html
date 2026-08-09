@@ -472,7 +472,7 @@
               <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #334155; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
                 <i class="ph ph-calendar" style="color: #6366f1;"></i> Select Timeperiod
               </label>
-              <select id="reports-period-filter" onchange="App.onReportsPeriodChange(this.value)" style="width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(255, 255, 255, 0.95); border-radius: 12px; color: #0f172a; font-size: 13px; font-weight: 700; outline: none; cursor: pointer;">
+              <select id="reports-period-filter" class="glass-select" onchange="App.onReportsPeriodChange(this.value)" style="width: 100%; padding: 10px 14px;">
                 <option value="all" selected>All Time (Entire Academic Year)</option>
                 <option value="custom">Custom Date Range...</option>
               </select>
