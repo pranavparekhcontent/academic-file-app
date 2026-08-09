@@ -1948,19 +1948,18 @@ const App = (() => {
               <span style="color: #475569; font-weight: 700; font-size: 12px; flex-shrink: 0;">Code: (${escHtml(s.code)})</span>
             </div>
 
-            <!-- Row 2: Badges & Action Buttons (% Covered, View Plan) -->
-            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
-              <div style="display: inline-flex; align-items: center; gap: 4px; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 3px 9px; border-radius: 9999px; height: 28px;">
-                <span style="font-size: 12px; font-weight: 900; color: ${pctColor};">${s.percent}%</span>
-                <span style="font-size: 9.5px; font-weight: 800; color: ${pctColor}; text-transform: uppercase; letter-spacing: 0.3px;">Covered</span>
-              </div>
-              <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 10px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+            <!-- Row 2: Action Buttons (View Plan & Student's Feedback side-by-side centered) -->
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 8px;">
+              <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                 View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
+              </button>
+              <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: rgba(255, 255, 255, 0.75); border: 1.5px solid ${pal.icon}; color: ${pal.icon} !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+                Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: ${pal.icon} !important;"></i>
               </button>
             </div>
 
             <!-- Row 3: Sem, Executed Lectures & Live Avg Attendance (ABOVE STATUS BAR) -->
-            <div style="font-size: 11.5px; color: #475569; font-weight: 600; margin-top: 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
+            <div style="font-size: 11.5px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
               <span>${semLabel} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed</span>
               <span style="font-size: 11.5px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
                 <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
@@ -1970,13 +1969,6 @@ const App = (() => {
             <!-- Row 4: Status Bar / Progress Bar -->
             <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden;">
               <div style="width: ${s.percent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
-            </div>
-
-            <!-- Row 5: Bottom Centrally Aligned Student's Feedback Button -->
-            <div style="display: flex; justify-content: center; margin-top: 10px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08);">
-              <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: rgba(255, 255, 255, 0.75); border: 1.5px solid ${pal.icon}; color: ${pal.icon} !important; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
-                Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: ${pal.icon} !important;"></i>
-              </button>
             </div>
           </div>
         `;
