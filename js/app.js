@@ -2936,7 +2936,20 @@ Generated: ${formatDisplayDate(new Date())}
       // 1. Identify all subject codes for this class from inchargeDashboard
       const data = state.inchargeDashboard || {};
       const eligibilityThreshold = (state.allData && state.allData.attendanceLimit) ? state.allData.attendanceLimit : 75;
+
       const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+
+      // Get enriched subjects from API to get outputSheetId
+      let enrichedSubjects = [];
+      try {
+        const subjectsRes = await API.getSubjects('');
+        if (subjectsRes && subjectsRes.success && subjectsRes.subjects) {
+          enrichedSubjects = subjectsRes.subjects;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch enriched subjects:', e);
+      }
+
       let classSubjects = [];
       const subCodeSet = {};
 
@@ -2947,22 +2960,29 @@ Generated: ${formatDisplayDate(new Date())}
           if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester'))) {
             if (s.code && !subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
+              
+              // find enriched subject to get outputSheetId
+              const enriched = enrichedSubjects.find(es => es.code === s.code);
+              if (enriched && enriched.outputSheetId) {
+                s.outputSheetId = enriched.outputSheetId;
+              }
+              
               classSubjects.push(s);
             }
           }
         });
       });
 
-      // 2. Parallel fetch student roster & attendance across all subject sheets of this class
+      const defaultOutputSheetId = enrichedSubjects.length > 0 ? enrichedSubjects[0].outputSheetId : '';
       const fetchPromises = [
         API.getStudents(className).catch(() => ({ success: false })),
-        API.getAttendance('', className).catch(() => ({ success: false }))
+        API.getAttendance('', className, '', defaultOutputSheetId).catch(() => ({ success: false }))
       ];
 
       // Also fetch per-subject attendance for distinct subject codes if any
       classSubjects.forEach(sub => {
         if (sub.code) {
-          fetchPromises.push(API.getAttendance(sub.code, className).then(res => {
+          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId).then(res => {
             // Inject subject code into records so we know which subject this attendance belongs to
             if (res && res.success && Array.isArray(res.records)) {
               res.records.forEach(r => { if (!r.code) r.code = sub.code; });

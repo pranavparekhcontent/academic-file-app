@@ -224,6 +224,18 @@ const API = (() => {
     return { success: false, error: 'Offline.' };
   }
 
+  async function getSubjects(teacher) {
+    if (navigator.onLine) {
+      try {
+        const data = await _get('getSubjects', { teacher: teacher || '' });
+        return data;
+      } catch (e) {
+        console.warn('API.getSubjects network failed:', e.message);
+      }
+    }
+    return { success: false, error: 'Offline.' };
+  }
+
   async function getAcademicIncharges() {
     if (navigator.onLine) {
       try {
@@ -303,10 +315,10 @@ const API = (() => {
     return { success: false, error: 'Offline or failed to fetch students.' };
   }
 
-  async function getAttendance(code, year, date) {
+  async function getAttendance(code, year, date, outputSheetId) {
     if (navigator.onLine) {
       try {
-        const data = await _get('getAttendance', { code: code || '', year: year || '', date: date || '' });
+        const data = await _get('getAttendance', { code: code || '', year: year || '', date: date || '', outputSheetId: outputSheetId || '' });
         return data;
       } catch (e) {
         console.warn('API.getAttendance network failed:', e.message);
@@ -317,6 +329,7 @@ const API = (() => {
 
   return {
     getAllData,
+    getSubjects,
     getTeachingPlan,
     syncTeachingPlan,
     saveRemark,
