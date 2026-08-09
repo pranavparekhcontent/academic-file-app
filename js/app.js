@@ -2961,7 +2961,13 @@ Generated: ${formatDisplayDate(new Date())}
       // Also fetch per-subject attendance for distinct subject codes if any
       classSubjects.forEach(sub => {
         if (sub.code) {
-          fetchPromises.push(API.getAttendance(sub.code, className).catch(() => ({ success: false })));
+          fetchPromises.push(API.getAttendance(sub.code, className).then(res => {
+            // Inject subject code into records so we know which subject this attendance belongs to
+            if (res && res.success && Array.isArray(res.records)) {
+              res.records.forEach(r => { if (!r.code) r.code = sub.code; });
+            }
+            return res;
+          }).catch(() => ({ success: false })));
         }
       });
 
@@ -3014,7 +3020,8 @@ Generated: ${formatDisplayDate(new Date())}
             name: st.name,
             batch: st.batch,
             pct: avgPct,
-            isDefaulter: avgPct < 75
+            isDefaulter: avgPct < 75,
+            subjectMap: st.subjectMap || {}
           };
         });
       } else if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students) && studentsRes.students.length > 0) {
@@ -3025,7 +3032,8 @@ Generated: ${formatDisplayDate(new Date())}
             name: st.name || st.studentName || 'Student',
             batch: st.batch || st.batchGroup || 'General',
             pct: avgPct,
-            isDefaulter: avgPct < 75
+            isDefaulter: avgPct < 75,
+            subjectMap: {} // Make sure this exists to prevent undefined errors
           };
         });
       }
@@ -3051,12 +3059,32 @@ Generated: ${formatDisplayDate(new Date())}
         return rA - rB;
       });
 
-      // 4. Render Table Rows (No Sr No, Column 1 = Roll No, Column 2 = Student Name, Column 3 = Batch, Column 4 = Average Attendance)
+      // 4. Render Table Headers and Rows
+      // Get unique subject columns based on classSubjects
+      const subjectColumns = classSubjects.filter(s => s.code).map(s => ({ code: s.code, name: s.subject || s.code }));
+      
+      let subjectHeadersHtml = subjectColumns.map(sc => 
+        `<th style="padding: 10px 16px; text-align: center;" title="${escHtml(sc.name)}">${escHtml(sc.code)} %</th>`
+      ).join('');
+
       let rowsHtml = '';
       let defaulterCount = 0;
 
       studentList.forEach(st => {
         if (st.isDefaulter) defaulterCount++;
+        
+        let subjectCellsHtml = '';
+        subjectColumns.forEach(sc => {
+          const subData = st.subjectMap[sc.code];
+          let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
+          if (subData && subData.total > 0) {
+            const subPct = Math.round((subData.present / subData.total) * 100);
+            const color = subPct < 75 ? '#ff3b30' : 'var(--text-main)';
+            cellHtml = `<span style="color: ${color}; font-weight: ${subPct < 75 ? '800' : '600'};">${subPct}%</span>`;
+          }
+          subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
+        });
+
         const statusBadge = st.isDefaulter ?
           `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Defaulter)</span>` :
           `<span style="background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Eligible)</span>`;
@@ -3073,6 +3101,7 @@ Generated: ${formatDisplayDate(new Date())}
                 ${escHtml(st.batch || 'General')}
               </span>
             </td>
+            ${subjectCellsHtml}
             <td style="padding: 12px 16px; text-align: right;">${statusBadge}</td>
           </tr>
         `;
@@ -3094,6 +3123,7 @@ Generated: ${formatDisplayDate(new Date())}
                 <th style="padding: 10px 16px;">Roll No</th>
                 <th style="padding: 10px 16px;">Student Name</th>
                 <th style="padding: 10px 16px;">Batch</th>
+                ${subjectHeadersHtml}
                 <th style="padding: 10px 16px; text-align: right;">Average Attendance</th>
               </tr>
             </thead>
