@@ -1958,11 +1958,11 @@ const App = (() => {
               </button>
             </div>
 
-            <!-- Row 3: Sem, Executed Lectures & Live Avg Attendance (ABOVE STATUS BAR) -->
-            <div style="font-size: 11.5px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
-              <span>${semLabel} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel} executed</span>
-              <span style="font-size: 11.5px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-                <i class="ph ph-users" style="color: #64748b;"></i> Avg. Attendance: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
+            <!-- Row 3: Sem, Lectures & Live Avg Attendance (SINGLE ROW ABOVE STATUS BAR) -->
+            <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${semLabel} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel}</span>
+              <span style="font-size: 11px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; white-space: nowrap;">
+                <i class="ph ph-users" style="color: #64748b;"></i> Avg. Att: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
               </span>
             </div>
 
