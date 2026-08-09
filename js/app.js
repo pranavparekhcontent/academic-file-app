@@ -2640,7 +2640,12 @@ Generated: ${formatDisplayDate(new Date())}
           let subjectItemsHtml = '';
           semObj.subjectsList.forEach(s => {
             const sp = s.percent || 0;
-            const barColor = 'var(--accent-blue, #0071e3)';
+            const barColor = 'var(--success, #34c759)';
+            const attVal = s.attendancePct || 75;
+            const attBadgeBg = attVal >= 80 ? 'rgba(52, 199, 89, 0.14)' : attVal >= 70 ? 'rgba(0, 113, 227, 0.14)' : 'rgba(255, 59, 48, 0.14)';
+            const attBadgeBorder = attVal >= 80 ? 'rgba(52, 199, 89, 0.3)' : attVal >= 70 ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
+            const attBadgeColor = attVal >= 80 ? 'var(--success, #34c759)' : attVal >= 70 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
+
             subjectItemsHtml += `
               <div style="
                 display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -2666,20 +2671,20 @@ Generated: ${formatDisplayDate(new Date())}
                   <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escHtml(s.facultyName)}</span>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 16px; flex: 1.4; flex-shrink: 0; justify-content: flex-end;">
+                <div style="display: flex; align-items: center; gap: 16px; flex: 1.8; flex-shrink: 0; justify-content: flex-end;">
                   <div style="width: 140px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 4px;">
-                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs (${sp}%)</span>
+                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs <span style="color: var(--success, #34c759); font-weight: 900;">(${sp}%)</span></span>
                     </div>
                     <div style="position: relative; height: 5px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
                       <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
                     </div>
                   </div>
-                  <span style="font-size: 12px; font-weight: 800; color: var(--text-main); background: var(--colorless-glass-hover); padding: 3px 8px; border-radius: var(--radius-pill); flex-shrink: 0;">
-                    ${s.attendancePct}% att.
+                  <span style="font-size: 11px; font-weight: 800; color: ${attBadgeColor}; background: ${attBadgeBg}; border: 1px solid ${attBadgeBorder}; padding: 4px 10px; border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">
+                    ${attVal}% Avg Student Attendance
                   </span>
                   <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
-                    display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px;
+                    display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
                     font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
                     background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
                     border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
