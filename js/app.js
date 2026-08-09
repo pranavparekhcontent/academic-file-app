@@ -3138,24 +3138,24 @@ Generated: ${formatDisplayDate(new Date())}
 
       studentList.forEach(st => {
         let sumPct = 0;
-        let validSubCount = 0;
         let subjectCellsHtml = '';
 
         subjectColumns.forEach(sc => {
           const subData = st.subjectMap[sc.code];
           let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
+          let subPct = 0;
           if (subData && subData.total > 0) {
-            const subPct = Math.round((subData.present / subData.total) * 100);
-            sumPct += subPct;
-            validSubCount++;
+            subPct = Math.round((subData.present / subData.total) * 100);
             const color = subPct < eligibilityThreshold ? '#ff3b30' : 'var(--text-main)';
             cellHtml = `<span style="color: ${color}; font-weight: ${subPct < eligibilityThreshold ? '800' : '600'};">${subPct}%</span>`;
           }
+          sumPct += subPct;
           subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
         });
 
-        // Compute average attendance as sum of valid subject percentages / number of valid subjects
-        const avgPct = validSubCount > 0 ? Math.round(sumPct / validSubCount) : (st.pct || 0);
+        // Compute average attendance across ALL active semester subjects in subjectColumns
+        const totalActiveSubjects = subjectColumns.length;
+        const avgPct = totalActiveSubjects > 0 ? Math.round(sumPct / totalActiveSubjects) : (st.pct || 0);
         st.pct = avgPct;
         st.isDefaulter = avgPct < eligibilityThreshold;
         if (st.isDefaulter) defaulterCount++;
