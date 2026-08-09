@@ -2755,23 +2755,17 @@ Generated: ${formatDisplayDate(new Date())}
       outputEl.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
           <div>
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
-              <h3 style="margin: 0; font-size: 18px; font-weight: 900; color: var(--text-main);">Class-Wise Report</h3>
-              <button onclick="App.generateReportType('class')" style="
-                display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px;
-                font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
-                background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
-                border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease;
-              " onmouseover="this.style.background='var(--accent-blue)';this.style.color='#fff';" onmouseout="this.style.background='var(--colorless-glass-hover)';this.style.color='var(--accent-blue)';">
-                Generate Report <i class="ph ph-caret-right" style="font-size: 12px;"></i>
-              </button>
-            </div>
+            <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 900; color: var(--text-main);">Class-Wise Report</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
               ${escHtml(periodLabel)} · ${classKeys.length} Active Classes · ${totalSubs} assigned subjects
             </span>
           </div>
-          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
-            <i class="ph ph-printer"></i> Print
+          <button class="btn btn-primary" onclick="App.generateReportType('class')" style="
+            padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+          ">
+            Generate Class-Wise Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
           </button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -2816,8 +2810,12 @@ Generated: ${formatDisplayDate(new Date())}
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">👨‍🎓 Student Attendance & Eligibility Report</h3>
             <span style="font-size: 12px; font-weight: 700; color: #8b5cf6;">Timeperiod: ${escHtml(periodLabel)}</span>
           </div>
-          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-            <i class="ph ph-printer"></i> Print Report
+          <button class="btn btn-primary" onclick="App.generateReportType('student')" style="
+            padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+            background: #8b5cf6; border: none; color: #fff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+          ">
+            Generate Student-Wise Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
           </button>
         </div>
         <div style="overflow-x: auto;">
