@@ -2928,60 +2928,104 @@ Generated: ${formatDisplayDate(new Date())}
     container.innerHTML = `
       <div style="padding: 36px; text-align: center; color: var(--text-secondary); font-size: 13px;">
         <i class="ph ph-spinner spinner" style="font-size: 26px; margin-bottom: 8px; color: #8b5cf6; display: block;"></i>
-        Fetching live student roster and attendance from college spreadsheet for <strong>${escHtml(className)}</strong>...
+        Fetching live student roster and attendance across all subject sheets for <strong>${escHtml(className)}</strong>...
       </div>
     `;
 
     try {
-      const [studentsRes, attRes] = await Promise.all([
+      // 1. Identify all subject codes for this class from inchargeDashboard
+      const data = state.inchargeDashboard || {};
+      const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+      let classSubjects = [];
+      const subCodeSet = {};
+
+      faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          if (!s) return;
+          const liveClass = (s.year || s.className || s.class || '').trim();
+          if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester'))) {
+            if (s.code && !subCodeSet[s.code]) {
+              subCodeSet[s.code] = true;
+              classSubjects.push(s);
+            }
+          }
+        });
+      });
+
+      // 2. Parallel fetch student roster & attendance across all subject sheets of this class
+      const fetchPromises = [
         API.getStudents(className).catch(() => ({ success: false })),
         API.getAttendance('', className).catch(() => ({ success: false }))
-      ]);
+      ];
+
+      // Also fetch per-subject attendance for distinct subject codes if any
+      classSubjects.forEach(sub => {
+        if (sub.code) {
+          fetchPromises.push(API.getAttendance(sub.code, className).catch(() => ({ success: false })));
+        }
+      });
+
+      const results = await Promise.all(fetchPromises);
+      const studentsRes = results[0];
+      const allAttRes = results.slice(1);
+
+      let studentMap = {};
+
+      // 3. Process all attendance records across all subject sheets
+      allAttRes.forEach(attRes => {
+        if (attRes && attRes.success && Array.isArray(attRes.records)) {
+          attRes.records.forEach(r => {
+            const key = String(r.rollNo || r.name).trim();
+            if (!key) return;
+            if (!studentMap[key]) {
+              studentMap[key] = {
+                rollNo: r.rollNo || 'N/A',
+                name: r.name || key,
+                batch: r.batch || 'General',
+                presentCount: 0,
+                totalCount: 0,
+                subjectMap: {}
+              };
+            }
+            const sCode = r.code || 'SUB';
+            if (!studentMap[key].subjectMap[sCode]) {
+              studentMap[key].subjectMap[sCode] = { present: 0, total: 0 };
+            }
+            studentMap[key].totalCount++;
+            studentMap[key].subjectMap[sCode].total++;
+            if (r.status === 'P' || r.status === 'Present') {
+              studentMap[key].presentCount++;
+              studentMap[key].subjectMap[sCode].present++;
+            }
+            if (r.batch && r.batch !== 'General') {
+              studentMap[key].batch = r.batch;
+            }
+          });
+        }
+      });
 
       let studentList = [];
 
-      if (attRes && attRes.success && Array.isArray(attRes.records) && attRes.records.length > 0) {
-        const studentMap = {};
-        attRes.records.forEach(r => {
-          const key = String(r.rollNo || r.name).trim();
-          if (!key) return;
-          if (!studentMap[key]) {
-            studentMap[key] = {
-              rollNo: r.rollNo || 'N/A',
-              name: r.name || key,
-              batch: r.batch || 'General',
-              presentCount: 0,
-              totalCount: 0
-            };
-          }
-          studentMap[key].totalCount++;
-          if (r.status === 'P' || r.status === 'Present') {
-            studentMap[key].presentCount++;
-          }
-          if (r.batch && r.batch !== 'General') {
-            studentMap[key].batch = r.batch;
-          }
-        });
-
+      if (Object.keys(studentMap).length > 0) {
         studentList = Object.values(studentMap).map(st => {
-          const pct = st.totalCount > 0 ? Math.round((st.presentCount / st.totalCount) * 100) : 0;
+          const avgPct = st.totalCount > 0 ? Math.round((st.presentCount / st.totalCount) * 100) : 0;
           return {
             rollNo: st.rollNo,
             name: st.name,
             batch: st.batch,
-            pct: pct,
-            isDefaulter: pct < 75
+            pct: avgPct,
+            isDefaulter: avgPct < 75
           };
         });
       } else if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students) && studentsRes.students.length > 0) {
         studentList = studentsRes.students.map(st => {
-          const pct = typeof st.attendancePct === 'number' ? st.attendancePct : (st.pct || 80);
+          const avgPct = typeof st.attendancePct === 'number' ? st.attendancePct : (st.pct || 80);
           return {
             rollNo: st.rollNo || st.roll || 'N/A',
             name: st.name || st.studentName || 'Student',
             batch: st.batch || st.batchGroup || 'General',
-            pct: pct,
-            isDefaulter: pct < 75
+            pct: avgPct,
+            isDefaulter: avgPct < 75
           };
         });
       }
@@ -3000,39 +3044,36 @@ Generated: ${formatDisplayDate(new Date())}
         return;
       }
 
+      // Sort students by Roll No
       studentList.sort((a, b) => {
         const rA = parseInt(a.rollNo, 10) || 0;
         const rB = parseInt(b.rollNo, 10) || 0;
         return rA - rB;
       });
 
+      // 4. Render Table Rows (No Sr No, Column 1 = Roll No, Column 2 = Student Name, Column 3 = Batch, Column 4 = Average Attendance)
       let rowsHtml = '';
-      let idx = 1;
       let defaulterCount = 0;
 
       studentList.forEach(st => {
         if (st.isDefaulter) defaulterCount++;
         const statusBadge = st.isDefaulter ?
-          `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 11px; white-space: nowrap;">Below 75% Defaulter (${st.pct}%)</span>` :
-          `<span style="background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 11px; white-space: nowrap;">Eligible (${st.pct}%)</span>`;
+          `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Defaulter)</span>` :
+          `<span style="background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Eligible)</span>`;
 
         const rowBg = st.isDefaulter ? 'rgba(255, 59, 48, 0.05)' : 'transparent';
         const nameColor = st.isDefaulter ? '#ff3b30' : 'var(--text-main)';
 
         rowsHtml += `
           <tr style="border-bottom: 1px solid var(--colorless-glass-base); background: ${rowBg};">
-            <td style="padding: 12px 14px; font-weight: 700; color: var(--text-secondary);">${idx++}</td>
-            <td style="padding: 12px 14px; font-weight: 800; color: var(--text-main);">${escHtml(st.rollNo)}</td>
-            <td style="padding: 12px 14px; font-weight: 800; color: ${nameColor};">${escHtml(st.name)}</td>
-            <td style="padding: 12px 14px;">
-              <span style="background: var(--colorless-glass-hover); color: var(--accent-purple, #8b5cf6); border: 1px solid rgba(139, 92, 246, 0.25); padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800;">
+            <td style="padding: 12px 16px; font-weight: 800; color: var(--text-main); font-size: 13px;">${escHtml(st.rollNo)}</td>
+            <td style="padding: 12px 16px; font-weight: 800; color: ${nameColor}; font-size: 13px;">${escHtml(st.name)}</td>
+            <td style="padding: 12px 16px;">
+              <span style="background: var(--colorless-glass-hover); color: var(--accent-purple, #8b5cf6); border: 1px solid rgba(139, 92, 246, 0.25); padding: 4px 12px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800;">
                 ${escHtml(st.batch || 'General')}
               </span>
             </td>
-            <td style="padding: 12px 14px; font-weight: 900; color: ${st.isDefaulter ? '#ff3b30' : 'var(--success, #34c759)'}; font-size: 13px;">
-              ${st.pct}%
-            </td>
-            <td style="padding: 12px 14px; text-align: right;">${statusBadge}</td>
+            <td style="padding: 12px 16px; text-align: right;">${statusBadge}</td>
           </tr>
         `;
       });
@@ -3040,7 +3081,7 @@ Generated: ${formatDisplayDate(new Date())}
       container.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 10px 14px; background: var(--colorless-glass-base); border-radius: var(--radius-sm);">
           <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-            Total Students Logged: <strong>${studentList.length}</strong>
+            Total Students: <strong>${studentList.length}</strong> · Subjects Scanned: <strong>${classSubjects.length > 0 ? classSubjects.length : 'All'}</strong>
           </span>
           <span style="font-size: 12px; font-weight: 800; color: ${defaulterCount > 0 ? '#ff3b30' : 'var(--success)'};">
             ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below 75%` : '✅ All Students Eligible (≥ 75%)'}
@@ -3050,12 +3091,10 @@ Generated: ${formatDisplayDate(new Date())}
           <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
             <thead>
               <tr style="border-bottom: 2px solid var(--colorless-glass-hover); text-align: left; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <th style="padding: 10px 14px;">#</th>
-                <th style="padding: 10px 14px;">Roll No</th>
-                <th style="padding: 10px 14px;">Student Name</th>
-                <th style="padding: 10px 14px;">Batch Group</th>
-                <th style="padding: 10px 14px;">% Attendance</th>
-                <th style="padding: 10px 14px; text-align: right;">Status / Defaulter</th>
+                <th style="padding: 10px 16px;">Roll No</th>
+                <th style="padding: 10px 16px;">Student Name</th>
+                <th style="padding: 10px 16px;">Batch</th>
+                <th style="padding: 10px 16px; text-align: right;">Average Attendance</th>
               </tr>
             </thead>
             <tbody>
