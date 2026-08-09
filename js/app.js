@@ -2540,65 +2540,132 @@ Generated: ${formatDisplayDate(new Date())}
     }
 
     if (type === 'class') {
-      // Group subjects by Semester / Class fetched from college server payload
-      const semMap = {};
+      // Helper function to resolve Class / Year name from subject data or semester number
+      function getClassYearName(s) {
+        if (s.class && String(s.class).trim()) return String(s.class).trim();
+        if (s.year && String(s.year).trim()) return String(s.year).trim();
+        if (s.courseYear && String(s.courseYear).trim()) return String(s.courseYear).trim();
+        
+        const semNum = parseInt(s.semester, 10) || 1;
+        if (semNum === 1 || semNum === 2) return 'F.Y. B.Pharm';
+        if (semNum === 3 || semNum === 4) return 'S.Y. B.Pharm';
+        if (semNum === 5 || semNum === 6) return 'T.Y. B.Pharm';
+        if (semNum === 7 || semNum === 8) return 'Final Year B.Pharm';
+        const yr = Math.ceil(semNum / 2);
+        return `Year ${yr} B.Pharm`;
+      }
+
+      // Group subjects by Class (Year) first, then by Semester underneath
+      const classMap = {};
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
+          const className = getClassYearName(s);
           const rawSem = s.semester ? String(s.semester).trim() : '1';
           const semKey = `Semester ${rawSem}`;
-          if (!semMap[semKey]) {
-            semMap[semKey] = { semName: semKey, totalLectures: 0, totalConducted: 0, subjectsCount: 0, subjectsList: [], totalAttPctSum: 0 };
+
+          if (!classMap[className]) {
+            classMap[className] = {
+              className: className,
+              totalLectures: 0,
+              totalConducted: 0,
+              subjectsCount: 0,
+              totalAttPctSum: 0,
+              semesters: {}
+            };
           }
-          semMap[semKey].subjectsCount++;
-          semMap[semKey].totalLectures += (s.totalLectures || 0);
-          semMap[semKey].totalConducted += (s.totalConducted || 0);
+
+          if (!classMap[className].semesters[semKey]) {
+            classMap[className].semesters[semKey] = {
+              semName: semKey,
+              semNum: parseInt(rawSem, 10) || 1,
+              subjectsList: []
+            };
+          }
+
           const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
-          semMap[semKey].totalAttPctSum += subAttPct;
-          semMap[semKey].subjectsList.push({ ...s, facultyName: f.faculty, attendancePct: subAttPct });
+          classMap[className].subjectsCount++;
+          classMap[className].totalLectures += (s.totalLectures || 0);
+          classMap[className].totalConducted += (s.totalConducted || 0);
+          classMap[className].totalAttPctSum += subAttPct;
+
+          classMap[className].semesters[semKey].subjectsList.push({
+            ...s,
+            facultyName: f.faculty,
+            attendancePct: subAttPct
+          });
         });
       });
 
-      const semKeys = Object.keys(semMap).sort();
-      const totalSubs = semKeys.reduce((a, k) => a + semMap[k].subjectsCount, 0);
-      const totalLec = semKeys.reduce((a, k) => a + semMap[k].totalLectures, 0);
-      const totalCond = semKeys.reduce((a, k) => a + semMap[k].totalConducted, 0);
+      const classKeys = Object.keys(classMap).sort((a, b) => {
+        const order = ['F.Y. B.Pharm', 'S.Y. B.Pharm', 'T.Y. B.Pharm', 'Final Year B.Pharm'];
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        return a.localeCompare(b);
+      });
+
+      const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
+      const totalLec = classKeys.reduce((a, k) => a + classMap[k].totalLectures, 0);
+      const totalCond = classKeys.reduce((a, k) => a + classMap[k].totalConducted, 0);
       const overallPct = totalLec > 0 ? Math.round((totalCond / totalLec) * 100) : 0;
 
       let classNodesHtml = '';
-      semKeys.forEach(sem => {
-        const item = semMap[sem];
+      classKeys.forEach(clsName => {
+        const item = classMap[clsName];
         const pct = item.totalLectures > 0 ? Math.min(100, Math.round((item.totalConducted / item.totalLectures) * 100)) : 0;
         const avgAtt = item.subjectsCount > 0 ? Math.round(item.totalAttPctSum / item.subjectsCount) : 0;
-        const isExpanded = activeClassMindmap === sem;
+        const isExpanded = activeClassMindmap === clsName;
 
-        let subjectItemsHtml = '';
-        item.subjectsList.forEach(s => {
-          const sp = s.percent || 0;
-          const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
-          subjectItemsHtml += `
-            <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code)}')" style="
-              background: var(--colorless-glass-base);
-              backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
-              border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
-              border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
-              border-radius: var(--radius-sm); padding: 14px 16px; cursor: pointer;
-              transition: transform 0.22s ease, box-shadow 0.22s ease;
-            " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--water-shadow-standard-hover)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">${escHtml(s.name)}</span>
-                <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code)}</span>
+        // Render Semesters under this Class
+        let semesterBlocksHtml = '';
+        const sortedSemKeys = Object.keys(item.semesters).sort((a, b) => item.semesters[a].semNum - item.semesters[b].semNum);
+
+        sortedSemKeys.forEach(semKey => {
+          const semObj = item.semesters[semKey];
+          let subjectItemsHtml = '';
+
+          semObj.subjectsList.forEach(s => {
+            const sp = s.percent || 0;
+            const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
+            subjectItemsHtml += `
+              <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code)}')" style="
+                background: var(--colorless-glass-base);
+                backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
+                border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
+                border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
+                border-radius: var(--radius-sm); padding: 14px 16px; cursor: pointer;
+                transition: transform 0.22s ease, box-shadow 0.22s ease;
+              " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--water-shadow-standard-hover)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">${escHtml(s.name)}</span>
+                  <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code)}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 10px;">
+                  <i class="ph ph-user-circle" style="font-size: 14px; color: var(--accent-blue);"></i>
+                  ${escHtml(s.facultyName)}
+                  <span style="margin-left: auto; font-weight: 800; color: var(--text-main);">${s.attendancePct}% att.</span>
+                </div>
+                <div style="position: relative; height: 6px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
+                  <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700;">
+                  <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lectures</span>
+                  <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
+                </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 10px;">
-                <i class="ph ph-user-circle" style="font-size: 14px; color: var(--accent-blue);"></i>
-                ${escHtml(s.facultyName)}
-                <span style="margin-left: auto; font-weight: 800; color: var(--text-main);">${s.attendancePct}% att.</span>
+            `;
+          });
+
+          semesterBlocksHtml += `
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px dashed var(--colorless-glass-hover);">
+                <i class="ph ph-bookmark-simple" style="font-size: 15px; color: var(--accent-blue);"></i>
+                <span style="font-size: 13px; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.5px;">${escHtml(semKey)}</span>
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill); margin-left: auto;">
+                  ${semObj.subjectsList.length} subjects
+                </span>
               </div>
-              <div style="position: relative; height: 6px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
-                <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700;">
-                <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lectures</span>
-                <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+                ${subjectItemsHtml}
               </div>
             </div>
           `;
@@ -2613,17 +2680,17 @@ Generated: ${formatDisplayDate(new Date())}
             border-radius: var(--radius-lg); box-shadow: var(--water-shadow-standard);
             overflow: hidden; transition: box-shadow 0.3s ease;
           ">
-            <div onclick="App.toggleClassMindmap('${escHtml(sem)}')" style="
+            <div onclick="App.toggleClassMindmap('${escHtml(clsName)}')" style="
               padding: 18px 20px; cursor: pointer; display: flex; align-items: center; gap: 14px;
               transition: background 0.2s ease;
             " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='transparent'">
               <div style="width: 42px; height: 42px; border-radius: var(--radius-sm); background: var(--colorless-glass-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                <i class="ph ph-tree-structure" style="font-size: 20px; color: var(--accent-blue);"></i>
+                <i class="ph ph-graduation-cap" style="font-size: 22px; color: var(--accent-blue);"></i>
               </div>
               <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 15px; font-weight: 800; color: var(--text-main);">${escHtml(sem)}</div>
+                <div style="font-size: 16px; font-weight: 900; color: var(--text-main);">${escHtml(clsName)}</div>
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
-                  ${item.subjectsCount} subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
+                  ${sortedSemKeys.length} Semesters · ${item.subjectsCount} subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
@@ -2641,12 +2708,11 @@ Generated: ${formatDisplayDate(new Date())}
               </div>
             </div>
             <div style="
-              max-height: ${isExpanded ? '2000px' : '0'}; opacity: ${isExpanded ? '1' : '0'};
+              max-height: ${isExpanded ? '3000px' : '0'}; opacity: ${isExpanded ? '1' : '0'};
               overflow: hidden; transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, padding 0.35s ease;
-              padding: ${isExpanded ? '0 16px 16px 16px' : '0 16px'};
-              display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;
+              padding: ${isExpanded ? '16px 16px 8px 16px' : '0 16px'};
             ">
-              ${subjectItemsHtml}
+              ${semesterBlocksHtml}
             </div>
           </div>
         `;
@@ -2657,7 +2723,7 @@ Generated: ${formatDisplayDate(new Date())}
           <div>
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">🧠 Class-Wise Mind Map</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-              ${escHtml(periodLabel)} · ${semKeys.length} classes · ${totalSubs} subjects · ${overallPct}% overall conduction
+              ${escHtml(periodLabel)} · ${classKeys.length} Classes (F.Y., S.Y., T.Y., Final Year) · ${totalSubs} subjects · ${overallPct}% overall conduction
             </span>
           </div>
           <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
