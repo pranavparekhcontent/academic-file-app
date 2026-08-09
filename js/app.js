@@ -996,6 +996,7 @@ const App = (() => {
     const menu = document.getElementById('custom-period-menu');
     const trigger = document.getElementById('custom-period-trigger');
     const wrapper = document.getElementById('custom-period-wrapper');
+    const filterBar = wrapper ? wrapper.closest('.incharge-glass-filter-bar') : null;
     if (!menu) return;
 
     const isVisible = menu.style.display === 'block';
@@ -1004,9 +1005,11 @@ const App = (() => {
       if (isVisible) {
         trigger.classList.remove('open');
         if (wrapper) wrapper.classList.remove('open');
+        if (filterBar) filterBar.classList.remove('dropdown-open');
       } else {
         trigger.classList.add('open');
         if (wrapper) wrapper.classList.add('open');
+        if (filterBar) filterBar.classList.add('dropdown-open');
       }
     }
   }
@@ -1017,6 +1020,7 @@ const App = (() => {
     const menu = document.getElementById('custom-period-menu');
     const trigger = document.getElementById('custom-period-trigger');
     const wrapper = document.getElementById('custom-period-wrapper');
+    const filterBar = wrapper ? wrapper.closest('.incharge-glass-filter-bar') : null;
 
     if (select) {
       select.value = val;
@@ -1026,6 +1030,7 @@ const App = (() => {
     if (menu) menu.style.display = 'none';
     if (trigger) trigger.classList.remove('open');
     if (wrapper) wrapper.classList.remove('open');
+    if (filterBar) filterBar.classList.remove('dropdown-open');
 
     if (menu) {
       menu.querySelectorAll('.custom-glass-option').forEach(opt => {
@@ -1069,6 +1074,8 @@ const App = (() => {
       if (periodMenu) periodMenu.style.display = 'none';
       if (periodTrigger) periodTrigger.classList.remove('open');
       periodWrapper.classList.remove('open');
+      const filterBar = periodWrapper.closest('.incharge-glass-filter-bar');
+      if (filterBar) filterBar.classList.remove('dropdown-open');
     }
   });
 

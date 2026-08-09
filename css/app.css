@@ -826,30 +826,40 @@ button, [role='button'] {
   transform: rotate(180deg);
 }
 
-.form-group {
-  margin-bottom: 20px;
+.form-group, .filter-group, .period-select-wrapper, .incharge-glass-filter-bar {
   position: relative;
-  z-index: 1;
+  z-index: 50;
 }
 
 .form-group.dropdown-open,
 .form-group:has(.custom-glass-trigger.open),
-.form-group:has(.open) {
-  z-index: 999999 !important;
-}
-
-.faculty-select-wrapper,
-.subject-select-wrapper {
-  position: relative;
-  width: 100%;
-  z-index: 9999;
-}
-
+.form-group:has(.open),
+.filter-group:has(.custom-glass-trigger.open),
+.filter-group.dropdown-open,
+.incharge-glass-filter-bar:has(.custom-glass-trigger.open),
+.incharge-glass-filter-bar.dropdown-open,
+.period-select-wrapper:has(.custom-glass-trigger.open),
+.period-select-wrapper.open,
 .faculty-select-wrapper:has(.custom-glass-trigger.open),
 .subject-select-wrapper:has(.custom-glass-trigger.open),
 .faculty-select-wrapper.open,
 .subject-select-wrapper.open {
   z-index: 999999 !important;
+  position: relative !important;
+}
+
+#reports-cards-container,
+.reports-cards-container {
+  position: relative;
+  z-index: 1 !important;
+}
+
+.faculty-select-wrapper,
+.subject-select-wrapper,
+.period-select-wrapper {
+  position: relative;
+  width: 100%;
+  z-index: 9999;
 }
 
 @keyframes dropdownSlideDown {
