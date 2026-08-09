@@ -315,9 +315,10 @@ function getSubjects(teacher, sheetId) {
     }
   }
 
+  var defaultOutId = getOutputSheetId(sheetId);
   for (var i = 1; i < data.length; i++) {
     var fs = String(data[i][cols.faculty]).toLowerCase().split(',').map(function(x){return x.trim()});
-    if (fs.indexOf(teacher.toLowerCase()) !== -1) {
+    if (!teacher || teacher.toLowerCase() === 'all' || fs.indexOf(teacher.toLowerCase()) !== -1) {
       var sCode = String(data[i][cols.code]).trim();
       var sName = String(data[i][cols.name]).trim();
       var sType = String(data[i][cols.type]).trim();
@@ -325,7 +326,7 @@ function getSubjects(teacher, sheetId) {
       if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
         sType = 'Practical';
       }
-      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType };
+      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType, outputSheetId: defaultOutId };
       subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
       res.push(subObj);
     }
@@ -440,6 +441,11 @@ function getAllData(sheetId) {
 }
 
 function getOutputSheetId(sheetId) {
+  try {
+    var collegeIds = _getCollegeSheetIds(sheetId);
+    if (collegeIds && collegeIds.outputSheetId) return collegeIds.outputSheetId;
+  } catch(e) {}
+
   var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
   var data = ws ? ws.getDataRange().getValues() : [];
   for (var i = 0; i < data.length; i++) {
@@ -449,7 +455,7 @@ function getOutputSheetId(sheetId) {
          var f = '';
          for (var n = j + 1; n < data[i].length; n++) { var nv = String(data[i][n]).trim(); if (nv !== '' && ['link','name','text'].indexOf(nv.toLowerCase()) === -1) { f = nv; break; } }
          if (f === '' && i + 1 < data.length) f = String(data[i+1][j]).trim();
-         if (f) { var m = f.match(/\/d\/(.*?)(\/|$)/); if (m && m[1]) return m[1]; }
+         if (f) { var m = f.match(/\/d\/(.*?)(\/|$)/); return m ? m[1] : f; }
       }
     }
   }
@@ -1107,16 +1113,21 @@ function setupFormulasAndConditions(sheet, rows, pctCol, startRow, startCol, lim
 }
 
 function getAttendance(code, year, date, outputSheetId, sheetId) {
-  if (!code) return { error: 'No code' };
   if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
   var outSs; try { outSs = SpreadsheetApp.openById(outputSheetId); } catch(e) { return { error: 'Scan Fail' }; }
   var res = [], sheets = outSs.getSheets();
-  var parsedInput = _parseSubjectCode(code);
+  var parsedInput = _parseSubjectCode(code || '');
   for (var i = 0; i < sheets.length; i++) {
     var s = sheets[i], name = s.getName();
+    var sNameUpper = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var codeUpper = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     var parsedSheetCode = _parseSubjectCode(name);
-    var cleanSheetName = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (parsedSheetCode.cleanBaseCode !== parsedInput.cleanBaseCode && cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== 0) continue;
+    
+    if (codeUpper) {
+      var isMatch = (sNameUpper.indexOf(codeUpper) !== -1) || 
+                    (parsedSheetCode.cleanBaseCode && parsedInput.cleanBaseCode && parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode);
+      if (!isMatch) continue;
+    }
     var batch = name.indexOf(" - Batch ") !== -1 ? name.substring(name.indexOf(" - Batch ") + 9).trim() : "";
     var lc = s.getLastColumn(), lr = s.getLastRow();
     if (lc < 6 || lr < 8) continue;
@@ -1176,12 +1187,16 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
     var topics = s.getRange(hdrRowNumber + 1, 1, 1, lc).getValues()[0];
     var mtx = s.getRange(hdrRowNumber + 2, 1, lr - (hdrRowNumber + 1), lc).getValues();
     for (var r = 0; r < mtx.length; r++) {
+       var rNo = String(mtx[r][rollColIdx] || '').trim();
+       var rName = String(mtx[r][nameColIdx] || '').trim();
+       if (!rNo && !rName) continue;
        for (var d = 0; d < dates.length; d++) {
-          var st = String(mtx[r][dates[d].index]).trim();
-          if (st === 'P' || st === 'A') {
+          var rawSt = String(mtx[r][dates[d].index] || '').toUpperCase().trim();
+          if (rawSt === 'P' || rawSt === 'A' || rawSt === 'PRESENT' || rawSt === 'ABSENT' || rawSt === '1' || rawSt === '0') {
+             var st = (rawSt === 'P' || rawSt === 'PRESENT' || rawSt === '1') ? 'P' : 'A';
              var dbD = displayToDb(dates[d].disp);
              if (date && dbD.indexOf(date) === -1) continue;
-             res.push({ date: dbD, code: code, year: year, batch: batch, faculty: "Assigned", rollNo: mtx[r][rollColIdx], name: mtx[r][nameColIdx], status: st, topic: String(topics[dates[d].index] || '') });
+             res.push({ date: dbD, code: code || parsedSheetCode.cleanBaseCode, year: year, batch: batch, faculty: "Assigned", rollNo: rNo, name: rName, status: st, topic: String(topics[dates[d].index] || '') });
           }
        }
     }

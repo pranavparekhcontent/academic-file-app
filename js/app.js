@@ -2960,18 +2960,30 @@ Generated: ${formatDisplayDate(new Date())}
           if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester'))) {
             if (s.code && !subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
-              
-              // find enriched subject to get outputSheetId
               const enriched = enrichedSubjects.find(es => es.code === s.code);
               if (enriched && enriched.outputSheetId) {
                 s.outputSheetId = enriched.outputSheetId;
               }
-              
               classSubjects.push(s);
             }
           }
         });
       });
+
+      // Fallback: if classSubjects is empty, populate from enrichedSubjects or state.allData.subjects
+      if (classSubjects.length === 0) {
+        const allSubs = (enrichedSubjects.length > 0 ? enrichedSubjects : (state.allData && state.allData.subjects) || []);
+        allSubs.forEach(s => {
+          if (!s || !s.code) return;
+          const liveClass = (s.year || s.className || s.class || s.program || '').trim();
+          if (!liveClass || liveClass.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
+            if (!subCodeSet[s.code]) {
+              subCodeSet[s.code] = true;
+              classSubjects.push(s);
+            }
+          }
+        });
+      }
 
       const defaultOutputSheetId = enrichedSubjects.length > 0 ? enrichedSubjects[0].outputSheetId : '';
       const fetchPromises = [
@@ -2982,7 +2994,7 @@ Generated: ${formatDisplayDate(new Date())}
       // Also fetch per-subject attendance for distinct subject codes if any
       classSubjects.forEach(sub => {
         if (sub.code) {
-          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId).then(res => {
+          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId || defaultOutputSheetId).then(res => {
             // Inject subject code into records so we know which subject this attendance belongs to
             if (res && res.success && Array.isArray(res.records)) {
               res.records.forEach(r => { if (!r.code) r.code = sub.code; });
@@ -2998,34 +3010,57 @@ Generated: ${formatDisplayDate(new Date())}
 
       let studentMap = {};
 
+      // Pre-populate studentMap with official roster from API if available
+      if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students)) {
+        studentsRes.students.forEach(st => {
+          const rNo = String(st.rollNo || st.roll || '').trim();
+          const rName = String(st.name || st.studentName || '').trim();
+          const key = rNo || rName;
+          if (key) {
+            studentMap[key] = {
+              rollNo: rNo || 'N/A',
+              name: rName || key,
+              batch: st.batch || st.batchGroup || 'General',
+              presentCount: 0,
+              totalCount: 0,
+              subjectMap: {}
+            };
+          }
+        });
+      }
+
       // 3. Process all attendance records across all subject sheets
       allAttRes.forEach(attRes => {
         if (attRes && attRes.success && Array.isArray(attRes.records)) {
           attRes.records.forEach(r => {
-            const key = String(r.rollNo || r.name).trim();
+            const rNo = String(r.rollNo || '').trim();
+            const rName = String(r.name || '').trim();
+            let key = (rNo && studentMap[rNo]) ? rNo : ((rName && studentMap[rName]) ? rName : (rNo || rName));
             if (!key) return;
+
             if (!studentMap[key]) {
               studentMap[key] = {
-                rollNo: r.rollNo || 'N/A',
-                name: r.name || key,
+                rollNo: rNo || 'N/A',
+                name: rName || key,
                 batch: r.batch || 'General',
                 presentCount: 0,
                 totalCount: 0,
                 subjectMap: {}
               };
             }
+            if (rName && studentMap[key].name === key) studentMap[key].name = rName;
+            if (r.batch && r.batch !== 'General') studentMap[key].batch = r.batch;
+
             const sCode = r.code || 'SUB';
             if (!studentMap[key].subjectMap[sCode]) {
               studentMap[key].subjectMap[sCode] = { present: 0, total: 0 };
             }
             studentMap[key].totalCount++;
             studentMap[key].subjectMap[sCode].total++;
-            if (r.status === 'P' || r.status === 'Present') {
+            const stUpper = String(r.status || '').toUpperCase().trim();
+            if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
               studentMap[key].presentCount++;
               studentMap[key].subjectMap[sCode].present++;
-            }
-            if (r.batch && r.batch !== 'General') {
-              studentMap[key].batch = r.batch;
             }
           });
         }
