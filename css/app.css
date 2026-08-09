@@ -2251,25 +2251,6 @@ button, [role='button'] {
   pointer-events: none;
 }
 
-.toast-stack.has-toasts::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(8px) saturate(150%);
-  -webkit-backdrop-filter: blur(8px) saturate(150%);
-  z-index: -1;
-  pointer-events: none;
-  animation: toastBackdropFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes toastBackdropFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
 .toast {
   display: flex;
