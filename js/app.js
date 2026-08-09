@@ -2501,13 +2501,8 @@ Generated: ${formatDisplayDate(new Date())}
 
   let activeClassMindmap = null;
 
-  function openClassMindmap(semKey) {
-    activeClassMindmap = semKey;
-    generateReportType('class');
-  }
-
-  function closeClassMindmap() {
-    activeClassMindmap = null;
+  function toggleClassMindmap(semKey) {
+    activeClassMindmap = (activeClassMindmap === semKey) ? null : semKey;
     generateReportType('class');
   }
 
@@ -2557,8 +2552,6 @@ Generated: ${formatDisplayDate(new Date())}
           semMap[semKey].subjectsCount++;
           semMap[semKey].totalLectures += (s.totalLectures || 0);
           semMap[semKey].totalConducted += (s.totalConducted || 0);
-          
-          // Calculate realistic attendance output for subject
           const subAttPct = s.attendancePct || Math.min(96, Math.max(72, Math.round(((s.percent || 75) * 0.88) + 12)));
           semMap[semKey].totalAttPctSum += subAttPct;
           semMap[semKey].subjectsList.push({ ...s, facultyName: f.faculty, attendancePct: subAttPct });
@@ -2566,153 +2559,113 @@ Generated: ${formatDisplayDate(new Date())}
       });
 
       const semKeys = Object.keys(semMap).sort();
+      const totalSubs = semKeys.reduce((a, k) => a + semMap[k].subjectsCount, 0);
+      const totalLec = semKeys.reduce((a, k) => a + semMap[k].totalLectures, 0);
+      const totalCond = semKeys.reduce((a, k) => a + semMap[k].totalConducted, 0);
+      const overallPct = totalLec > 0 ? Math.round((totalCond / totalLec) * 100) : 0;
 
-      if (activeClassMindmap && semMap[activeClassMindmap]) {
-        // ── 🧠 NOTEBOOKLM MIND MAP VIEW FOR SELECTED CLASS ──
-        const classData = semMap[activeClassMindmap];
-        const overallProgress = classData.totalLectures > 0 ? Math.min(100, Math.round((classData.totalConducted / classData.totalLectures) * 100)) : 0;
-        const avgClassAtt = classData.subjectsCount > 0 ? Math.round(classData.totalAttPctSum / classData.subjectsCount) : 0;
+      let classNodesHtml = '';
+      semKeys.forEach(sem => {
+        const item = semMap[sem];
+        const pct = item.totalLectures > 0 ? Math.min(100, Math.round((item.totalConducted / item.totalLectures) * 100)) : 0;
+        const avgAtt = item.subjectsCount > 0 ? Math.round(item.totalAttPctSum / item.subjectsCount) : 0;
+        const isExpanded = activeClassMindmap === sem;
 
-        let nodeCardsHtml = '';
-        classData.subjectsList.forEach(s => {
-          const attBadgeColor = s.attendancePct >= 85 ? 'rgba(16, 185, 129, 0.15)' : s.attendancePct >= 75 ? 'rgba(2, 132, 199, 0.15)' : 'rgba(245, 158, 11, 0.15)';
-          const attTextColor = s.attendancePct >= 85 ? '#10b981' : s.attendancePct >= 75 ? '#0284c7' : '#d97706';
-
-          nodeCardsHtml += `
-            <div class="notebooklm-node-card" onclick="App.selectSubjectForDrilldown('${escHtml(s.code)}')" style="cursor: pointer;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                <span style="font-size: 11px; font-weight: 800; background: rgba(99, 102, 241, 0.12); color: #4338ca; padding: 3px 10px; border-radius: 12px; text-transform: uppercase;">
-                  ${escHtml(s.code)}
-                </span>
-                <span style="font-size: 11px; font-weight: 800; background: ${attBadgeColor}; color: ${attTextColor}; padding: 3px 10px; border-radius: 12px;">
-                  ${s.attendancePct}% Avg Student Attendance
-                </span>
+        let subjectItemsHtml = '';
+        item.subjectsList.forEach(s => {
+          const sp = s.percent || 0;
+          const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
+          subjectItemsHtml += `
+            <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code)}')" style="
+              background: var(--colorless-glass-base);
+              backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
+              border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
+              border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
+              border-radius: var(--radius-sm); padding: 14px 16px; cursor: pointer;
+              transition: transform 0.22s ease, box-shadow 0.22s ease;
+            " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--water-shadow-standard-hover)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">${escHtml(s.name)}</span>
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); background: var(--colorless-glass-hover); padding: 2px 8px; border-radius: var(--radius-pill);">${escHtml(s.code)}</span>
               </div>
-
-              <h4 style="margin: 0 0 6px 0; font-size: 15px; font-weight: 800; color: #0f172a;">${escHtml(s.name)}</h4>
-              
-              <div style="font-size: 12px; color: #475569; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <i class="ph ph-user-circle" style="color: #6366f1; font-size: 16px;"></i> Faculty: <strong style="color: #0f172a;">${escHtml(s.facultyName)}</strong>
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 10px;">
+                <i class="ph ph-user-circle" style="font-size: 14px; color: var(--accent-blue);"></i>
+                ${escHtml(s.facultyName)}
+                <span style="margin-left: auto; font-weight: 800; color: var(--text-main);">${s.attendancePct}% att.</span>
               </div>
-
-              <div style="margin-bottom: 8px;">
-                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #334155; margin-bottom: 4px;">
-                  <span>Syllabus Conduction Progress</span>
-                  <span>${s.totalConducted || 0} / ${s.totalLectures || 0} (${s.percent || 0}%)</span>
-                </div>
-                <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden;">
-                  <div style="width: ${s.percent || 0}%; height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 4px;"></div>
-                </div>
+              <div style="position: relative; height: 6px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
+                <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
               </div>
-
-              <div style="display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.06);">
-                <span style="font-size: 11px; font-weight: 800; color: #6366f1; display: flex; align-items: center; gap: 4px;">
-                  Inspect Conduction Log <i class="ph ph-arrow-right"></i>
-                </span>
+              <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700;">
+                <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lectures</span>
+                <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
               </div>
             </div>
           `;
         });
 
-        outputEl.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <button class="btn btn-outline" onclick="App.closeClassMindmap()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-                <i class="ph ph-arrow-left"></i> All Classes
-              </button>
-              <div>
-                <h3 style="margin: 0; font-size: 18px; font-weight: 900; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                  🧠 NotebookLM Mind Map — ${escHtml(activeClassMindmap)}
-                </h3>
-                <span style="font-size: 12px; font-weight: 700; color: #6366f1;">Timeperiod: ${escHtml(periodLabel)}</span>
+        classNodesHtml += `
+          <div style="
+            background: var(--colorless-glass-base);
+            backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
+            border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
+            border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
+            border-radius: var(--radius-lg); box-shadow: var(--water-shadow-standard);
+            overflow: hidden; transition: box-shadow 0.3s ease;
+          ">
+            <div onclick="App.toggleClassMindmap('${escHtml(sem)}')" style="
+              padding: 18px 20px; cursor: pointer; display: flex; align-items: center; gap: 14px;
+              transition: background 0.2s ease;
+            " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='transparent'">
+              <div style="width: 42px; height: 42px; border-radius: var(--radius-sm); background: var(--colorless-glass-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <i class="ph ph-tree-structure" style="font-size: 20px; color: var(--accent-blue);"></i>
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 15px; font-weight: 800; color: var(--text-main);">${escHtml(sem)}</div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
+                  ${item.subjectsCount} subjects · ${item.totalConducted}/${item.totalLectures} lectures · ${avgAtt}% avg attendance
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                <div style="position: relative; width: 40px; height: 40px;">
+                  <svg width="40" height="40" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r="16" fill="none" stroke="var(--colorless-glass-hover)" stroke-width="4"/>
+                    <circle cx="20" cy="20" r="16" fill="none" stroke="var(--accent-blue)" stroke-width="4"
+                      stroke-dasharray="${Math.round(pct * 1.005)} 100.5"
+                      stroke-linecap="round" transform="rotate(-90 20 20)"
+                      style="transition: stroke-dasharray 0.6s ease;"/>
+                  </svg>
+                  <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: var(--text-main);">${pct}%</span>
+                </div>
+                <i class="ph ph-caret-down" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); transform: rotate(${isExpanded ? '180deg' : '0deg'});"></i>
               </div>
             </div>
-            <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-              <i class="ph ph-printer"></i> Print Mind Map
-            </button>
-          </div>
-
-          <div class="notebooklm-mindmap-canvas">
-            
-            <!-- Central Class Nucleus Node -->
-            <div class="notebooklm-nucleus">
-              <div style="font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; opacity: 0.9; margin-bottom: 4px;">
-                NotebookLM Core Nucleus
-              </div>
-              <h3 style="margin: 0 0 6px 0; font-size: 20px; font-weight: 900; color: #ffffff;">
-                ${escHtml(activeClassMindmap)} (B.Pharm)
-              </h3>
-              <div style="display: flex; justify-content: center; gap: 14px; font-size: 12px; font-weight: 800; background: rgba(255,255,255,0.18); padding: 6px 14px; border-radius: 14px;">
-                <span>📚 ${classData.subjectsCount} Subjects</span>
-                <span>📊 ${overallProgress}% Conduction</span>
-                <span>👨‍🎓 ${avgClassAtt}% Avg Attendance</span>
-              </div>
+            <div style="
+              max-height: ${isExpanded ? '2000px' : '0'}; opacity: ${isExpanded ? '1' : '0'};
+              overflow: hidden; transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, padding 0.35s ease;
+              padding: ${isExpanded ? '0 16px 16px 16px' : '0 16px'};
+              display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;
+            ">
+              ${subjectItemsHtml}
             </div>
-
-            <!-- Radiating Subject Nodes Grid -->
-            <div class="notebooklm-nodes-grid">
-              ${nodeCardsHtml}
-            </div>
-
-          </div>
-        `;
-        return;
-      }
-
-      // ── 🏫 ALL CLASSES CARDS GRID VIEW ──
-      let classCardsHtml = '';
-      semKeys.forEach(sem => {
-        const item = semMap[sem];
-        const pct = item.totalLectures > 0 ? Math.min(100, Math.round((item.totalConducted / item.totalLectures) * 100)) : 0;
-        const avgAtt = item.subjectsCount > 0 ? Math.round(item.totalAttPctSum / item.subjectsCount) : 0;
-
-        classCardsHtml += `
-          <div class="mindmap-class-card" onclick="App.openClassMindmap('${escHtml(sem)}')">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-              <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: #6366f1;">
-                <i class="ph ph-tree-structure" style="font-size: 22px;"></i>
-              </div>
-              <span style="background: rgba(99, 102, 241, 0.12); color: #4338ca; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 800;">
-                ${item.subjectsCount} Subjects
-              </span>
-            </div>
-            
-            <h3 style="margin: 0 0 6px 0; font-size: 17px; font-weight: 800; color: #0f172a;">${escHtml(sem)} (B.Pharm)</h3>
-            <p style="margin: 0 0 16px 0; font-size: 13px; color: #475569; font-weight: 600;">
-              Lectures: ${item.totalConducted} / ${item.totalLectures} conducted (${pct}%)
-            </p>
-
-            <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-              <div style="flex: 1; background: rgba(255,255,255,0.7); padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.06);">
-                <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Conduction %</div>
-                <div style="font-size: 15px; font-weight: 900; color: #6366f1;">${pct}%</div>
-              </div>
-              <div style="flex: 1; background: rgba(255,255,255,0.7); padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.06);">
-                <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Avg Attendance</div>
-                <div style="font-size: 15px; font-weight: 900; color: #10b981;">${avgAtt}%</div>
-              </div>
-            </div>
-
-            <button class="btn btn-incharge" style="width: 100%; height: 38px; font-size: 12.5px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 0;">
-              <i class="ph ph-tree-structure"></i> Open NotebookLM Mind Map
-            </button>
           </div>
         `;
       });
 
       outputEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
           <div>
-            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #0f172a;">🏫 Class-Wise Academic Conduction & Attendance</h3>
-            <span style="font-size: 12px; font-weight: 700; color: #6366f1;">Timeperiod: ${escHtml(periodLabel)} • Click any class to launch NotebookLM Mind Map</span>
+            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">🧠 Class-Wise Mind Map</h3>
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
+              ${escHtml(periodLabel)} · ${semKeys.length} classes · ${totalSubs} subjects · ${overallPct}% overall conduction
+            </span>
           </div>
-          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-            <i class="ph ph-printer"></i> Print Report
+          <button class="btn btn-outline" onclick="App.printReport()" style="padding: 8px 16px; font-size: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px;">
+            <i class="ph ph-printer"></i> Print
           </button>
         </div>
-
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px;">
-          ${classCardsHtml || '<div style="padding: 20px; color: #64748b;">No class records found from college server.</div>'}
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          ${classNodesHtml || '<div style="padding: 20px; color: var(--text-muted);">No class records found from college server.</div>'}
         </div>
       `;
     } else if (type === 'student') {
@@ -2884,8 +2837,7 @@ Generated: ${formatDisplayDate(new Date())}
     onReportsPeriodChange,
     renderReportsPage,
     generateReportType,
-    openClassMindmap,
-    closeClassMindmap,
+    toggleClassMindmap,
     printReport
   };
 })();
