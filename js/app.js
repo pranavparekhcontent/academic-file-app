@@ -2640,17 +2640,16 @@ Generated: ${formatDisplayDate(new Date())}
           let subjectItemsHtml = '';
           semObj.subjectsList.forEach(s => {
             const sp = s.percent || 0;
-            const barColor = sp >= 80 ? 'var(--success, #34c759)' : sp >= 50 ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
+            const barColor = 'var(--accent-blue, #0071e3)';
             subjectItemsHtml += `
-              <div onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
+              <div style="
                 display: flex; align-items: center; justify-content: space-between; gap: 16px;
                 padding: 12px 16px; margin-bottom: 6px;
                 background: var(--colorless-glass-base);
                 backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
                 border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
                 border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
-                border-radius: var(--radius-sm); cursor: pointer;
-                transition: transform 0.2s ease, background 0.2s ease;
+                border-radius: var(--radius-sm); transition: background 0.2s ease;
               " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='var(--colorless-glass-base)'">
                 
                 <div style="display: flex; align-items: center; gap: 12px; flex: 1.5; min-width: 0;">
@@ -2667,20 +2666,26 @@ Generated: ${formatDisplayDate(new Date())}
                   <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">${escHtml(s.facultyName)}</span>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 16px; flex: 1.2; flex-shrink: 0; justify-content: flex-end;">
-                  <div style="width: 130px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 3px;">
-                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs</span>
-                      <span style="color: var(--text-main); font-weight: 900;">${sp}%</span>
+                <div style="display: flex; align-items: center; gap: 16px; flex: 1.4; flex-shrink: 0; justify-content: flex-end;">
+                  <div style="width: 140px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 4px;">
+                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} lecs (${sp}%)</span>
                     </div>
                     <div style="position: relative; height: 5px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
                       <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
                     </div>
                   </div>
-                  <span style="font-size: 12px; font-weight: 800; color: var(--text-main); min-width: 60px; text-align: right; background: var(--colorless-glass-hover); padding: 3px 8px; border-radius: var(--radius-pill);">
+                  <span style="font-size: 12px; font-weight: 800; color: var(--text-main); background: var(--colorless-glass-hover); padding: 3px 8px; border-radius: var(--radius-pill); flex-shrink: 0;">
                     ${s.attendancePct}% att.
                   </span>
-                  <i class="ph ph-caret-right" style="font-size: 16px; color: var(--text-secondary);"></i>
+                  <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
+                    display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px;
+                    font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
+                    background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
+                    border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+                  " onmouseover="this.style.background='var(--accent-blue)';this.style.color='#fff';" onmouseout="this.style.background='var(--colorless-glass-hover)';this.style.color='var(--accent-blue)';">
+                    View Plan <i class="ph ph-caret-right" style="font-size: 12px;"></i>
+                  </button>
                 </div>
 
               </div>
@@ -2726,16 +2731,6 @@ Generated: ${formatDisplayDate(new Date())}
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                <div style="position: relative; width: 40px; height: 40px;">
-                  <svg width="40" height="40" viewBox="0 0 40 40">
-                    <circle cx="20" cy="20" r="16" fill="none" stroke="var(--colorless-glass-hover)" stroke-width="4"/>
-                    <circle cx="20" cy="20" r="16" fill="none" stroke="var(--accent-blue)" stroke-width="4"
-                      stroke-dasharray="${Math.round(pct * 1.005)} 100.5"
-                      stroke-linecap="round" transform="rotate(-90 20 20)"
-                      style="transition: stroke-dasharray 0.6s ease;"/>
-                  </svg>
-                  <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: var(--text-main);">${pct}%</span>
-                </div>
                 <i class="ph ph-caret-down" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); transform: rotate(${isExpanded ? '180deg' : '0deg'});"></i>
               </div>
             </div>
@@ -2753,7 +2748,17 @@ Generated: ${formatDisplayDate(new Date())}
       outputEl.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
           <div>
-            <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">🧠 Class-Wise Mind Map</h3>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+              <h3 style="margin: 0; font-size: 18px; font-weight: 900; color: var(--text-main);">Class-Wise Report</h3>
+              <button onclick="App.generateReportType('class')" style="
+                display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px;
+                font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
+                background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
+                border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease;
+              " onmouseover="this.style.background='var(--accent-blue)';this.style.color='#fff';" onmouseout="this.style.background='var(--colorless-glass-hover)';this.style.color='var(--accent-blue)';">
+                Generate Report <i class="ph ph-caret-right" style="font-size: 12px;"></i>
+              </button>
+            </div>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
               ${escHtml(periodLabel)} · ${classKeys.length} Classes · ${totalSubs} assigned subjects · ${overallPct}% overall conduction
             </span>
