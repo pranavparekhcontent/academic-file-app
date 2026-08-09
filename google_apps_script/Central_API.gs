@@ -1208,49 +1208,49 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
    ACADEMIC FILE LOGIC — SYLLABUS & TEACHING PLAN
    ═══════════════════════════════════════════════════════════════ */
 
-function getTeachingPlan(code, teacher, sheetId) {
-  if (!code) return { success: false, error: 'Missing subject code' };
-  
-  function parseAndFormatDate(val, timeZone) {
-    if (!val) return '';
-    if (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]') {
-      try {
-        return Utilities.formatDate(val, timeZone, 'yyyy-MM-dd');
-      } catch(e) {}
-    }
-    var str = String(val).trim();
-    var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (ymdRegex.test(str)) {
-      return str;
-    }
-    var slashRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/;
-    var match = str.match(slashRegex);
-    if (match) {
-      var d = parseInt(match[1], 10);
-      var m = parseInt(match[2], 10);
-      var y = parseInt(match[3], 10);
-      if (y < 100) {
-        y += 2000;
-      }
-      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-        try {
-          var dateObj = new Date(y, m - 1, d);
-          return Utilities.formatDate(dateObj, timeZone, 'yyyy-MM-dd');
-        } catch(e) {}
-      }
-    }
-    var dmyRegex = /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/;
-    if (dmyRegex.test(str)) {
-      return str;
-    }
+function parseAndFormatDate(val, timeZone) {
+  if (!val) return '';
+  if (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]') {
     try {
-      var parsed = new Date(str);
-      if (!isNaN(parsed.getTime())) {
-        return Utilities.formatDate(parsed, timeZone, 'yyyy-MM-dd');
-      }
+      return Utilities.formatDate(val, timeZone, 'yyyy-MM-dd');
     } catch(e) {}
+  }
+  var str = String(val).trim();
+  var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (ymdRegex.test(str)) {
     return str;
   }
+  var slashRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/;
+  var match = str.match(slashRegex);
+  if (match) {
+    var d = parseInt(match[1], 10);
+    var m = parseInt(match[2], 10);
+    var y = parseInt(match[3], 10);
+    if (y < 100) {
+      y += 2000;
+    }
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      try {
+        var dateObj = new Date(y, m - 1, d);
+        return Utilities.formatDate(dateObj, timeZone, 'yyyy-MM-dd');
+      } catch(e) {}
+    }
+  }
+  var dmyRegex = /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/;
+  if (dmyRegex.test(str)) {
+    return str;
+  }
+  try {
+    var parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, timeZone, 'yyyy-MM-dd');
+    }
+  } catch(e) {}
+  return str;
+}
+
+function getTeachingPlan(code, teacher, sheetId) {
+  if (!code) return { success: false, error: 'Missing subject code' };
 
   try {
     var targetIds = getTargetSheetIds(code, sheetId);
