@@ -2572,7 +2572,7 @@ Generated: ${formatDisplayDate(new Date())}
 
           const className = resolveSubjectClass(s);
           const rawSem = s.semester ? String(s.semester).trim() : '1';
-          const semKey = `Semester ${rawSem}`;
+          const semKey = /^sem/i.test(rawSem) ? rawSem : `Semester ${rawSem}`;
 
           if (!classMap[className]) {
             classMap[className] = {
