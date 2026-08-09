@@ -2673,12 +2673,51 @@ Generated: ${formatDisplayDate(new Date())}
 
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
 
+      const classRainbowPalettes = [
+        { // 1. BLUE (Sapphire 3D Specular Glass)
+          bg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.18) 0%, rgba(186, 230, 253, 0.28) 100%)',
+          bottomBorder: 'rgba(0, 122, 255, 0.45)',
+          shadow: '0 8px 24px rgba(0, 122, 255, 0.16)',
+          iconBg: 'rgba(0, 122, 255, 0.15)',
+          iconColor: '#0284c7'
+        },
+        { // 2. PURPLE / VIOLET (3D Specular Glass)
+          bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(196, 181, 253, 0.28) 100%)',
+          bottomBorder: 'rgba(139, 92, 246, 0.45)',
+          shadow: '0 8px 24px rgba(139, 92, 246, 0.16)',
+          iconBg: 'rgba(139, 92, 246, 0.15)',
+          iconColor: '#7c3aed'
+        },
+        { // 3. EMERALD GREEN (3D Specular Glass)
+          bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(167, 243, 208, 0.28) 100%)',
+          bottomBorder: 'rgba(16, 185, 129, 0.45)',
+          shadow: '0 8px 24px rgba(16, 185, 129, 0.16)',
+          iconBg: 'rgba(16, 185, 129, 0.15)',
+          iconColor: '#059669'
+        },
+        { // 4. AMBER / GOLD (3D Specular Glass)
+          bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(253, 230, 138, 0.28) 100%)',
+          bottomBorder: 'rgba(245, 158, 11, 0.45)',
+          shadow: '0 8px 24px rgba(245, 158, 11, 0.16)',
+          iconBg: 'rgba(245, 158, 11, 0.15)',
+          iconColor: '#d97706'
+        },
+        { // 5. CYAN / TEAL (3D Specular Glass)
+          bg: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18) 0%, rgba(165, 243, 252, 0.28) 100%)',
+          bottomBorder: 'rgba(6, 182, 212, 0.45)',
+          shadow: '0 8px 24px rgba(6, 182, 212, 0.16)',
+          iconBg: 'rgba(6, 182, 212, 0.15)',
+          iconColor: '#0891b2'
+        }
+      ];
+
       let classNodesHtml = '';
-      classKeys.forEach(clsName => {
+      classKeys.forEach((clsName, clsIdx) => {
         const item = classMap[clsName];
         const avgAtt = (item.validAttCount > 0) ? Math.round(item.totalAttPctSum / item.validAttCount) : null;
         const avgAttText = (avgAtt !== null) ? `${avgAtt}%` : '--%';
         const isExpanded = activeClassMindmap === clsName;
+        const pal = classRainbowPalettes[clsIdx % classRainbowPalettes.length];
 
         // Render Semesters under this Class
         let semesterBlocksHtml = '';
@@ -2773,28 +2812,31 @@ Generated: ${formatDisplayDate(new Date())}
 
         classNodesHtml += `
           <div style="
-            background: var(--colorless-glass-base);
-            backdrop-filter: blur(var(--water-blur)) saturate(var(--water-saturate));
-            border-top: var(--crystal-rim-top); border-left: var(--crystal-rim-top);
-            border-bottom: var(--crystal-rim-bottom); border-right: var(--crystal-rim-bottom);
-            border-radius: var(--radius-lg); box-shadow: var(--water-shadow-standard);
-            overflow: hidden; transition: box-shadow 0.3s ease;
+            background: ${pal.bg} !important;
+            backdrop-filter: blur(20px) saturate(180%);
+            border-top: 1.8px solid #ffffff !important;
+            border-left: 1.8px solid #ffffff !important;
+            border-bottom: 1.8px solid ${pal.bottomBorder} !important;
+            border-right: 1.8px solid ${pal.bottomBorder} !important;
+            border-radius: 18px;
+            box-shadow: inset 0 1.5px 2px #ffffff, ${pal.shadow} !important;
+            overflow: hidden; margin-bottom: 14px; transition: all 0.3s ease;
           ">
             <div onclick="App.toggleClassMindmap('${escHtml(clsName)}')" style="
               padding: 18px 20px; cursor: pointer; display: flex; align-items: center; gap: 14px;
               transition: background 0.2s ease;
-            " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='transparent'">
-              <div style="width: 42px; height: 42px; border-radius: var(--radius-sm); background: var(--colorless-glass-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                <i class="ph ph-graduation-cap" style="font-size: 22px; color: var(--accent-blue);"></i>
+            " onmouseover="this.style.background='rgba(255, 255, 255, 0.25)'" onmouseout="this.style.background='transparent'">
+              <div style="width: 44px; height: 44px; border-radius: 14px; background: ${pal.iconBg}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: inset 0 1px 1px #ffffff;">
+                <i class="ph ph-graduation-cap" style="font-size: 24px; color: ${pal.iconColor};"></i>
               </div>
               <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 16px; font-weight: 900; color: var(--text-main);">${escHtml(clsName)}</div>
-                <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
-                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · ${avgAttText} avg student attendance
+                <div style="font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: -0.2px;">${escHtml(clsName)}</div>
+                <div style="font-size: 12.5px; font-weight: 700; color: #475569; margin-top: 3px;">
+                  ${sortedSemKeys.length} Active Semesters · ${item.subjectsCount} assigned subjects · <span style="color: ${pal.iconColor}; font-weight: 900;">${avgAttText} avg student attendance</span>
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                <i class="ph ph-caret-down" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); transform: rotate(${isExpanded ? '180deg' : '0deg'});"></i>
+                <i class="ph ph-caret-down" style="font-size: 20px; color: ${pal.iconColor}; font-weight: 800; transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); transform: rotate(${isExpanded ? '180deg' : '0deg'});"></i>
               </div>
             </div>
             <div style="
