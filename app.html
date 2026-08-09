@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="./appstart/appstart.css">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="css/app.css?v=2.1.7">
+  <link rel="stylesheet" href="css/app.css?v=2.1.8">
 </head>
 <body style="background-color: #080a10; color: #e8eaf6;">
 
@@ -474,10 +474,6 @@
               </label>
               <select id="reports-period-filter" onchange="App.onReportsPeriodChange(this.value)" style="width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(255, 255, 255, 0.95); border-radius: 12px; color: #0f172a; font-size: 13px; font-weight: 700; outline: none; cursor: pointer;">
                 <option value="all" selected>All Time (Entire Academic Year)</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="semester">This Semester</option>
                 <option value="custom">Custom Date Range...</option>
               </select>
             </div>
@@ -737,9 +733,9 @@
 <script src="./appstart/appstart.js"></script>
 
 <!-- Javascript Boot Modules -->
-<script src="js/firebase-config.js?v=2.1.7"></script>
-<script src="js/api.js?v=2.1.7"></script>
-<script src="js/app.js?v=2.1.7"></script>
+<script src="js/firebase-config.js?v=2.1.8"></script>
+<script src="js/api.js?v=2.1.8"></script>
+<script src="js/app.js?v=2.1.8"></script>
 <script>
   document.addEventListener('appstart:complete', async (e) => {
     console.log("🏁 AppStart Complete. Launching Academic Workspace...");

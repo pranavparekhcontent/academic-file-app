@@ -2526,11 +2526,7 @@ Generated: ${formatDisplayDate(new Date())}
     const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
 
     let periodLabel = 'All Time (Entire Academic Year)';
-    if (period === 'today') periodLabel = 'Today';
-    else if (period === 'week') periodLabel = 'This Week';
-    else if (period === 'month') periodLabel = 'This Month';
-    else if (period === 'semester') periodLabel = 'Current Semester';
-    else if (period === 'custom') {
+    if (period === 'custom') {
       const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
       const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
       periodLabel = (s && e) ? `Custom (${s} to ${e})` : 'Custom Range';
