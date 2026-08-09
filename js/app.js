@@ -2540,26 +2540,54 @@ Generated: ${formatDisplayDate(new Date())}
     }
 
     if (type === 'class') {
-      // Helper function to resolve Class / Year name from subject data or semester number
-      function getClassYearName(s) {
-        if (s.class && String(s.class).trim()) return String(s.class).trim();
-        if (s.year && String(s.year).trim()) return String(s.year).trim();
-        if (s.courseYear && String(s.courseYear).trim()) return String(s.courseYear).trim();
-        
-        const semNum = parseInt(s.semester, 10) || 1;
-        if (semNum === 1 || semNum === 2) return 'F.Y. B.Pharm';
-        if (semNum === 3 || semNum === 4) return 'S.Y. B.Pharm';
-        if (semNum === 5 || semNum === 6) return 'T.Y. B.Pharm';
-        if (semNum === 7 || semNum === 8) return 'Final Year B.Pharm';
-        const yr = Math.ceil(semNum / 2);
-        return `Year ${yr} B.Pharm`;
+      // 1. Helper to extract class name live from subject or class object from college URL
+      function extractLiveClassName(item) {
+        if (!item) return '';
+        const name = item.className || item.class || item.courseYear || item.year || item.programYear || item.courseClass || item.name || '';
+        return String(name).trim();
       }
 
-      // Group subjects by Class (Year) first, then by Semester underneath
+      // 2. Helper to resolve Class name live from subject data
+      function resolveSubjectClass(s) {
+        const liveName = extractLiveClassName(s);
+        if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
+          return liveName;
+        }
+
+        const prog = (s.program || s.course || (state.metadata && state.metadata.course) || 'B.Pharm').trim();
+        const semNum = parseInt(s.semester, 10);
+        if (!isNaN(semNum) && semNum > 0) {
+          const yrNum = Math.ceil(semNum / 2);
+          const yrLabels = ['F.Y.', 'S.Y.', 'T.Y.', 'Final Year'];
+          const yrPrefix = yrLabels[yrNum - 1] || `Year ${yrNum}`;
+          return `${yrPrefix} ${prog}`;
+        }
+        return 'General Academic Class';
+      }
+
+      // 3. Group subjects by live fetched Class (Year) first, then by Semester underneath
       const classMap = {};
+
+      // Initialize any explicit live classes array from college server sheet if provided
+      if (Array.isArray(data.classes) && data.classes.length > 0) {
+        data.classes.forEach(c => {
+          const cName = extractLiveClassName(c);
+          if (cName && !classMap[cName]) {
+            classMap[cName] = {
+              className: cName,
+              totalLectures: 0,
+              totalConducted: 0,
+              subjectsCount: 0,
+              totalAttPctSum: 0,
+              semesters: {}
+            };
+          }
+        });
+      }
+
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
-          const className = getClassYearName(s);
+          const className = resolveSubjectClass(s);
           const rawSem = s.semester ? String(s.semester).trim() : '1';
           const semKey = `Semester ${rawSem}`;
 
