@@ -433,6 +433,12 @@ const App = (() => {
       backBtn.style.display = (state.isAcademicIncharge && viewId === 'teaching-plan') ? 'flex' : 'none';
     }
 
+    // Hide Upload Document button for faculty — only Academic Incharge can upload
+    const uploadDocBtn = document.getElementById('btn-upload-doc-header');
+    if (uploadDocBtn) {
+      uploadDocBtn.style.display = state.isAcademicIncharge ? '' : 'none';
+    }
+
     // Synchronize views with current data
     if (viewId === 'teaching-plan') populateTeachingPlan();
     else if (viewId === 'academic-schedule') loadAcademicSchedule();

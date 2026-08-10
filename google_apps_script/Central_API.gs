@@ -2158,9 +2158,10 @@ function uploadAcademicDocument(data, sheetId) {
       return { success: false, error: "SECURITY BLOCK: Access to Master Config sheet for Drive upload is prohibited." };
     }
 
-    var academicFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
+    var resFolder = _getCollegeAcademicFolder(targetSpreadsheetId);
+    var academicFolder = resFolder ? resFolder.folder : null;
     if (!academicFolder) {
-      return { success: false, error: "Folder Error: Could not locate or auto-create 'Academic Calendars & Timetable' folder." };
+      return { success: false, error: resFolder ? resFolder.error : "Folder Error: Could not locate or auto-create 'Academic Calendars & Timetable' folder." };
     }
 
     var bytes = Utilities.base64Decode(data.fileData);
