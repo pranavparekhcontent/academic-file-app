@@ -28,9 +28,8 @@ const APP_CONFIG = {
   LICENSE_STORAGE_KEY: "academic_file_license",
 
   // ── Central API Configuration ──────────────────────────────
-  // The central GAS script URL for Academic File.
-  // Note: Users can deploy Academic_API.gs and configure its URL here or dynamically.
-  CENTRAL_API_URL: "https://script.google.com/macros/s/AKfycbwdEMH_36ryLox45JmzdI6v8z7J0AEgk5gtFHwmy87V5aJhlpxAovaz6UNHdrOp8pH-/exec",
+  // The dedicated standalone GAS script URL for Academic File.
+  CENTRAL_API_URL: "https://script.google.com/macros/s/AKfycbxH8oHwujYjOdZ8LwrbtTStHp0ziSISiRKHiPiMfzkc_jcHoyn55mnV-a3BjroM07jD1A/exec",
 
 
   // ── Config Sheet ──────────────────────────────────────────
