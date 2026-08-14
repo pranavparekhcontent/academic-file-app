@@ -1031,7 +1031,10 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
-              var statsObj = { totalLectures: topicsCount, totalConducted: conductedCount };
+              var isSheetPrac = parsedSheet.isPractical || sheetName.toLowerCase().indexOf('pract') !== -1 || sheetName.toLowerCase().indexOf('lab') !== -1;
+              var minTopics = isSheetPrac ? 15 : 45;
+              var effectiveTopicsCount = topicsCount > 5 ? topicsCount : Math.max(topicsCount, conductedCount, minTopics);
+              var statsObj = { totalLectures: effectiveTopicsCount, totalConducted: conductedCount };
 
               // Match this tab stats to any subject code
               for (var c = 0; c < distinctCodes.length; c++) {
@@ -1174,8 +1177,13 @@ function getInchargeDashboard(sheetId) {
         var attConducted = attendanceConductedMap[sCode] || 0;
         var subAvgAtt = attendanceAvgMap[sCode] || 0;
 
+        var isPrac = subs[s].isPractical || (subs[s].type && String(subs[s].type).toLowerCase().indexOf('prac') !== -1) || (subs[s].name && String(subs[s].name).toLowerCase().indexOf('prac') !== -1) || _parseSubjectCode(sCode, subs[s].type, subs[s].name).isPractical;
+        subs[s].isPractical = isPrac;
+        var fallbackTotal = isPrac ? 15 : 45;
+
+        var planTotal = (info.totalLectures && info.totalLectures > 5) ? info.totalLectures : fallbackTotal;
         var finalConducted = Math.max(info.totalConducted || 0, attConducted);
-        var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : Math.max(finalConducted, 45);
+        var finalTotal = Math.max(planTotal, finalConducted);
         var finalPct = finalTotal > 0 ? Math.min(100, Math.round((finalConducted / finalTotal) * 100)) : 0;
 
         subs[s].totalLectures = finalTotal;
@@ -1701,10 +1709,11 @@ function getTeachingPlan(code, teacher, sheetId) {
       for (var r = 0; r < data.length; r++) {
         for (var c = 0; c < data[r].length; c++) {
           var cellVal = String(data[r][c]).toLowerCase().trim();
-          if (cellVal.indexOf('total lectures/practical') !== -1 || cellVal.indexOf('total lectures') !== -1 || cellVal.indexOf('total practicals') !== -1) {
+          if ((cellVal.indexOf('total lectures/practical') !== -1 || cellVal.indexOf('total lectures') !== -1 || cellVal.indexOf('total practicals') !== -1 || cellVal.indexOf('total turn') !== -1) &&
+              cellVal.indexOf('per week') === -1 && cellVal.indexOf('/week') === -1 && cellVal.indexOf('hours') === -1 && cellVal.indexOf('credits') === -1) {
             for (var c2 = c + 1; c2 < data[r].length; c2++) {
               var val = parseInt(data[r][c2]);
-              if (!isNaN(val) && val > 0) {
+              if (!isNaN(val) && val > 5) {
                 totalLectures = val;
                 foundLectures = true;
                 break;
@@ -1717,8 +1726,14 @@ function getTeachingPlan(code, teacher, sheetId) {
       }
       
       if (!foundLectures) {
-        if (data[12] && data[12].length > 8) totalLectures = parseInt(data[12][8]) || 0;
-        if (data[13] && data[13].length > 8) totalTutorials = parseInt(data[13][8]) || 0;
+        if (data[12] && data[12].length > 8) {
+          var v12 = parseInt(data[12][8]) || 0;
+          if (v12 > 5) totalLectures = v12;
+        }
+        if (data[13] && data[13].length > 8) {
+          var v13 = parseInt(data[13][8]) || 0;
+          if (v13 > 5) totalTutorials = v13;
+        }
       }
     } catch(e) {}
 
@@ -1835,9 +1850,14 @@ function getTeachingPlan(code, teacher, sheetId) {
     }
     topics = uniqueTopics;
 
-    var conductedCount = topics.filter(function(t) { return t.executedDate !== ''; }).length;
-    var percent = topics.length > 0 ? Math.round((conductedCount / topics.length) * 100) : 0;
     var parsedSubjectCodeInfo = _parseSubjectCode(code, '', subject);
+    var fallbackTotal = parsedSubjectCodeInfo.isPractical ? 15 : 45;
+    if (!totalLectures || totalLectures <= 5) {
+      totalLectures = topics.length > 5 ? topics.length : fallbackTotal;
+    }
+    var conductedCount = topics.filter(function(t) { return t.executedDate !== ''; }).length;
+    var effectiveTotal = Math.max(totalLectures, topics.length, conductedCount, 1);
+    var percent = Math.min(100, Math.round((conductedCount / effectiveTotal) * 100));
 
     return {
       success: true,
@@ -1850,7 +1870,7 @@ function getTeachingPlan(code, teacher, sheetId) {
         faculty: faculty,
         subject: subject,
         isPractical: parsedSubjectCodeInfo.isPractical,
-        totalLectures: totalLectures,
+        totalLectures: effectiveTotal,
         totalTutorials: totalTutorials,
         percent: percent,
         conductedCount: conductedCount,
