@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.8.5)
+ * Academic File PWA — Core Controller (v2.8.3)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
@@ -1272,11 +1272,7 @@ const App = (() => {
     });
 
     // Dashboard Cards progress updating
-    const isPrac = isPracticalSubject(state.activeSubject);
-    const fallbackTotal = isPrac ? 15 : 45;
-    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 5)
-      ? state.metadata.totalLectures
-      : (filteredTopics.length > 5 ? filteredTopics.length : fallbackTotal);
+    const reqTopics = state.metadata.totalLectures || filteredTopics.length || 0;
     const originalTopics = filteredTopics.slice(0, reqTopics);
     const originalConducted = originalTopics.filter(t => t.executedDate).length;
     const tpPct = reqTopics > 0 ? Math.round((originalConducted / reqTopics) * 100) : 0;
@@ -1346,7 +1342,7 @@ const App = (() => {
     });
 
     function getRequiredTopicsCount(topicsList, metadata) {
-      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 5 && metadata.totalLectures <= topicsList.length) {
+      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 0 && metadata.totalLectures <= topicsList.length) {
         return metadata.totalLectures;
       }
       let maxSeenNo = 0;
@@ -1361,8 +1357,7 @@ const App = (() => {
           }
         }
       }
-      if (topicsList.length > 5) return topicsList.length;
-      return isPracticalSubject(state.activeSubject) ? 15 : 45;
+      return topicsList.length;
     }
 
     const totalTopics = filteredTopics.length;
@@ -2074,18 +2069,14 @@ const App = (() => {
       const pal = rainbowGlassPalettes[idx % rainbowGlassPalettes.length];
 
       const subjectRows = (f.subjects || []).map(s => {
-        const isPractical = isPracticalSubject(s) || s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
-        const unitLabel = isPractical ? 'practicals' : 'lectures';
-        const fallback = isPractical ? 15 : 45;
-        const displayTotal = (s.totalLectures && s.totalLectures > 0) ? s.totalLectures : fallback;
-        const displayConducted = s.totalConducted || 0;
-        const displayPercent = displayTotal > 0 ? Math.min(100, Math.round((displayConducted / displayTotal) * 100)) : 0;
-
-        const isSubZero = (displayPercent === 0);
+        const isSubZero = (s.percent === 0);
         const pctColor = isSubZero ? '#dc2626' : '#059669';
         const pctBg = isSubZero ? 'rgba(239, 68, 68, 0.10)' : 'rgba(16, 185, 129, 0.10)';
         const pctBorder = isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)';
         const sBarColor = isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
+
+        const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
+        const unitLabel = isPractical ? 'practicals' : 'lectures';
 
         const liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name);
         const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 ? `${s.avgAttendance}%` : '--%');
@@ -2115,7 +2106,7 @@ const App = (() => {
 
             <!-- Row 3: Sem, Lectures & Live Avg Attendance (SINGLE ROW ABOVE STATUS BAR) -->
             <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${semLabel} • ${displayConducted} / ${displayTotal} ${unitLabel} <strong style="color: ${pctColor}; margin-left: 4px;">(${displayPercent}%)</strong></span>
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${semLabel} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel}</span>
               <span style="font-size: 11px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; white-space: nowrap;">
                 <i class="ph ph-users" style="color: #64748b;"></i> Avg. Att: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
               </span>
@@ -2123,7 +2114,7 @@ const App = (() => {
 
             <!-- Row 4: Status Bar / Progress Bar -->
             <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden;">
-              <div style="width: ${displayPercent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+              <div style="width: ${s.percent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
             </div>
           </div>
         `;
@@ -2336,7 +2327,7 @@ const App = (() => {
       return !lNo.startsWith('t') && !lNo.includes('tut');
     });
     function getRequiredTopicsCount(topicsList, metadata) {
-      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 5 && metadata.totalLectures <= topicsList.length) {
+      if (metadata && typeof metadata.totalLectures === 'number' && metadata.totalLectures > 0 && metadata.totalLectures <= topicsList.length) {
         return metadata.totalLectures;
       }
       let maxSeenNo = 0;
@@ -2351,8 +2342,7 @@ const App = (() => {
           }
         }
       }
-      if (topicsList.length > 5) return topicsList.length;
-      return isPracticalSubject(state.activeSubject) ? 15 : 45;
+      return topicsList.length;
     }
 
     const reqTopics = getRequiredTopicsCount(filteredTopics, state.metadata);
@@ -3045,11 +3035,9 @@ const App = (() => {
       const lNo = String(t.lectureNo).toLowerCase();
       return !lNo.startsWith('t') && !lNo.includes('tut');
     });
-    const isPrac = isPracticalSubject(state.activeSubject);
-    const fallbackTotal = isPrac ? 15 : 45;
-    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 5)
+    const reqTopics = (state.metadata && typeof state.metadata.totalLectures === 'number' && state.metadata.totalLectures > 0)
       ? state.metadata.totalLectures
-      : (filteredTopics.length > 5 ? filteredTopics.length : fallbackTotal);
+      : filteredTopics.length;
     const originalTopics = filteredTopics.slice(0, reqTopics);
     const conducted = originalTopics.filter(t => t.executedDate).length;
     const progressPct = reqTopics > 0 ? Math.round((conducted / reqTopics) * 100) : 0;
@@ -3278,14 +3266,8 @@ Generated: ${formatDisplayDate(new Date())}
             if (!isNaN(fallback) && fallback > 0) liveSubAtt = fallback;
           }
 
-          const isPrac = isPracticalSubject(s);
-          const fallback = isPrac ? 15 : 45;
-          const displayTotal = (s.totalLectures && s.totalLectures > 5) ? Math.max(s.totalLectures, s.totalConducted || 0) : Math.max(s.totalConducted || 0, fallback);
-          s.totalLectures = displayTotal;
-          s.percent = displayTotal > 0 ? Math.min(100, Math.round(((s.totalConducted || 0) / displayTotal) * 100)) : 0;
-
           classMap[className].subjectsCount++;
-          classMap[className].totalLectures += displayTotal;
+          classMap[className].totalLectures += (s.totalLectures || 0);
           classMap[className].totalConducted += (s.totalConducted || 0);
           if (liveSubAtt !== null && !isNaN(liveSubAtt) && liveSubAtt > 0) {
             classMap[className].totalAttPctSum += liveSubAtt;
@@ -3572,11 +3554,7 @@ Generated: ${formatDisplayDate(new Date())}
       let subjectRows = '';
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
-          const isPrac = isPracticalSubject(s);
-          const fallback = isPrac ? 15 : 45;
-          const displayTotal = (s.totalLectures && s.totalLectures > 5) ? Math.max(s.totalLectures, s.totalConducted || 0) : Math.max(s.totalConducted || 0, fallback);
-          const displayConducted = s.totalConducted || 0;
-          const pct = displayTotal > 0 ? Math.min(100, Math.round((displayConducted / displayTotal) * 100)) : 0;
+          const pct = s.totalLectures > 0 ? Math.min(100, Math.round(((s.totalConducted || 0) / s.totalLectures) * 100)) : 0;
           const statusBadge = pct >= 80 ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Completed / On Track</span>' :
                               pct >= 50 ? '<span style="background: rgba(2,132,199,0.15); color: #0284c7; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">In Progress</span>' :
                               '<span style="background: rgba(245,158,11,0.15); color: #d97706; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Needs Conduction</span>';
@@ -3586,7 +3564,7 @@ Generated: ${formatDisplayDate(new Date())}
               <td style="padding: 12px 14px; font-weight: 800; color: #0f172a;">${escHtml(s.name)} <br><span style="font-size: 11px; color: #64748b; font-weight: 600;">Code: ${escHtml(s.code)}</span></td>
               <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${escHtml(f.faculty)}</td>
               <td style="padding: 12px 14px; font-weight: 700; color: #334155;">Sem ${escHtml(s.semester || 'N/A')}</td>
-              <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${displayConducted} / ${displayTotal}</td>
+              <td style="padding: 12px 14px; font-weight: 700; color: #334155;">${s.totalConducted || 0} / ${s.totalLectures || 0}</td>
               <td style="padding: 12px 14px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <div style="flex: 1; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden; min-width: 70px;">

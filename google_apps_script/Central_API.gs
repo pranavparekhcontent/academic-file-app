@@ -1,22 +1,26 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  ACADEMIC FILE PWA — CENTRAL API (v4.0 Optimized)
- *  Dedicated, high-performance Google Apps Script Backend.
- *  Handles Syllabus, Teaching Plans, In-charge Dashboard, 
- *  Attendance Reports, Timetables, and Academic Calendars.
+ *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.5)
+ *  Supports both Smart Attendance PWA and Academic File PWA.
+ *  Proxies access to college sheets via the sheetId parameter.
  * ═══════════════════════════════════════════════════════════════
  */
 
 // Diagnostic self-test function for 1-click execution in Google Apps Script editor
 function testDiagnostics() {
-  Logger.log("=== RUNNING ACADEMIC FILE API DIAGNOSTICS ===");
+  Logger.log("=== RUNNING CENTRAL API DIAGNOSTICS ===");
   try {
     var userEmail = "";
     try { userEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
-    Logger.log("[OK] Effective User: " + (userEmail || "Active Deployment"));
+    Logger.log("[OK] Effective User: " + (userEmail || "Anonymous / Active Deployment"));
     
+    // Test Drive permissions
     var root = DriveApp.getRootFolder();
-    Logger.log("[OK] Drive authorized. Root: " + root.getName());
+    Logger.log("[OK] Google Drive access is authorized. Root folder: " + root.getName());
+    
+    // Test Academic Schedule discovery
+    var scheduleRes = getAcademicSchedule("", "");
+    Logger.log("[OK] getAcademicSchedule test response: " + JSON.stringify(scheduleRes));
     
     Logger.log("=== ALL DIAGNOSTICS PASSED SUCCESSFULLY! ===");
     return { status: "SUCCESS", email: userEmail, driveAccessible: true };
@@ -26,62 +30,87 @@ function testDiagnostics() {
   }
 }
 
-// In-memory Spreadsheet instance cache for current script execution
+// Fallback alias for test executions
+function testRun() {
+  return testDiagnostics();
+}
+
 var _ssCache = {};
 function _getSpreadsheet(sheetId) {
   if (!sheetId) {
     throw new Error("Missing sheetId parameter");
   }
-  var cleanId = extractSpreadsheetId(sheetId) || sheetId;
-  if (!_ssCache[cleanId]) {
-    _ssCache[cleanId] = SpreadsheetApp.openById(cleanId);
+  if (!_ssCache[sheetId]) {
+    _ssCache[sheetId] = SpreadsheetApp.openById(sheetId);
   }
-  return _ssCache[cleanId];
+  return _ssCache[sheetId];
 }
 
 /**
- * Main GET entry point — routes all read actions
+ * Main GET entry point - merges routes for Attendance and Academic PWAs
  */
 function doGet(e) {
   try {
+    // Gracefully handle manual executions in Google Apps Script Editor or empty requests
     if (!e || !e.parameter) {
       return ContentService.createTextOutput(JSON.stringify({
         status: "API is online and operational",
-        version: "4.0",
+        version: "3.5",
         timestamp: new Date().toISOString(),
         message: "Send HTTP GET with action and sheetId parameters to query data."
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
     var action = e.parameter.action;
-    var sheetId = e.parameter.sheetId;
+    var sheetId = e.parameter.sheetId; // Master config sheet ID
     var result;
 
     if (!action) {
       return ContentService.createTextOutput(JSON.stringify({
         status: "API is online and operational",
-        version: "4.0",
+        version: "3.5",
         message: "No action specified."
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
     switch (action) {
-      // ── Core Config & User Directory ──
+      // ── Attendance & Common Routes ──
+      case 'getTeachers': 
+        result = getTeachers(sheetId); 
+        break;
+      case 'getSubjects': 
+        result = getSubjects(e.parameter.teacher, sheetId); 
+        break;
+      case 'getStudents': 
+        result = getStudents(e.parameter.sheet, e.parameter.batch, sheetId); 
+        break;
+      case 'getAttendanceLimit': 
+        result = getAttendanceLimit(sheetId); 
+        break;
+      case 'getAttendance': 
+        result = getAttendance(e.parameter.code, e.parameter.year, e.parameter.date, e.parameter.outputSheetId, sheetId); 
+        break;
+      case 'getTaughtTopics':
+        result = getTaughtTopics(e.parameter.code, e.parameter.outputSheetId, sheetId);
+        break;
+      case 'getSyllabus':
+        result = getSyllabus(e.parameter.link, e.parameter.code, sheetId);
+        break;
       case 'getConfig':
-      case 'getAllData':
-        result = getAllData(sheetId);
-        break;
-      case 'getTeachers':
-        result = getTeachers(sheetId);
-        break;
-      case 'getSubjects':
-        result = getSubjects(e.parameter.teacher, sheetId);
-        break;
-      case 'getStudents':
-        result = getStudents(e.parameter.sheet, e.parameter.batch, sheetId);
+      case 'getAllData': 
+        result = getAllData(sheetId); 
         break;
 
-      // ── Academic In-charge Portal ──
+      // ── Academic File Routes ──
+      case 'getTeachingPlan':
+        result = getTeachingPlan(e.parameter.code, e.parameter.teacher, sheetId);
+        break;
+      case 'syncTeachingPlan':
+        result = syncTeachingPlan(e.parameter.code, e.parameter.teacher, sheetId);
+        break;
+      case 'getAcademicSchedule':
+        result = getAcademicSchedule(sheetId, e.parameter.teachingPlanLink);
+        break;
       case 'getAcademicIncharges':
         result = getAcademicIncharges(sheetId);
         break;
@@ -92,31 +121,7 @@ function doGet(e) {
         result = getInchargeDashboard(sheetId);
         break;
 
-      // ── Teaching Plan & Syllabus ──
-      case 'getTeachingPlan':
-        result = getTeachingPlan(e.parameter.code, e.parameter.teacher, sheetId);
-        break;
-      case 'syncTeachingPlan':
-        result = syncTeachingPlan(e.parameter.code, e.parameter.teacher, sheetId);
-        break;
-      case 'getSyllabus':
-        result = getSyllabus(e.parameter.link, e.parameter.code, sheetId);
-        break;
-
-      // ── Attendance Metrics & Taught Topics ──
-      case 'getAttendance':
-        result = getAttendance(e.parameter.code, e.parameter.year, e.parameter.date, e.parameter.outputSheetId, sheetId);
-        break;
-      case 'getTaughtTopics':
-        result = getTaughtTopics(e.parameter.code, e.parameter.outputSheetId, sheetId);
-        break;
-
-      // ── Academic Schedule & Documents ──
-      case 'getAcademicSchedule':
-        result = getAcademicSchedule(sheetId, e.parameter.teachingPlanLink);
-        break;
-
-      default:
+      default: 
         result = { error: 'Unknown GET action: ' + action };
     }
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -126,7 +131,7 @@ function doGet(e) {
 }
 
 /**
- * Main POST entry point — routes all write actions
+ * Main POST entry point - merges post routes for Attendance and Academic PWAs
  */
 function doPost(e) {
   try {
@@ -136,6 +141,12 @@ function doPost(e) {
     var result;
 
     switch (action) {
+      // ── Attendance POSTs ──
+      case 'saveAttendance': 
+        result = saveAttendance(data.records, data.outputSheetId, data.collegeName, data.managementName, sheetId); 
+        break;
+
+      // ── Academic File POSTs ──
       case 'saveRemark':
         result = saveRemark(data.code, data.rowIndex, data.remark, sheetId);
         break;
@@ -145,6 +156,7 @@ function doPost(e) {
       case 'uploadAcademicDocument':
         result = uploadAcademicDocument(data, sheetId);
         break;
+
       default:
         result = { error: 'Unknown POST action: ' + action };
     }
@@ -155,7 +167,7 @@ function doPost(e) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   UTILITY HELPERS
+   COMMON / UTILS FUNCTIONS
    ═══════════════════════════════════════════════════════════════ */
 
 function _mapSubjectCols(headers) {
@@ -177,13 +189,13 @@ function _mapSubjectCols(headers) {
   }
   return {
     code: find(['subject code', 'code'], 0),
-    name: find(['subject name', 'subject', 'name'], 1),
+    faculty: find(['faculty', 'teacher'], 6),
+    pin: find(['pin', 'password'], 7),
+    semester: find(['semester', 'sem'], 4),
     year: find(['year', 'class'], 2),
     program: find(['program', 'course'], 3),
-    semester: find(['semester', 'sem'], 4),
     type: find(['type'], 5),
-    faculty: find(['faculty', 'teacher'], 6),
-    pin: find(['pin', 'password'], 7)
+    name: find(['subject name', 'subject', 'name'], 1)
   };
 }
 
@@ -224,7 +236,6 @@ function _parseSubjectCode(code, typeHint, nameHint) {
   var nameStr = String(nameHint || '').toLowerCase();
   var codeUpper = cleanBaseCode;
 
-  // Strict Theory vs Practical determination
   var isPractical = false;
   if (typeStr.indexOf('practical') !== -1 || typeStr.indexOf('lab') !== -1 || typeStr === 'pr' || typeStr === 'p') {
     isPractical = true;
@@ -232,8 +243,10 @@ function _parseSubjectCode(code, typeHint, nameHint) {
     isPractical = true;
   } else if (raw.toLowerCase().indexOf('practical') !== -1 || raw.toLowerCase().indexOf('lab') !== -1 || cleanBatch !== '') {
     isPractical = true;
-  } else if (codeUpper.endsWith('P') || /.*?\d+P$/i.test(codeUpper)) {
-    isPractical = true;
+  } else {
+    if (/.*?\d+P$/i.test(codeUpper) || codeUpper.endsWith('P')) {
+      isPractical = true;
+    }
   }
 
   return {
@@ -274,11 +287,8 @@ function _findSheetByCode(ss, inputCode, nameHint) {
     var sheetNameLower = sheetName.toLowerCase();
     var cleanSheetName = sheetName.toUpperCase().replace(/[^A-Z0-9]/g, '');
     var parsedSheet = _parseSubjectCode(sheetName);
-
-    // Practical sheet MUST NOT match Theory subject, and vice versa
-    if (parsedSheet.isPractical !== parsedInput.isPractical) continue;
-
     var score = 0;
+
     if (sheetNameLower === parsedInput.raw.toLowerCase()) {
       score = 100;
     } else if (parsedSheet.cleanFullCode && parsedSheet.cleanFullCode === parsedInput.cleanFullCode && parsedSheet.batch === parsedInput.batch) {
@@ -289,12 +299,12 @@ function _findSheetByCode(ss, inputCode, nameHint) {
       score = 88;
     } else if (parsedSheet.cleanBaseCode && parsedSheet.cleanBaseCode === parsedInput.cleanBaseCode) {
       score = 85;
-    } else if (cleanSheetName === parsedInput.cleanBaseCode) {
+    } else if (parsedInput.cleanBaseCode && cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== -1) {
       score = 80;
     } else if (cleanHint && cleanSheetName.indexOf(cleanHint) !== -1) {
       score = 75;
-    } else if (cleanSheetName.indexOf(parsedInput.cleanBaseCode) === 0) {
-      score = 70;
+    } else if (parsedInput.cleanBaseCode && (parsedSheet.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1 || parsedInput.cleanBaseCode.indexOf(parsedSheet.cleanBaseCode) !== -1)) {
+      score = 65;
     }
 
     if (score > maxScore) {
@@ -309,42 +319,24 @@ function _findSheetByCode(ss, inputCode, nameHint) {
 
   for (var i = 0; i < sheets.length; i++) {
     var nameLower = sheets[i].getName().trim().toLowerCase();
-    var sParsed = _parseSubjectCode(nameLower);
-    if (sParsed.isPractical !== parsedInput.isPractical) continue;
+    if (looksLikeSubjectCode(nameLower) && _parseSubjectCode(nameLower).cleanBaseCode !== parsedInput.cleanBaseCode) {
+      continue;
+    }
     if (nameLower.indexOf("syllabus") !== -1 || nameLower.indexOf("teaching plan") !== -1 || nameLower.indexOf("plan") !== -1) {
       return sheets[i];
     }
   }
 
   if (sheets[0]) {
-    var sParsed0 = _parseSubjectCode(sheets[0].getName());
-    if (sParsed0.isPractical === parsedInput.isPractical) {
-      return sheets[0];
+    var firstName = sheets[0].getName().trim();
+    if (looksLikeSubjectCode(firstName) && _parseSubjectCode(firstName).cleanBaseCode !== parsedInput.cleanBaseCode) {
+      return null;
     }
+    return sheets[0];
   }
 
   return null;
 }
-
-function extractSpreadsheetId(url) {
-  if (!url) return '';
-  var str = String(url).trim();
-  if (str.length >= 25 && str.indexOf('/') === -1 && str.indexOf('.') === -1) {
-    return str;
-  }
-  var match = str.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : '';
-}
-
-function looksLikeSubjectCode(name) {
-  if (!name) return false;
-  var clean = String(name).trim().toUpperCase();
-  return /^[A-Z0-9_-]{3,15}$/.test(clean);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   CORE CONFIG & DIRECTORY HANDLERS
-   ═══════════════════════════════════════════════════════════════ */
 
 function getTeachers(sheetId) {
   var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
@@ -356,43 +348,57 @@ function getTeachers(sheetId) {
     if (fStr && fStr !== 'undefined') {
       var fs = fStr.split(','), ps = pStr.split(',');
       for (var f = 0; f < fs.length; f++) {
-        var t = fs[f].trim();
-        if (t && !map[t]) map[t] = { name: t, pin: ps[f] ? ps[f].trim() : '' };
+        var n = fs[f].trim(), p = (ps[f] && ps[f].trim()) || ps[0].trim();
+        if (n) {
+          if (!map[n]) map[n] = p;
+          else if (map[n].split(',').indexOf(p) === -1) map[n] += ',' + p;
+        }
       }
     }
   }
-  var res = []; for (var k in map) res.push(map[k]);
+  var res = []; for (var k in map) res.push({ name: k, pin: map[k] });
   return { success: true, teachers: res };
 }
 
 function getSubjects(teacher, sheetId) {
   var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
-  if (!ws) return { success: false, error: 'Sheet "subjects" not found' };
+  if (!ws) return { success: false };
   var data = ws.getDataRange().getValues(), res = [];
+  var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
   var cols = _mapSubjectCols(data[0] || []);
-  var targetTeacher = String(teacher || '').trim().toLowerCase();
-  for (var i = 1; i < data.length; i++) {
-    var facStr = String(data[i][cols.faculty]).trim();
-    var match = !targetTeacher;
-    if (targetTeacher) {
-      var faculties = facStr.split(',').map(function(f) { return f.trim().toLowerCase(); });
-      match = faculties.indexOf(targetTeacher) !== -1;
+  var collegeIds = _getCollegeSheetIds(sheetId);
+  var defaultOutId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
+
+  var teachingPlanIdx = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var h = headers[c];
+    if (h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) {
+      teachingPlanIdx = c;
+      break;
     }
-    if (match) {
-      var subCode = String(data[i][cols.code]).trim();
-      var subType = String(data[i][cols.type]).trim();
-      var subName = String(data[i][cols.name]).trim();
-      var isPrac = (subType.toLowerCase().indexOf('prac') !== -1 || subCode.toUpperCase().endsWith('P') || subName.toLowerCase().indexOf('prac') !== -1);
-      res.push({
-        code: subCode,
-        name: subName,
-        year: String(data[i][cols.year]).trim(),
-        program: String(data[i][cols.program]).trim(),
-        semester: String(data[i][cols.semester]).trim(),
-        type: subType,
-        faculty: facStr,
-        isPractical: isPrac
-      });
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    var fs = String(data[i][cols.faculty]).toLowerCase().split(',').map(function(x){return x.trim()});
+    if (!teacher || fs.indexOf(teacher.toLowerCase()) !== -1) {
+      var sCode = String(data[i][cols.code]).trim();
+      var sName = String(data[i][cols.name]).trim();
+      var sType = String(data[i][cols.type]).trim();
+      var parsedCode = _parseSubjectCode(sCode, sType, sName);
+      if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
+        sType = 'Practical';
+      }
+      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType };
+      subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
+      subObj.outputSheetId = defaultOutId;
+      res.push(subObj);
+    }
+  }
+  var globalLink = '';
+  for (var i = 0; i < res.length; i++) {
+    if (!res[i].teachingPlanLink) {
+      if (!globalLink) globalLink = getGlobalTeachingPlanLink(sheetId);
+      if (globalLink) res[i].teachingPlanLink = globalLink;
     }
   }
   return { success: true, subjects: res };
@@ -400,10 +406,17 @@ function getSubjects(teacher, sheetId) {
 
 function getStudents(sheet, batch, sheetId) {
   var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName(sheet);
-  if (!ws) return { success: false, error: 'Sheet "' + sheet + '" not found' };
+  if (!ws) return { success: false };
   var data = ws.getDataRange().getValues(), res = [];
+  var H = (data[0] || []).map(function(h) { return String(h).toLowerCase().trim(); });
+  var rollCol = 0, nameCol = 1, batchCol = 2;
+  for (var c = 0; c < H.length; c++) {
+    if (H[c].indexOf('roll') !== -1) rollCol = c;
+    else if (H[c].indexOf('name') !== -1) nameCol = c;
+    else if (H[c].indexOf('batch') !== -1) batchCol = c;
+  }
   for (var i = 1; i < data.length; i++) {
-    var r = String(data[i][0]).trim(), n = String(data[i][1]).trim(), b = data[i][2] ? String(data[i][2]).trim() : '';
+    var r = data[i][rollCol], n = String(data[i][nameCol]).trim(), b = String(data[i][batchCol] || '').trim();
     if (!r && !n) continue;
     if (batch && b !== batch) continue;
     res.push({ rollNo: r, name: n, batch: b });
@@ -411,9 +424,22 @@ function getStudents(sheet, batch, sheetId) {
   return { success: true, students: res, sheet: sheet };
 }
 
+function getAttendanceLimit(sheetId) {
+  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
+  var data = ws ? ws.getDataRange().getValues() : [], limit = 75;
+  for (var i = 0; i < data.length; i++) {
+    for (var j = 0; j < data[i].length; j++) {
+      if (String(data[i][j]).toLowerCase().indexOf('attendance limit') !== -1 && j + 1 < data[i].length) {
+        var v = Number(data[i][j + 1]); if (!isNaN(v) && v > 0) limit = v; break;
+      }
+    }
+  }
+  return { success: true, limit: limit };
+}
+
 function getAllData(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'allData_v4_' + (sheetId || '');
+  var cacheKey = 'allData_' + (sheetId || '');
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -421,114 +447,283 @@ function getAllData(sheetId) {
     } catch(e) {}
   }
 
-  var tRes = getTeachers(sheetId);
-  var sRes = getSubjects('', sheetId);
-  var inchRes = _getAcademicInchargeList(sheetId);
-  var collegeSheetIds = _getCollegeSheetIds(sheetId);
+  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects'), subs = [], config = { collegeName: '', managementName: '' };
+  var teachers = [], limit = 75;
+  if (ws) {
+    var data = ws.getDataRange().getValues();
+    var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
+    var cols = _mapSubjectCols(data[0] || []);
 
-  var result = {
-    success: true,
-    teachers: tRes.teachers || [],
-    subjects: sRes.subjects || [],
-    academicIncharges: inchRes.incharges || [],
-    outputSheetId: collegeSheetIds.outputSheetId || '',
-    teachingPlanId: collegeSheetIds.teachingPlanId || '',
-    managementName: collegeSheetIds.managementName || '',
-    collegeName: collegeSheetIds.collegeName || ''
-  };
+    var teachingPlanIdx = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c];
+      if (h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) {
+        teachingPlanIdx = c;
+        break;
+      }
+    }
 
-  try {
-    cache.put(cacheKey, JSON.stringify(result), 300);
-  } catch(e) {}
-
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][cols.code]).trim()) {
+        var sCode = String(data[i][cols.code]).trim();
+        var sName = String(data[i][cols.name]).trim();
+        var sType = String(data[i][cols.type]).trim();
+        var parsedCode = _parseSubjectCode(sCode, sType, sName);
+        if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
+          sType = 'Practical';
+        }
+        var subObj = {
+          code: sCode,
+          name: sName,
+          year: String(data[i][cols.year]).trim(),
+          program: String(data[i][cols.program]).trim(),
+          semester: String(data[i][cols.semester]).trim(),
+          type: sType,
+          faculty: String(data[i][cols.faculty]).trim()
+        };
+        subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
+        subs.push(subObj);
+      }
+    }
+    var globalLink = '';
+    for (var i = 0; i < subs.length; i++) {
+      if (!subs[i].teachingPlanLink) {
+        if (!globalLink) globalLink = getGlobalTeachingPlanLink(sheetId);
+        if (globalLink) subs[i].teachingPlanLink = globalLink;
+      }
+    }
+    var cs = ss.getSheetByName('client sheet') || ss.getSheetByName('subjects');
+    if (cs) {
+      var cd = cs.getDataRange().getValues(), keys = ['college name', 'management name'];
+      for (var r = 0; r < cd.length; r++) {
+        for (var c = 0; c < cd[r].length; c++) {
+          var v = String(cd[r][c]).trim().toLowerCase();
+          for (var k = 0; k < keys.length; k++) {
+            if (v.indexOf(keys[k]) !== -1) {
+              var f = '';
+              for (var n = c + 1; n < cd[r].length; n++) { var nv = String(cd[r][n]).trim(); if (nv !== '' && ['link','name','text'].indexOf(nv.toLowerCase()) === -1) { f = nv; break; } }
+              if (f === '' && r + 1 < cd.length) f = String(cd[r+1][c]).trim();
+              if (f) { if (keys[k] === 'college name') config.collegeName = f; else config.managementName = f; }
+            }
+          }
+        }
+      }
+    }
+    // --- Inline teachers extraction (reuse already-read data, avoid re-reading subjects) ---
+    var tMap = {};
+    for (var i = 1; i < data.length; i++) {
+      var fStr = String(data[i][cols.faculty]).trim(), pStr = String(data[i][cols.pin]).trim();
+      if (fStr && fStr !== 'undefined') {
+        var fs = fStr.split(','), ps = pStr.split(',');
+        for (var f = 0; f < fs.length; f++) {
+          var n = fs[f].trim(), p = (ps[f] && ps[f].trim()) || ps[0].trim();
+          if (n) {
+            if (!tMap[n]) tMap[n] = p;
+            else if (tMap[n].split(',').indexOf(p) === -1) tMap[n] += ',' + p;
+          }
+        }
+      }
+    }
+    for (var k in tMap) teachers.push({ name: k, pin: tMap[k] });
+    // --- Inline attendance limit extraction (reuse already-read data) ---
+    for (var i = 0; i < data.length; i++) {
+      for (var j = 0; j < data[i].length; j++) {
+        if (String(data[i][j]).toLowerCase().indexOf('attendance limit') !== -1 && j + 1 < data[i].length) {
+          var v = Number(data[i][j + 1]); if (!isNaN(v) && v > 0) limit = v; break;
+        }
+      }
+    }
+  }
+  var result = { success: !!ws, teachers: teachers, subjects: subs, attendanceLimit: limit, config: config };
+  if (ws && (teachers.length > 0 || subs.length > 0)) {
+    try { cache.put(cacheKey, JSON.stringify(result), 3600); } catch(ce) {}
+  }
   return result;
 }
 
 function getOutputSheetId(sheetId) {
-  return _getCollegeSheetIds(sheetId).outputSheetId || '';
+  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
+  var data = ws ? ws.getDataRange().getValues() : [];
+  for (var i = 0; i < data.length; i++) {
+    for (var j = 0; j < data[i].length; j++) {
+      var cellVal = String(data[i][j]).trim().toLowerCase();
+      if (cellVal === 'output excel link' || cellVal.indexOf('output sheet') !== -1 || cellVal.indexOf('output excel') !== -1 || cellVal.indexOf('output link') !== -1) {
+         var f = '';
+         for (var n = j + 1; n < data[i].length; n++) { var nv = String(data[i][n]).trim(); if (nv !== '' && ['link','name','text'].indexOf(nv.toLowerCase()) === -1) { f = nv; break; } }
+         if (f === '' && i + 1 < data.length) f = String(data[i+1][j]).trim();
+         if (f) { var m = f.match(/\/d\/(.*?)(\/|$)/); if (m && m[1]) return m[1]; }
+      }
+    }
+  }
+  return '';
 }
 
 function _getCollegeSheetIds(sheetId) {
-  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
-  var res = { outputSheetId: '', teachingPlanId: '', managementName: '', collegeName: '' };
-  try {
-    var ss = _getSpreadsheet(MASTER_CONFIG_ID);
-    var ws = ss.getSheetByName('colleges') || ss.getSheets()[0];
-    var data = ws.getDataRange().getValues();
-    if (!data || data.length <= 1) return res;
-
-    var colCollege = 1, colMgmt = 2, colInput = 4, colOutput = 5, colTp = 6;
-    var hdr = data[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
-    for (var c = 0; c < hdr.length; c++) {
-      if (hdr[c].indexOf('college name') !== -1) colCollege = c;
-      else if (hdr[c].indexOf('management name') !== -1) colMgmt = c;
-      else if (hdr[c].indexOf('input sheet') !== -1) colInput = c;
-      else if (hdr[c].indexOf('output') !== -1) colOutput = c;
-      else if (hdr[c].indexOf('teaching plan') !== -1) colTp = c;
-    }
-
-    var cleanTargetSheetId = extractSpreadsheetId(sheetId) || sheetId;
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var rawInput = String(row[colInput] || '').trim();
-      var cId = extractSpreadsheetId(rawInput) || rawInput;
-      if (cId === cleanTargetSheetId || (rawInput && rawInput.indexOf(cleanTargetSheetId) !== -1)) {
-        res.collegeName = String(row[colCollege] || '').trim();
-        res.managementName = String(row[colMgmt] || '').trim();
-        res.outputSheetId = extractSpreadsheetId(String(row[colOutput] || ''));
-        res.teachingPlanId = extractSpreadsheetId(String(row[colTp] || ''));
-        break;
-      }
-    }
-  } catch(e) {
-    Logger.log("Error in _getCollegeSheetIds: " + e.message);
+  var teachingPlanId = '';
+  var outputSheetId = '';
+  
+  if (!sheetId) return { outputSheetId: '', teachingPlanId: '' };
+  
+  var cache = CacheService.getScriptCache();
+  var cacheKeyOut = 'outLink_' + sheetId;
+  var cacheKeyTp = 'tpLink_' + sheetId;
+  var cachedOut = cache.get(cacheKeyOut);
+  var cachedTp = cache.get(cacheKeyTp);
+  
+  if (cachedOut !== null && cachedTp !== null) {
+    return {
+      outputSheetId: cachedOut === 'NONE' ? '' : cachedOut,
+      teachingPlanId: cachedTp === 'NONE' ? '' : cachedTp
+    };
   }
-  return res;
-}
 
-function getTargetSheetIds(code, sheetId) {
-  var res = { teachingPlanId: '', outputSheetId: '' };
   try {
-    var ss = _getSpreadsheet(sheetId);
-    var ws = ss.getSheetByName('subjects');
-    if (ws) {
-      var data = ws.getDataRange().getValues();
-      for (var i = 1; i < data.length; i++) {
-        var row = data[i];
-        var sCode = String(row[0] || '').trim();
-        if (sCode === code) {
-          for (var c = 0; c < row.length; c++) {
-            var val = String(row[c] || '').trim();
-            if (val.indexOf('docs.google.com/spreadsheets') !== -1) {
-              var sId = extractSpreadsheetId(val);
-              if (sId) {
-                if (!res.teachingPlanId) res.teachingPlanId = sId;
-                else if (!res.outputSheetId) res.outputSheetId = sId;
-              }
-            }
+    var MASTER_CONFIG_SHEET_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
+    var masterSs = _getSpreadsheet(MASTER_CONFIG_SHEET_ID);
+    var masterWs = masterSs.getSheetByName("smart attendance client sheet") || masterSs.getSheets()[0];
+    if (masterWs) {
+      var data = masterWs.getDataRange().getValues();
+      var headers = data[2] || data[0];
+      var inputCol = -1, outputCol = -1, tpCol = -1;
+      
+      for (var c = 0; c < headers.length; c++) {
+        var h = String(headers[c]).toLowerCase().trim();
+        if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1 || h.indexOf('sheet id') !== -1 || h.indexOf('master sheet') !== -1 || h.indexOf('input sheet') !== -1) inputCol = c;
+        if (h.indexOf('output link') !== -1 || h.indexOf('output sheet') !== -1 || h.indexOf('output excel') !== -1) outputCol = c;
+        if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1 || h.indexOf('tp link') !== -1) tpCol = c;
+      }
+      
+      if (inputCol === -1) inputCol = 4;
+      if (outputCol === -1) outputCol = 5;
+      if (tpCol === -1) tpCol = 6;
+      
+      for (var r = 3; r < data.length; r++) {
+        var row = data[r];
+        var rowInputId = String(row[inputCol] || '').trim();
+        if (rowInputId === sheetId || (sheetId && rowInputId.indexOf(sheetId) !== -1) || (rowInputId && sheetId.indexOf(rowInputId) !== -1)) {
+          var outVal = (outputCol !== -1 && outputCol < row.length) ? String(row[outputCol] || '').trim() : '';
+          if (outVal) {
+            var m = outVal.match(/\/d\/(.*?)(\/|$)/);
+            outputSheetId = m ? m[1] : outVal;
+          }
+          
+          var tpVal = (tpCol !== -1 && tpCol < row.length) ? String(row[tpCol] || '').trim() : '';
+          if (tpVal) {
+            var m = tpVal.match(/\/d\/(.*?)(\/|$)/);
+            teachingPlanId = m ? m[1] : tpVal;
           }
           break;
         }
       }
     }
-  } catch(e) {}
-
-  if (!res.teachingPlanId || !res.outputSheetId) {
-    var globalIds = _getCollegeSheetIds(sheetId);
-    if (!res.teachingPlanId) res.teachingPlanId = globalIds.teachingPlanId;
-    if (!res.outputSheetId) res.outputSheetId = globalIds.outputSheetId;
+  } catch(err) {
+    Logger.log("_getCollegeSheetIds: Error looking up from master config sheet: " + err.message);
   }
-  return res;
+  
+  cache.put(cacheKeyOut, outputSheetId || 'NONE', 21600);
+  cache.put(cacheKeyTp, teachingPlanId || 'NONE', 21600);
+
+  return { outputSheetId: outputSheetId, teachingPlanId: teachingPlanId };
+}
+
+function getTargetSheetIds(code, sheetId) {
+  var collegeIds = _getCollegeSheetIds(sheetId);
+  var teachingPlanId = collegeIds.teachingPlanId;
+  var outputSheetId = collegeIds.outputSheetId;
+
+  if (!teachingPlanId || !outputSheetId) {
+    try {
+      var ss = _getSpreadsheet(sheetId);
+      var ws = ss.getSheetByName('subjects');
+      if (ws) {
+        var data = ws.getDataRange().getValues();
+        var tpColIdx = -1;
+        var outColIdx = -1;
+        var codeColIdx = 0;
+
+        var headers = data[0] || [];
+        for (var c = 0; c < headers.length; c++) {
+          var val = String(headers[c]).toLowerCase().trim();
+          if (val.indexOf('teaching plan') !== -1 || val.indexOf('syllabus') !== -1) tpColIdx = c;
+          if (val.indexOf('output excel') !== -1 || val.indexOf('output sheet') !== -1 || val.indexOf('output link') !== -1) outColIdx = c;
+        }
+
+        var inputParsed = _parseSubjectCode(code);
+        for (var i = 1; i < data.length; i++) {
+          var rowCode = String(data[i][codeColIdx]).trim();
+          var rowParsed = _parseSubjectCode(rowCode);
+          if (rowParsed.cleanBaseCode === inputParsed.cleanBaseCode || rowCode.toLowerCase() === code.trim().toLowerCase()) {
+            if (!teachingPlanId && tpColIdx !== -1 && data[i][tpColIdx]) {
+              var m = String(data[i][tpColIdx]).match(/\/d\/(.*?)(\/|$)/);
+              teachingPlanId = m ? m[1] : String(data[i][tpColIdx]).trim();
+            }
+            if (!outputSheetId && outColIdx !== -1 && data[i][outColIdx]) {
+              var m = String(data[i][outColIdx]).match(/\/d\/(.*?)(\/|$)/);
+              outputSheetId = m ? m[1] : String(data[i][outColIdx]).trim();
+            }
+            break;
+          }
+        }
+      }
+    } catch(err) {
+      Logger.log("Error looking up from subjects sheet tab: " + err.message);
+    }
+  }
+
+  if (!teachingPlanId) teachingPlanId = sheetId;
+  if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
+
+  return { teachingPlanId: teachingPlanId, outputSheetId: outputSheetId };
 }
 
 function getGlobalTeachingPlanLink(sheetId) {
-  var globalIds = _getCollegeSheetIds(sheetId);
-  return globalIds.teachingPlanId ? ("https://docs.google.com/spreadsheets/d/" + globalIds.teachingPlanId + "/edit") : "";
+  if (!sheetId) return '';
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'tpLink_' + sheetId;
+  var cachedLink = cache.get(cacheKey);
+  if (cachedLink !== null) return cachedLink === 'NONE' ? '' : cachedLink;
+
+  try {
+    var MASTER_CONFIG_SHEET_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
+    var masterSs = _getSpreadsheet(MASTER_CONFIG_SHEET_ID);
+    var masterWs = masterSs.getSheetByName("smart attendance client sheet") || masterSs.getSheets()[0];
+    if (!masterWs) return '';
+
+    var data = masterWs.getDataRange().getValues();
+    var headers = data[2] || data[0];
+    var inputCol = -1, tpCol = -1;
+
+    for (var c = 0; c < headers.length; c++) {
+      var h = String(headers[c]).toLowerCase().trim();
+      if (h.indexOf('input sheet id') !== -1 || h.indexOf('input link') !== -1) inputCol = c;
+      if (h.indexOf('teaching plan link') !== -1 || h.indexOf('teaching plan') !== -1) tpCol = c;
+    }
+
+    if (inputCol === -1) inputCol = 4;
+    if (tpCol === -1) tpCol = 6;
+
+    for (var r = 3; r < data.length; r++) {
+      var rowInputId = String(data[r][inputCol] || '').trim();
+      if (rowInputId === sheetId || (sheetId && rowInputId.indexOf(sheetId) !== -1) || (rowInputId && sheetId.indexOf(rowInputId) !== -1)) {
+        var tpVal = (tpCol !== -1 && tpCol < data[r].length) ? String(data[r][tpCol] || '').trim() : '';
+        if (tpVal) {
+          var m = tpVal.match(/\/d\/(.*?)(\/|$)/);
+          var finalLink = m ? m[1] : tpVal;
+          cache.put(cacheKey, finalLink, 21600);
+          return finalLink;
+        }
+        break;
+      }
+    }
+  } catch(e) {
+    Logger.log("Error getting global teaching plan link: " + e.message);
+  }
+  cache.put(cacheKey, 'NONE', 21600);
+  return '';
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ACADEMIC IN-CHARGE PORTAL HANDLERS
+   ACADEMIC INCHARGE DASHBOARD & AUTHENTICATION
    ═══════════════════════════════════════════════════════════════ */
 
 function _getAcademicInchargeList(sheetId) {
@@ -693,7 +888,7 @@ function academicInchargeLogin(name, pin, sheetId) {
         }
       }
     }
-    return { success: false, error: "Invalid PIN code for Academic In-charge." };
+    return { success: false, error: "Invalid PIN or Incharge not found." };
   } catch(e) {
     return { success: false, error: e.message };
   }
@@ -701,7 +896,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v40_' + sheetId;
+  var cacheKey = 'dash_v37_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -725,6 +920,8 @@ function getInchargeDashboard(sheetId) {
     var facultyMap = {};
     var subjectCodeSet = {};
     var distinctCodes = [];
+    var collegeName = "";
+    var managementName = "";
 
     for (var i = 1; i < data.length; i++) {
       var rawFaculty = String(data[i][cols.faculty] || '').trim();
@@ -732,7 +929,6 @@ function getInchargeDashboard(sheetId) {
       var sName = String(data[i][cols.name] || '').trim();
       var sYear = String(data[i][cols.year] || '').trim();
       var sSem = String(data[i][cols.semester] || '').trim();
-      var sType = String(data[i][cols.type] || '').trim();
 
       if (!sCode) continue;
 
@@ -742,8 +938,6 @@ function getInchargeDashboard(sheetId) {
       }
 
       var facList = rawFaculty ? rawFaculty.split(',').map(function(x) { return x.trim(); }) : ['Unassigned'];
-      var isPrac = (sType.toLowerCase().indexOf('prac') !== -1 || sCode.toUpperCase().endsWith('P') || sName.toLowerCase().indexOf('prac') !== -1);
-
       for (var f = 0; f < facList.length; f++) {
         var facName = facList[f];
         if (!facName) continue;
@@ -754,8 +948,6 @@ function getInchargeDashboard(sheetId) {
           name: sName,
           year: sYear,
           semester: sSem,
-          type: sType,
-          isPractical: isPrac,
           faculty: facName
         });
       }
@@ -764,7 +956,7 @@ function getInchargeDashboard(sheetId) {
     var collegeIds = _getCollegeSheetIds(sheetId);
     var subjectPlanMap = {};
 
-    // ── 1. Scan Teaching Plan Spreadsheet (Exact topic rows & conducted dates) ──
+    // ── 1. Scan Teaching Plan Spreadsheet (planned topics + executed dates) ──
     try {
       var tpId = collegeIds.teachingPlanId;
       if (tpId) {
@@ -791,6 +983,7 @@ function getInchargeDashboard(sheetId) {
               }
               if (headerRowIdx === -1) headerRowIdx = 14;
 
+              // Dynamically locate column indices
               var colIdxSyllabus = -1;
               var colIdxPlanned = -1;
               var colIdxExecuted = -1;
@@ -838,20 +1031,17 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
-              var isSheetPrac = parsedSheet.isPractical || cleanSheetName.endsWith('P') || cleanSheetName.indexOf('PRACT') !== -1;
               var statsObj = { totalLectures: topicsCount, totalConducted: conductedCount };
 
-              // Strict Theory vs Practical tab matching
+              // Match this tab stats to any subject code
               for (var c = 0; c < distinctCodes.length; c++) {
                 var code = distinctCodes[c];
                 var parsedCode = _parseSubjectCode(code);
-                var isCodePrac = parsedCode.isPractical || code.toUpperCase().endsWith('P');
-                if (isSheetPrac === isCodePrac) {
-                  var cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                  if (cleanSheetName === cleanCode || parsedSheet.cleanBaseCode === parsedCode.cleanBaseCode || (cleanSheetName.indexOf(parsedCode.cleanBaseCode) === 0 && cleanSheetName.length <= parsedCode.cleanBaseCode.length + 3)) {
-                    if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
-                      subjectPlanMap[code] = statsObj;
-                    }
+                if (parsedSheet.cleanBaseCode === parsedCode.cleanBaseCode ||
+                    cleanSheetName.indexOf(parsedCode.cleanBaseCode) !== -1 ||
+                    sheetName.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+                  if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
+                    subjectPlanMap[code] = statsObj;
                   }
                 }
               }
@@ -863,63 +1053,76 @@ function getInchargeDashboard(sheetId) {
       Logger.log("Batch teaching plan scan error: " + tpErr.message);
     }
 
-    // ── 2. Scan Attendance Output Spreadsheet (Actual attendance averages) ──
+    // ── 2. Scan Attendance Output Spreadsheet (actual conducted attendance lectures & average attendance) ──
     var attendanceConductedMap = {};
     var attendanceAvgMap = {};
     var totalCollegeP = 0;
     var totalCollegeAttMarks = 0;
 
     try {
-      var outId = collegeIds.outputSheetId;
+      var outId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
       if (outId) {
         var cleanOutId = extractSpreadsheetId(outId);
         if (cleanOutId) {
           var outSs = _getSpreadsheet(cleanOutId);
           if (outSs) {
             var outSheets = outSs.getSheets();
-            for (var o = 0; o < outSheets.length; o++) {
-              var oSheet = outSheets[o];
+            for (var s = 0; s < outSheets.length; s++) {
+              var oSheet = outSheets[s];
               var oName = oSheet.getName().trim();
               var parsedOSheet = _parseSubjectCode(oName);
               var cleanOName = oName.toUpperCase().replace(/[^A-Z0-9]/g, '');
-              var lr = oSheet.getLastRow(), lc = oSheet.getLastColumn();
-              if (lr < 5 || lc < 4) continue;
+              
+              var lc = oSheet.getLastColumn();
+              var lr = oSheet.getLastRow();
+              if (lc < 4 || lr < 3) continue;
 
-              var oRows = oSheet.getRange(1, 1, Math.min(10, lr), lc).getValues();
-              var oHdr = -1;
-              for (var r = 0; r < oRows.length; r++) {
-                var rowStr = oRows[r].map(function (c) { return String(c || '').toLowerCase().trim(); }).join('|');
+              var sampleData = oSheet.getRange(1, 1, Math.min(15, lr), lc).getValues();
+              var hdrIdx = -1;
+              for (var r = 0; r < sampleData.length; r++) {
+                var rowStr = sampleData[r].map(function(c) { return String(c || '').toLowerCase().trim(); }).join('|');
                 if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
-                  oHdr = r;
+                  hdrIdx = r;
                   break;
                 }
               }
-              if (oHdr === -1) oHdr = 5;
+              if (hdrIdx === -1) hdrIdx = 5;
 
-              var dateHeaderRow = oRows[oHdr] || [];
-              var conductedLecturesInSheet = 0;
-              for (var c = 2; c < dateHeaderRow.length; c++) {
-                var val = String(dateHeaderRow[c] || '').trim().toLowerCase();
-                if (val.indexOf('total p') !== -1 || val.indexOf('total a') !== -1 || val.indexOf('total') !== -1 || val.indexOf('% att') !== -1) {
+              var rawHeaders = sampleData[hdrIdx] || [];
+              var nameCol = -1;
+              var totalPCol = -1;
+              for (var c = 0; c < rawHeaders.length; c++) {
+                var v = String(rawHeaders[c] || '').toLowerCase().trim();
+                if (v.indexOf('name') !== -1 && nameCol === -1) nameCol = c;
+                if (v.indexOf('total p') !== -1 || v.indexOf('total') !== -1 || v.indexOf('% att') !== -1) {
+                  totalPCol = c;
                   break;
                 }
-                if (val !== '' && val !== 'topic' && val !== 'roll no.' && val !== 'name' && val !== 'roll no') {
+              }
+              if (nameCol === -1) nameCol = 1;
+              if (totalPCol === -1) totalPCol = rawHeaders.length;
+
+              var conductedLecturesInSheet = 0;
+              for (var c = nameCol + 1; c < totalPCol; c++) {
+                var cellV = rawHeaders[c];
+                if (cellV !== undefined && cellV !== null && String(cellV).trim() !== '') {
                   conductedLecturesInSheet++;
                 }
               }
 
-              var subP = 0, subMarks = 0;
-              var dataStartRow = oHdr + 3;
-              if (lr >= dataStartRow && conductedLecturesInSheet > 0) {
-                var numStudents = lr - dataStartRow + 1;
-                var attMatrix = oSheet.getRange(dataStartRow, 3, numStudents, conductedLecturesInSheet).getValues();
-                for (var sr = 0; sr < attMatrix.length; sr++) {
-                  for (var sc = 0; sc < attMatrix[sr].length; sc++) {
-                    var mark = String(attMatrix[sr][sc] || '').trim().toUpperCase();
-                    if (mark === 'P') {
+              // Compute average student attendance % for this sheet tab
+              var subP = 0;
+              var subMarks = 0;
+              if (conductedLecturesInSheet > 0 && lr > hdrIdx + 1) {
+                var numRows = Math.min(150, lr - hdrIdx - 1);
+                var attGrid = oSheet.getRange(hdrIdx + 2, nameCol + 2, numRows, conductedLecturesInSheet).getValues();
+                for (var gr = 0; gr < attGrid.length; gr++) {
+                  for (var gc = 0; gc < attGrid[gr].length; gc++) {
+                    var mVal = String(attGrid[gr][gc] || '').toUpperCase().trim();
+                    if (mVal === 'P' || mVal === '1') {
                       subP++;
                       subMarks++;
-                    } else if (mark === 'A') {
+                    } else if (mVal === 'A' || mVal === '0') {
                       subMarks++;
                     }
                   }
@@ -929,18 +1132,16 @@ function getInchargeDashboard(sheetId) {
               totalCollegeP += subP;
               totalCollegeAttMarks += subMarks;
 
-              var isOSheetPrac = parsedOSheet.isPractical || cleanOName.endsWith('P') || cleanOName.indexOf('PRACT') !== -1;
+              // Map to matching subject codes
               for (var c = 0; c < distinctCodes.length; c++) {
                 var dCode = distinctCodes[c];
                 var parsedDCode = _parseSubjectCode(dCode);
-                var isDCodePrac = parsedDCode.isPractical || dCode.toUpperCase().endsWith('P');
-                if (isOSheetPrac === isDCodePrac) {
-                  var cleanDCode = dCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                  if (cleanOName === cleanDCode || parsedOSheet.cleanBaseCode === parsedDCode.cleanBaseCode || (cleanOName.indexOf(parsedDCode.cleanBaseCode) === 0 && cleanOName.length <= parsedDCode.cleanBaseCode.length + 3)) {
-                    attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
-                    if (sheetAvgAtt > 0) {
-                      attendanceAvgMap[dCode] = sheetAvgAtt;
-                    }
+                if (parsedOSheet.cleanBaseCode === parsedDCode.cleanBaseCode ||
+                    cleanOName.indexOf(parsedDCode.cleanBaseCode) !== -1 ||
+                    oName.toLowerCase().indexOf(dCode.toLowerCase()) !== -1) {
+                  attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
+                  if (sheetAvgAtt > 0) {
+                    attendanceAvgMap[dCode] = sheetAvgAtt;
                   }
                 }
               }
@@ -952,13 +1153,15 @@ function getInchargeDashboard(sheetId) {
       Logger.log("Batch attendance output scan error: " + outErr.message);
     }
 
-    // ── 3. Assemble Final Metrics per Faculty ──
+    // ── 3. Assemble Final Stats for Each Faculty ──
     var faculties = [];
     var grandTotalLectures = 0;
     var grandTotalConducted = 0;
     var grandTotalSubjects = 0;
 
-    for (var fac in facultyMap) {
+    var facKeys = Object.keys(facultyMap);
+    for (var k = 0; k < facKeys.length; k++) {
+      var fac = facKeys[k];
       var subs = facultyMap[fac];
       var facLectures = 0;
       var facConducted = 0;
@@ -971,15 +1174,9 @@ function getInchargeDashboard(sheetId) {
         var attConducted = attendanceConductedMap[sCode] || 0;
         var subAvgAtt = attendanceAvgMap[sCode] || 0;
 
-        var isPrac = subs[s].isPractical || (subs[s].type && String(subs[s].type).toLowerCase().indexOf('prac') !== -1) || _parseSubjectCode(sCode, subs[s].type, subs[s].name).isPractical;
-        subs[s].isPractical = isPrac;
-        var fallbackTotal = isPrac ? 15 : 45;
-
-        // Strictly faithful to sheet: use actual topics entered, or fallback if sheet not yet created
-        var planTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : fallbackTotal;
         var finalConducted = Math.max(info.totalConducted || 0, attConducted);
-        var finalTotal = Math.max(planTotal, finalConducted, 1);
-        var finalPct = Math.min(100, Math.round((finalConducted / finalTotal) * 100));
+        var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : Math.max(finalConducted, 45);
+        var finalPct = finalTotal > 0 ? Math.min(100, Math.round((finalConducted / finalTotal) * 100)) : 0;
 
         subs[s].totalLectures = finalTotal;
         subs[s].totalConducted = finalConducted;
@@ -1006,25 +1203,27 @@ function getInchargeDashboard(sheetId) {
         totalSubjects: subs.length,
         totalLectures: facLectures,
         totalConducted: facConducted,
-        avgSyllabusCompletion: facPct,
+        overallPercent: facPct,
         avgAttendance: facAvgAtt,
         subjects: subs
       });
     }
 
-    var overallSyllabusPercent = grandTotalLectures > 0 ? Math.min(100, Math.round((grandTotalConducted / grandTotalLectures) * 100)) : 0;
+    var avgCoverage = grandTotalLectures > 0 ? Math.min(100, Math.round((grandTotalConducted / grandTotalLectures) * 100)) : 0;
     var overallCollegeAvgAtt = totalCollegeAttMarks > 0 ? Math.round((totalCollegeP / totalCollegeAttMarks) * 100) : 0;
 
     var result = {
       success: true,
-      collegeName: collegeIds.collegeName || "College",
-      managementName: collegeIds.managementName || "Management",
-      totalFaculties: faculties.length,
-      totalSubjects: grandTotalSubjects,
-      totalLecturesPlanned: grandTotalLectures,
-      totalLecturesConducted: grandTotalConducted,
-      overallSyllabusPercent: overallSyllabusPercent,
-      overallAttendancePercent: overallCollegeAvgAtt,
+      collegeName: collegeName || "Institutional Workspace",
+      managementName: managementName || "Academic Management",
+      overallStats: {
+        totalFaculties: faculties.length,
+        totalSubjects: grandTotalSubjects,
+        totalLectures: grandTotalLectures,
+        totalConducted: grandTotalConducted,
+        avgCoveragePercent: avgCoverage,
+        overallAvgAttendance: overallCollegeAvgAtt
+      },
       faculties: faculties
     };
 
@@ -1036,12 +1235,214 @@ function getInchargeDashboard(sheetId) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ATTENDANCE & DEFAULTERS QUERY HANDLERS
+   SMART ATTENDANCE LOGIC (FULLY RESTORED & UNTOUCHED)
    ═══════════════════════════════════════════════════════════════ */
+
+function saveAttendance(records, outputSheetId, collegeName, managementName, sheetId) {
+  if (!records || !records.length) return { error: 'No data' };
+  if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
+  var res = updateOutputMatrix(records, outputSheetId, collegeName, managementName, sheetId);
+  if (res === true) {
+    try {
+      if (sheetId) CacheService.getScriptCache().remove('dash_' + sheetId);
+      var code = records[0] && records[0].code ? records[0].code : '';
+      var cleanOutId = extractSpreadsheetId(outputSheetId);
+      if (code) {
+        CacheService.getScriptCache().remove('attrep_v1_' + code + '__' + cleanOutId);
+      }
+    } catch(cErr) {}
+    return { success: true, saved: records.length };
+  }
+  return { success: false, error: String(res) };
+}
+
+function updateOutputMatrix(records, outputSheetId, _collegeName, _managementName, sheetId) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return "Lock Timeout"; }
+  try {
+    var outSs = SpreadsheetApp.openById(outputSheetId);
+    var grouped = {};
+    for (var i = 0; i < records.length; i++) {
+      var r = records[i], tab = r.code + " - " + getSubjectName(r.code, sheetId);
+      if (r.batch) tab += " - Batch " + r.batch;
+      if (!grouped[tab]) grouped[tab] = {};
+      if (!grouped[tab][r.date]) grouped[tab][r.date] = [];
+      grouped[tab][r.date].push(r);
+    }
+    var limit = (getAttendanceLimit(sheetId).limit || 75) / 100;
+    var config = { collegeName: _collegeName || '', managementName: _managementName || '' };
+    if (!config.collegeName || !config.managementName) {
+      try {
+        var cs = _getSpreadsheet(sheetId).getSheetByName('client sheet') || _getSpreadsheet(sheetId).getSheetByName('subjects');
+        if (cs) {
+          var cd = cs.getDataRange().getValues();
+          for (var cr = 0; cr < cd.length; cr++) {
+            for (var cc = 0; cc < cd[cr].length; cc++) {
+              var cv = String(cd[cr][cc]).trim().toLowerCase();
+              if (!config.collegeName && cv.indexOf('college name') !== -1) {
+                if (cr+1 < cd.length) { var bv = String(cd[cr+1][cc]).trim(); if (bv) config.collegeName = bv; }
+              }
+              if (!config.managementName && cv.indexOf('management name') !== -1) {
+                if (cr+1 < cd.length) { var bv = String(cd[cr+1][cc]).trim(); if (bv) config.managementName = bv; }
+              }
+            }
+          }
+        }
+      } catch(ce) {}
+    }
+    for (var tab in grouped) {
+        var dates = grouped[tab], dKeys = Object.keys(dates), sheet = outSs.getSheetByName(tab);
+        if (!sheet) {
+            sheet = outSs.insertSheet(tab);
+            sheet.getRange("A1:K1").mergeAcross(); sheet.getRange("A2:K2").mergeAcross(); sheet.getRange("A4:K4").mergeAcross();
+            sheet.getRange(6, 1, 1, 6).setValues([["Roll No.", "Name", "Total P", "Total A", "Total", "% Att."]]).setFontWeight("bold").setBackground("#F1F5F9").setHorizontalAlignment("center");
+            sheet.getRange("B7").setValue("Topic").setFontWeight("bold").setHorizontalAlignment("left");
+            var f = dates[dKeys[0]][0], sts = getStudents(f.year, f.batch, sheetId).students || [];
+            sts.sort(function(a,b){return parseInt(a.rollNo)-parseInt(b.rollNo)});
+            var sd = sts.map(function(s){return [s.rollNo, s.name, 0, 0, 0, 0]});
+            if (sd.length > 0) sheet.getRange(8, 1, sd.length, 6).setValues(sd);
+            sheet.setColumnWidth(1, 80); sheet.setColumnWidth(2, 280);
+        }
+        
+        var sheetData = sheet.getDataRange().getValues();
+        var hdrRowIdx = -1;
+        for (var r = 0; r < Math.min(sheetData.length, 30); r++) {
+            var rowStr = sheetData[r].map(function(cell) { return String(cell).toLowerCase().trim(); }).join('|');
+            if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
+                hdrRowIdx = r;
+                break;
+            }
+        }
+        if (hdrRowIdx === -1) {
+            hdrRowIdx = 5;
+        }
+        var hdrRowNumber = hdrRowIdx + 1;
+        
+        for (var k = 0; k < dKeys.length; k++) {
+            var dateKey = dKeys[k], recs = dates[dateKey], dispDate = dbToDisplay(dateKey);
+            var hRows = sheet.getRange(hdrRowNumber, 1, 1, Math.max(sheet.getLastColumn(), 10)).getDisplayValues()[0];
+            var dCol = -1, tpCol = -1;
+            for (var c = 0; c < hRows.length; c++) {
+                var val = hRows[c].trim().toLowerCase();
+                if (val === dispDate.toLowerCase()) dCol = c + 1;
+                if (val.indexOf("total p") !== -1) tpCol = c + 1;
+            }
+            
+            var nameColIdx = -1;
+            for (var c = 0; c < hRows.length; c++) {
+                if (hRows[c].trim().toLowerCase().indexOf('name') !== -1) {
+                    nameColIdx = c;
+                    break;
+                }
+            }
+            if (nameColIdx === -1) nameColIdx = 1;
+            
+            if (dCol === -1 && tpCol !== -1) {
+                sheet.insertColumnBefore(tpCol); dCol = tpCol;
+                sheet.getRange(hdrRowNumber, dCol).setValue(dispDate).setFontWeight("bold").setBackground("#F1F5F9").setHorizontalAlignment("center");
+                sheet.setColumnWidth(dCol, 100);
+                var rs = sheet.getLastRow() - (hdrRowNumber + 1);
+                if (rs > 0) {
+                    var tpL = columnToLetter(dCol+1), taL = columnToLetter(dCol+2), tL = columnToLetter(dCol+3), deL = columnToLetter(dCol);
+                    var firstDateLetter = columnToLetter(nameColIdx + 2);
+                    var fms = [];
+                    for (var r=0; r<rs; r++) {
+                        var rn = r + (hdrRowNumber + 2);
+                        fms.push([
+                          '=COUNTIF(' + firstDateLetter + rn + ':' + deL + rn + ', "P")', 
+                          '=COUNTIF(' + firstDateLetter + rn + ':' + deL + rn + ', "A")', 
+                          '=' + tpL + rn + '+' + taL + rn, 
+                          '=IF(' + tL + rn + '>0,' + tpL + rn + '/' + tL + rn + ',0)'
+                        ]);
+                    }
+                    sheet.getRange(hdrRowNumber + 2, dCol+1, rs, 4).setFormulas(fms);
+                    setupFormulasAndConditions(sheet, rs, dCol+4, hdrRowNumber + 2, nameColIdx + 2, limit*100);
+                }
+            }
+            if (dCol !== -1) {
+                var topic = recs[0] && recs[0].topic ? recs[0].topic : "";
+                sheet.getRange(hdrRowNumber + 1, dCol).setValue(topic).setFontStyle("italic").setHorizontalAlignment("center");
+                
+                var rs = sheet.getLastRow() - (hdrRowNumber + 1);
+                if (rs > 0) {
+                    var ex = sheet.getRange(hdrRowNumber + 2, dCol, rs, 1).getValues(), rolls = sheet.getRange(hdrRowNumber + 2, 1, rs, 1).getValues();
+                    var ups = rolls.map(function(r, idx) {
+                        var roll = String(r[0]), st = ex[idx][0] || "-";
+                        for (var x=0; x<recs.length; x++) { if (String(recs[x].rollNo) === roll) st = recs[x].status; }
+                        return [st];
+                    });
+                    sheet.getRange(hdrRowNumber + 2, dCol, rs, 1).setValues(ups).setHorizontalAlignment("center");
+                }
+            }
+        }
+        try {
+          var f = dates[dKeys[0]][0], info = getSubjectInfo(f.code, sheetId);
+          var row4 = f.code + " - " + info.name + (f.batch ? " | Batch " + f.batch : "") + " | " + info.program + " | " + info.year + " | 01 Jan 2020 to " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd MMM yyyy");
+          sheet.getRange("A1:K1").unmerge().mergeAcross().setValue(config.managementName || "Management Name").setFontWeight("bold").setFontSize(14).setHorizontalAlignment("center");
+          sheet.getRange("A2:K2").unmerge().mergeAcross().setValue(config.collegeName || "College Name").setFontWeight("bold").setFontSize(11).setHorizontalAlignment("center");
+          sheet.getRange("A4:K4").unmerge().mergeAcross().setValue(row4).setFontWeight("bold").setBackground("#E2E8F0").setHorizontalAlignment("center");
+        } catch(e) {}
+    }
+    return true;
+  } catch(e) { return e.message; } finally { lock.releaseLock(); }
+}
+
+function getSubjectName(code, sheetId) {
+  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
+  if (!ws) return "Unknown";
+  var data = ws.getDataRange().getValues();
+  for (var i=1; i<data.length; i++) { if (String(data[i][0]).trim() === String(code).trim()) return String(data[i][1]).trim(); }
+  return "Unknown";
+}
+
+function getSubjectInfo(code, sheetId) {
+  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
+  if (!ws) return { name: "Unknown", program: "", year: "" };
+  var data = ws.getDataRange().getValues();
+  for (var i=1; i<data.length; i++) { if (String(data[i][0]).trim() === String(code).trim()) return { name: String(data[i][1]).trim(), year: String(data[i][2]).trim(), program: String(data[i][3]).trim() }; }
+  return { name: "Unknown", program: "", year: "" };
+}
+
+function dbToDisplay(db) {
+  if (!db) return '';
+  var m = String(db), s = ""; if (m.indexOf(' (') !== -1) { s = m.substring(m.indexOf(' (')); m = m.substring(0, m.indexOf(' (')); }
+  var p = m.split('_')[0].split('-'); if (p.length < 3) return m + s;
+  var mos = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dd = parseInt(p[2]); var dStr = dd < 10 ? '0' + dd : String(dd);
+  return dStr + '-' + mos[parseInt(p[1])-1] + s;
+}
+
+function displayToDb(disp) {
+  var m = String(disp), s = ""; if (m.indexOf(' (') !== -1) { s = m.substring(m.indexOf(' (')); m = m.substring(0, m.indexOf(' (')); }
+  var p = m.split('-'); if (p.length !== 2) return disp;
+  var mos = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mi = mos.indexOf(p[1]) + 1;
+  var mm = mi < 10 ? '0' + mi : String(mi);
+  var dd = parseInt(p[0]); var dStr = dd < 10 ? '0' + dd : String(dd);
+  return new Date().getFullYear() + '-' + mm + '-' + dStr + s;
+}
+
+function columnToLetter(column) {
+  var temp, letter = '';
+  while (column > 0) { temp = (column - 1) % 26; letter = String.fromCharCode(temp + 65) + letter; column = (column - temp - 1) / 26; }
+  return letter;
+}
+
+function setupFormulasAndConditions(sheet, rows, pctCol, startRow, startCol, limit) {
+  sheet.getRange(startRow, pctCol, rows, 1).setNumberFormat('0.0%');
+  var dataR = sheet.getRange(startRow, startCol, 1000, Math.max(pctCol - startCol, 1));
+  var pctR = sheet.getRange(startRow, pctCol, 1000, 1);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("P").setFontColor("#15803D").setBackground("#DCFCE7").setRanges([dataR]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("A").setFontColor("#B91C1C").setBackground("#FEE2E2").setRanges([dataR]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(limit / 100).setFontColor("#14532D").setBackground("#BBF7D0").setBold(true).setRanges([pctR]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(limit / 100).setFontColor("#7F1D1D").setBackground("#FECACA").setBold(true).setRanges([pctR]).build()
+  ]);
+}
 
 function getAttendance(code, year, date, outputSheetId, sheetId) {
   var cleanOutId = extractSpreadsheetId(outputSheetId || getOutputSheetId(sheetId));
-  var cacheKey = 'attrep_v4_' + (code || '') + '_' + (year || '') + '_' + (date || '') + '_' + (cleanOutId || '');
+  var cacheKey = 'attrep_v1_' + (code || '') + '_' + (year || '') + '_' + (date || '') + '_' + (cleanOutId || '');
   var cache = CacheService.getScriptCache();
   var cached = cache.get(cacheKey);
   if (cached) {
@@ -1076,14 +1477,10 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
 
     var isMatch = (!code || code === '*' || code === 'all');
     if (!isMatch) {
-      var isInputPrac = parsedInput.isPractical || (code && code.toUpperCase().endsWith('P'));
-      var isSheetPrac = parsedSheetCode.isPractical || cleanSheetName.endsWith('P') || cleanSheetName.indexOf('PRACT') !== -1;
-      if (isInputPrac === isSheetPrac) {
-        if (parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode ||
-            cleanSheetName === parsedInput.cleanBaseCode ||
-            (cleanSheetName.indexOf(parsedInput.cleanBaseCode) === 0 && cleanSheetName.length <= parsedInput.cleanBaseCode.length + 3)) {
-          isMatch = true;
-        }
+      if (parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode ||
+          cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== -1 ||
+          (parsedSheetCode.cleanBaseCode && parsedInput.cleanBaseCode && parsedSheetCode.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1)) {
+        isMatch = true;
       }
     }
     if (!isMatch) continue;
@@ -1093,122 +1490,101 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
     if (lc < 4 || lr < 3) continue;
     
     var attData = s.getDataRange().getValues();
+    if (!attData || attData.length < 3) continue;
+
     var hdrRowIdx = -1;
     for (var r = 0; r < Math.min(attData.length, 30); r++) {
-      var rowStr = attData[r].map(function (c) { return String(c || '').toLowerCase().trim(); }).join('|');
+      var rowStr = attData[r].map(function(cell) { return String(cell || '').toLowerCase().trim(); }).join('|');
       if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
         hdrRowIdx = r;
         break;
       }
     }
-    if (hdrRowIdx === -1) hdrRowIdx = 5;
+    if (hdrRowIdx === -1) {
+      hdrRowIdx = 5;
+    }
+    if (attData.length <= hdrRowIdx + 2) continue;
 
-    var dateHeader = attData[hdrRowIdx] || [];
+    var rawHeaders = attData[hdrRowIdx] || [];
+    var hdrs = rawHeaders.map(function(cell) {
+      if (cell instanceof Date) {
+        try { return Utilities.formatDate(cell, outSs.getSpreadsheetTimeZone(), 'yyyy-MM-dd'); } catch(e) {}
+      }
+      return String(cell || '').trim();
+    });
+    
+    var rollColIdx = -1;
+    var nameColIdx = -1;
+    var totalPColIdx = -1;
+    for (var c = 0; c < hdrs.length; c++) {
+      var val = hdrs[c].toLowerCase().trim();
+      if (val.indexOf('roll') !== -1 && rollColIdx === -1) {
+        rollColIdx = c;
+      }
+      if (val.indexOf('name') !== -1 && nameColIdx === -1) {
+        nameColIdx = c;
+      }
+      if (val.indexOf('total p') !== -1 || val.indexOf('% att') !== -1) {
+        if (totalPColIdx === -1) totalPColIdx = c;
+      }
+    }
+    if (rollColIdx === -1) rollColIdx = 0;
+    if (nameColIdx === -1) nameColIdx = 1;
+    if (totalPColIdx === -1) {
+      for (var c = 0; c < hdrs.length; c++) {
+        var val = hdrs[c].toLowerCase().trim();
+        if (val.indexOf('total') !== -1 || val.indexOf('% att') !== -1) {
+           totalPColIdx = c;
+           break;
+        }
+      }
+    }
+    if (totalPColIdx === -1) totalPColIdx = hdrs.length;
+
+    var dates = [];
+    var firstDateColIdx = Math.max(rollColIdx, nameColIdx) + 1;
+    for (var c = firstDateColIdx; c < totalPColIdx; c++) {
+       if (hdrs[c]) dates.push({ index: c, disp: hdrs[c] });
+    }
+    if (dates.length === 0) continue;
+
+    var effectiveCode = (code && code !== '*' && code !== 'all') ? code : (parsedSheetCode.cleanBaseCode || name);
     var topicRow = attData[hdrRowIdx + 1] || [];
-    var dateIndices = [];
-    var totalPCol = -1, totalACol = -1, totalClassesCol = -1, pctCol = -1;
+    for (var r = hdrRowIdx + 2; r < attData.length; r++) {
+       var rowData = attData[r];
+       if (!rowData || rowData.length === 0) continue;
+       var rNo = rowData[rollColIdx];
+       var rName = rowData[nameColIdx];
+       if (!rNo && !rName) continue;
 
-    for (var c = 0; c < dateHeader.length; c++) {
-      var hVal = String(dateHeader[c] || '').trim().toLowerCase();
-      if (hVal.indexOf('total p') !== -1) totalPCol = c;
-      else if (hVal.indexOf('total a') !== -1) totalACol = c;
-      else if (hVal === 'total') totalClassesCol = c;
-      else if (hVal.indexOf('% att') !== -1) pctCol = c;
-      else if (c >= 2 && hVal !== '' && hVal !== 'topic' && hVal !== 'roll no.' && hVal !== 'name' && hVal !== 'roll no') {
-        if (totalPCol === -1) {
-          dateIndices.push({ colIndex: c, date: String(dateHeader[c]).trim(), topic: String(topicRow[c] || '').trim() });
-        }
-      }
-    }
-
-    var startStudentRow = hdrRowIdx + 2;
-    for (var r = startStudentRow; r < attData.length; r++) {
-      var row = attData[r];
-      var rNo = row[0], stName = row[1];
-      if (!rNo && !stName) continue;
-      if (String(rNo).toLowerCase().indexOf('total') !== -1) continue;
-
-      var datesObj = {};
-      var pCount = 0, aCount = 0;
-
-      for (var d = 0; d < dateIndices.length; d++) {
-        var dInfo = dateIndices[d];
-        var val = String(row[dInfo.colIndex] || '-').trim().toUpperCase();
-        datesObj[dInfo.date] = val;
-        if (val === 'P') pCount++;
-        else if (val === 'A') aCount++;
-      }
-
-      var totClasses = (totalClassesCol !== -1 && !isNaN(Number(row[totalClassesCol]))) ? Number(row[totalClassesCol]) : (pCount + aCount);
-      var totP = (totalPCol !== -1 && !isNaN(Number(row[totalPCol]))) ? Number(row[totalPCol]) : pCount;
-      var totA = (totalACol !== -1 && !isNaN(Number(row[totalACol]))) ? Number(row[totalACol]) : aCount;
-      var pct = totClasses > 0 ? Math.round((totP / totClasses) * 100) : 0;
-      if (pctCol !== -1 && row[pctCol] !== undefined && row[pctCol] !== null && row[pctCol] !== '') {
-        var rawPct = Number(row[pctCol]);
-        if (!isNaN(rawPct)) {
-          if (rawPct <= 1.0 && rawPct > 0) rawPct = rawPct * 100;
-          pct = Math.round(rawPct);
-        }
-      }
-
-      res.push({
-        rollNo: String(rNo).trim(),
-        name: String(stName).trim(),
-        batch: batch,
-        subject: name,
-        dates: datesObj,
-        totalP: totP,
-        totalA: totA,
-        total: totClasses,
-        pct: pct
-      });
+       for (var d = 0; d < dates.length; d++) {
+          var colIdx = dates[d].index;
+          if (colIdx >= rowData.length) continue;
+          var st = String(rowData[colIdx] || '').trim();
+          if (st === 'P' || st === 'A') {
+             var dbD = displayToDb(dates[d].disp);
+             if (date && dbD.indexOf(date) === -1) continue;
+             var topicVal = colIdx < topicRow.length ? String(topicRow[colIdx] || '') : '';
+             res.push({
+               date: dbD,
+               code: effectiveCode,
+               year: year,
+               batch: batch,
+               faculty: "Assigned",
+               rollNo: rowData[0],
+               name: rowData[1],
+               status: st,
+               topic: topicVal
+             });
+          }
+       }
     }
   }
-
-  return { success: true, count: res.length, attendance: res };
-}
-
-function getTaughtTopics(code, outputSheetId, sheetId) {
-  try {
-    if (!outputSheetId && sheetId) outputSheetId = getOutputSheetId(sheetId);
-    var cleanOutId = extractSpreadsheetId(outputSheetId);
-    if (!cleanOutId) return { success: false, error: 'Invalid Output Sheet Link' };
-    var outSs = SpreadsheetApp.openById(cleanOutId);
-    var sheets = outSs.getSheets();
-    var parsedInput = _parseSubjectCode(code);
-    var found = {};
-    for (var i = 0; i < sheets.length; i++) {
-      var s = sheets[i];
-      var parsedSheet = _parseSubjectCode(s.getName());
-      var cleanName = s.getName().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (parsedSheet.isPractical !== parsedInput.isPractical) continue;
-      if (parsedSheet.cleanBaseCode !== parsedInput.cleanBaseCode && cleanName.indexOf(parsedInput.cleanBaseCode) === -1) continue;
-      var lc = s.getLastColumn(), lr = s.getLastRow();
-      if (lc < 6 || lr < 6) continue;
-      var rows = s.getRange(1, 1, Math.min(15, lr), lc).getValues();
-      var hdr = -1;
-      for (var r = 0; r < rows.length; r++) {
-        var rowStr = rows[r].map(function (c) { return String(c || '').toLowerCase().trim(); }).join('|');
-        if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) { hdr = r; break; }
-      }
-      if (hdr === -1) hdr = 5;
-      var dateHdr = rows[hdr] || [], topicRow = rows[hdr + 1] || [];
-      for (var c = 2; c < dateHdr.length; c++) {
-        var dStr = String(dateHdr[c] || '').trim();
-        var tStr = String(topicRow[c] || '').trim();
-        if (dStr && tStr && tStr.toLowerCase() !== 'topic' && dStr.toLowerCase().indexOf('total') === -1) {
-          found[dStr] = tStr;
-        }
-      }
-    }
-    return { success: true, count: Object.keys(found).length, taughtTopics: found };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+  return { success: true, records: res };
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TEACHING PLAN & SYLLABUS HANDLERS
+   ACADEMIC FILE LOGIC — SYLLABUS & TEACHING PLAN
    ═══════════════════════════════════════════════════════════════ */
 
 function getTeachingPlan(code, teacher, sheetId) {
@@ -1223,20 +1599,29 @@ function getTeachingPlan(code, teacher, sheetId) {
     }
     var str = String(val).trim();
     var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (ymdRegex.test(str)) return str;
+    if (ymdRegex.test(str)) {
+      return str;
+    }
     var slashRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/;
     var match = str.match(slashRegex);
     if (match) {
-      var d = parseInt(match[1], 10), m = parseInt(match[2], 10), y = parseInt(match[3], 10);
-      if (y < 100) y += 2000;
+      var d = parseInt(match[1], 10);
+      var m = parseInt(match[2], 10);
+      var y = parseInt(match[3], 10);
+      if (y < 100) {
+        y += 2000;
+      }
       if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
         try {
-          return Utilities.formatDate(new Date(y, m - 1, d), timeZone, 'yyyy-MM-dd');
+          var dateObj = new Date(y, m - 1, d);
+          return Utilities.formatDate(dateObj, timeZone, 'yyyy-MM-dd');
         } catch(e) {}
       }
     }
     var dmyRegex = /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/;
-    if (dmyRegex.test(str)) return str;
+    if (dmyRegex.test(str)) {
+      return str;
+    }
     try {
       var parsed = new Date(str);
       if (!isNaN(parsed.getTime())) {
@@ -1316,11 +1701,10 @@ function getTeachingPlan(code, teacher, sheetId) {
       for (var r = 0; r < data.length; r++) {
         for (var c = 0; c < data[r].length; c++) {
           var cellVal = String(data[r][c]).toLowerCase().trim();
-          if ((cellVal.indexOf('total lectures/practical') !== -1 || cellVal.indexOf('total lectures') !== -1 || cellVal.indexOf('total practicals') !== -1 || cellVal.indexOf('total turn') !== -1) &&
-              cellVal.indexOf('per week') === -1 && cellVal.indexOf('/week') === -1 && cellVal.indexOf('hours') === -1 && cellVal.indexOf('credits') === -1) {
+          if (cellVal.indexOf('total lectures/practical') !== -1 || cellVal.indexOf('total lectures') !== -1 || cellVal.indexOf('total practicals') !== -1) {
             for (var c2 = c + 1; c2 < data[r].length; c2++) {
               var val = parseInt(data[r][c2]);
-              if (!isNaN(val) && val > 5) {
+              if (!isNaN(val) && val > 0) {
                 totalLectures = val;
                 foundLectures = true;
                 break;
@@ -1333,16 +1717,22 @@ function getTeachingPlan(code, teacher, sheetId) {
       }
       
       if (!foundLectures) {
-        if (data[12] && data[12].length > 8) {
-          var v12 = parseInt(data[12][8]) || 0;
-          if (v12 > 5) totalLectures = v12;
-        }
-        if (data[13] && data[13].length > 8) {
-          var v13 = parseInt(data[13][8]) || 0;
-          if (v13 > 5) totalTutorials = v13;
-        }
+        if (data[12] && data[12].length > 8) totalLectures = parseInt(data[12][8]) || 0;
+        if (data[13] && data[13].length > 8) totalTutorials = parseInt(data[13][8]) || 0;
       }
     } catch(e) {}
+
+    function isDateOrNumberVal(val) {
+      if (!val) return false;
+      if (val instanceof Date || Object.prototype.toString.call(val) === '[object Date]') return true;
+      var s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return true;
+      if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(s)) return true;
+      if (/^\d{1,2}-[A-Za-z]{3}-\d{2,4}/.test(s)) return true;
+      if (/^(sun|mon|tue|wed|thu|fri|sat)\s+[a-z]{3}\s+\d{1,2}\s+\d{4}/i.test(s)) return true;
+      if (/^\d+$/.test(s)) return true;
+      return false;
+    }
 
     var headerRow = data[headerRowIdx] || [];
     var colIdxSyllabus = -1;
@@ -1370,6 +1760,7 @@ function getTeachingPlan(code, teacher, sheetId) {
     var topics = [];
     var startRow = headerRowIdx + 1;
 
+    // Safety fallback for syllabus column: find the text column with real topic names (not dates/numbers)
     if (colIdxSyllabus === -1 || (data[startRow] && isDateOrNumberVal(data[startRow][colIdxSyllabus]))) {
       var bestCol = -1, maxLen = 0;
       for (var r = startRow; r < Math.min(startRow + 5, data.length); r++) {
@@ -1401,13 +1792,15 @@ function getTeachingPlan(code, teacher, sheetId) {
         syllabus = String(rawSyl).trim();
       }
       if (!syllabus) {
+        var altSyllabus = '';
         for (var c = 0; c < row.length; c++) {
           var strCell = String(row[c] || '').trim();
           if (strCell.length > 5 && !isDateOrNumberVal(row[c]) && strCell.indexOf('Total') === -1 && strCell.indexOf('Signature') === -1) {
-            syllabus = strCell;
+            altSyllabus = strCell;
             break;
           }
         }
+        syllabus = altSyllabus;
       }
 
       if (syllabus && syllabus.indexOf('Total') === -1 && syllabus.indexOf('Signature') === -1) {
@@ -1442,14 +1835,9 @@ function getTeachingPlan(code, teacher, sheetId) {
     }
     topics = uniqueTopics;
 
-    var parsedSubjectCodeInfo = _parseSubjectCode(code, '', subject);
-    var fallbackTotal = parsedSubjectCodeInfo.isPractical ? 15 : 45;
     var conductedCount = topics.filter(function(t) { return t.executedDate !== ''; }).length;
-    var effectiveTotal = totalLectures > 0 ? totalLectures : (topics.length > 0 ? topics.length : fallbackTotal);
-    if (topics.length > 0) {
-      effectiveTotal = Math.max(topics.length, totalLectures);
-    }
-    var percent = effectiveTotal > 0 ? Math.min(100, Math.round((conductedCount / effectiveTotal) * 100)) : 0;
+    var percent = topics.length > 0 ? Math.round((conductedCount / topics.length) * 100) : 0;
+    var parsedSubjectCodeInfo = _parseSubjectCode(code, '', subject);
 
     return {
       success: true,
@@ -1462,285 +1850,664 @@ function getTeachingPlan(code, teacher, sheetId) {
         faculty: faculty,
         subject: subject,
         isPractical: parsedSubjectCodeInfo.isPractical,
-        totalLectures: effectiveTotal,
+        totalLectures: totalLectures,
         totalTutorials: totalTutorials,
-        conductedLectures: conductedCount,
-        percent: percent
+        percent: percent,
+        conductedCount: conductedCount,
+        totalTopics: topics.length,
+        colIdxSyllabus: colIdxSyllabus,
+        colIdxLectureNo: colIdxLectureNo,
+        colIdxPlanned: colIdxPlanned,
+        colIdxExecuted: colIdxExecuted,
+        colIdxRemark: colIdxRemark
       },
-      theory: topics
+      topics: topics
     };
-  } catch(e) {
-    return { success: false, error: e.message };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 
 function syncTeachingPlan(code, teacher, sheetId) {
+  if (!code) return { success: false, error: 'Missing subject code' };
+
   try {
     var targetIds = getTargetSheetIds(code, sheetId);
-    if (!targetIds.teachingPlanId) {
-      return { success: false, error: 'Teaching plan spreadsheet not found' };
+    if (!targetIds.teachingPlanId || !targetIds.outputSheetId) {
+      return { success: false, error: 'Spreadsheet IDs not resolved for sync' };
     }
-
-    var outputSheetId = targetIds.outputSheetId || getOutputSheetId(sheetId);
-    var taughtResult = getTaughtTopics(code, outputSheetId, sheetId);
-    var taughtMap = taughtResult.success ? (taughtResult.taughtTopics || {}) : {};
 
     var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
-    var ws = _findSheetByCode(tpSs, code);
-    if (!ws) {
-      return { success: false, error: 'Teaching plan sheet not found' };
+    var tpWs = _findSheetByCode(tpSs, code);
+    if (!tpWs) {
+      return { success: false, error: 'Teaching plan sheet not found for subject code: ' + code };
     }
 
-    var data = ws.getDataRange().getValues();
-    var headerRowIdx = -1;
-    for (var r = 0; r < Math.min(data.length, 25); r++) {
-      var rowStr = data[r].join(' ').toLowerCase();
-      if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no.') !== -1 || rowStr.indexOf('unit') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
-        headerRowIdx = r;
-        break;
+    var planResult = getTeachingPlan(code, teacher, sheetId);
+    if (!planResult.success || !planResult.topics || planResult.topics.length === 0) {
+      return { success: false, error: 'No teaching plan topics available to sync: ' + (planResult.error || '') };
+    }
+
+    var outSs = _getSpreadsheet(targetIds.outputSheetId);
+    var outWs = _findSheetByCode(outSs, code);
+    if (!outWs) {
+      return { success: false, error: 'Attendance matrix sheet not found for subject code: ' + code };
+    }
+
+    var outData = outWs.getDataRange().getValues();
+    if (!outData || outData.length < 3) {
+      return { success: false, error: 'Attendance matrix sheet contains insufficient rows' };
+    }
+
+    var topicDatesMap = {};
+    for (var r = 0; r < 2; r++) {
+      var row = outData[r];
+      for (var c = 3; c < row.length; c++) {
+        var cellVal = String(row[c]).trim();
+        if (cellVal) {
+          var normTopic = cellVal.toLowerCase();
+          for (var t = 0; t < planResult.topics.length; t++) {
+            var tpTopic = planResult.topics[t].syllabus.trim().toLowerCase();
+            if (normTopic.indexOf(tpTopic) !== -1 || tpTopic.indexOf(normTopic) !== -1) {
+              for (var dr = 0; dr < outData.length; dr++) {
+                var dVal = String(outData[dr][c]).trim();
+                var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (ymdRegex.test(dVal)) {
+                  topicDatesMap[planResult.topics[t].rowIndex] = dVal;
+                  break;
+                }
+              }
+            }
+          }
+        }
       }
     }
-    if (headerRowIdx === -1) headerRowIdx = 14;
 
-    var colIdxPlanned = -1, colIdxExecuted = -1, colIdxSyllabus = -1;
-    var headerRow = data[headerRowIdx] || [];
-    for (var c = 0; c < headerRow.length; c++) {
-      var h = String(headerRow[c] || '').toLowerCase().trim();
-      if (h.indexOf('syllabus') !== -1 || h.indexOf('topic') !== -1) colIdxSyllabus = c;
-      if (h.indexOf('planned') !== -1) colIdxPlanned = c;
-      if (h.indexOf('executed') !== -1 || h.indexOf('conducted') !== -1) colIdxExecuted = c;
-    }
-    if (colIdxSyllabus === -1) colIdxSyllabus = 2;
-    if (colIdxPlanned === -1) colIdxPlanned = 3;
-    if (colIdxExecuted === -1) colIdxExecuted = 4;
-
+    var colExecuted = planResult.metadata.colIdxExecuted + 1;
     var updatedCount = 0;
-    var dates = Object.keys(taughtMap);
 
-    for (var i = headerRowIdx + 1; i < data.length; i++) {
-      var currentExecuted = data[i][colIdxExecuted];
-      if (!currentExecuted && updatedCount < dates.length) {
-        var dateToSet = dates[updatedCount];
-        ws.getRange(i + 1, colIdxExecuted + 1).setValue(dateToSet);
+    for (var rowIndexStr in topicDatesMap) {
+      var rIdx = parseInt(rowIndexStr);
+      var execDate = topicDatesMap[rowIndexStr];
+      if (rIdx > 0 && execDate) {
+        tpWs.getRange(rIdx, colExecuted).setValue(execDate);
         updatedCount++;
       }
     }
 
-    return { success: true, updatedRows: updatedCount };
-  } catch(e) {
-    return { success: false, error: e.message };
+    var freshPlan = getTeachingPlan(code, teacher, sheetId);
+    return {
+      success: true,
+      syncedCount: updatedCount,
+      percent: freshPlan.metadata.percent,
+      topics: freshPlan.topics
+    };
+  } catch (err) {
+    return { success: false, error: 'Sync failed: ' + err.message };
   }
 }
 
 function saveRemark(code, rowIndex, remark, sheetId) {
+  if (!code || !rowIndex) return { success: false, error: 'Missing code or rowIndex' };
+
   try {
     var targetIds = getTargetSheetIds(code, sheetId);
-    if (!targetIds.teachingPlanId) return { success: false, error: 'No teaching plan sheet found' };
+    if (!targetIds.teachingPlanId) return { success: false, error: 'Teaching Plan ID missing' };
+
     var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
     var ws = _findSheetByCode(tpSs, code);
-    if (!ws) return { success: false, error: 'Sheet not found' };
+    if (!ws) return { success: false, error: 'Teaching plan tab not found' };
 
-    var data = ws.getDataRange().getValues();
-    var headerRowIdx = -1;
-    for (var r = 0; r < Math.min(data.length, 25); r++) {
-      var rowStr = data[r].join(' ').toLowerCase();
-      if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no.') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
-        headerRowIdx = r;
-        break;
-      }
-    }
-    if (headerRowIdx === -1) headerRowIdx = 14;
-
-    var colIdxRemark = -1;
-    var headerRow = data[headerRowIdx] || [];
-    for (var c = 0; c < headerRow.length; c++) {
-      var h = String(headerRow[c] || '').toLowerCase().trim();
-      if (h.indexOf('remark') !== -1 || h.indexOf('pedagogy') !== -1) {
-        colIdxRemark = c;
-        break;
-      }
-    }
-    if (colIdxRemark === -1) colIdxRemark = 5;
-
-    ws.getRange(rowIndex, colIdxRemark + 1).setValue(remark);
-    return { success: true, rowIndex: rowIndex, remark: remark };
-  } catch(e) {
-    return { success: false, error: e.message };
+    var colRemark = 6;
+    ws.getRange(rowIndex, colRemark).setValue(remark);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 
 function addCustomSyllabusTopic(data, sheetId) {
-  try {
-    var code = data.code;
-    var topic = data.topic;
-    var remark = data.remark || '';
-    var date = data.date || '';
-
-    if (!code || !topic) return { success: false, error: 'Code and topic are required' };
-
-    var targetIds = getTargetSheetIds(code, sheetId);
-    if (!targetIds.teachingPlanId) return { success: false, error: 'Teaching plan spreadsheet not found' };
-    var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
-    var ws = _findSheetByCode(tpSs, code);
-    if (!ws) return { success: false, error: 'Teaching plan sheet not found' };
-
-    var lastRow = ws.getLastRow();
-    ws.appendRow([lastRow, topic, date, date, remark]);
-    return { success: true, message: 'Topic appended successfully' };
-  } catch(e) {
-    return { success: false, error: e.message };
+  if (!data || !data.code || !data.topic) {
+    return { success: false, error: 'Missing topic or subject code' };
   }
-}
+  var code = data.code;
+  var targetIds = getTargetSheetIds(code, sheetId);
+  var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
+  var ws = _findSheetByCode(tpSs, code);
+  if (!ws) return { success: false, error: 'Teaching plan tab not found for ' + code };
 
-function getSyllabus(link, code, sheetId) {
-  try {
-    var sId = extractSpreadsheetId(link) || getTargetSheetIds(code, sheetId).teachingPlanId;
-    if (!sId) return { success: false, error: 'Syllabus link invalid' };
-    return getSyllabusPointsFromLink("https://docs.google.com/spreadsheets/d/" + sId + "/edit", code);
-  } catch(e) {
-    return { success: false, error: e.message };
-  }
-}
+  var plan = getTeachingPlan(code, null, sheetId);
+  var lastRow = ws.getLastRow();
+  var nextLectNo = (plan.topics && plan.topics.length > 0) ? plan.topics.length + 1 : 1;
 
-function getSyllabusPointsFromLink(url, code) {
-  try {
-    var sId = extractSpreadsheetId(url);
-    if (!sId) return { success: false, error: 'Invalid URL' };
-    var ss = _getSpreadsheet(sId);
-    var ws = _findSheetByCode(ss, code);
-    if (!ws) return { success: false, error: 'Syllabus tab not found' };
-    var data = ws.getDataRange().getValues();
-    var topics = [];
-    for (var r = 0; r < data.length; r++) {
-      for (var c = 0; c < data[r].length; c++) {
-        var str = String(data[r][c] || '').trim();
-        if (str.length > 8 && !isDateOrNumberVal(data[r][c])) {
-          topics.push({ topic: str });
-        }
-      }
-    }
-    return { success: true, count: topics.length, topics: topics };
-  } catch(e) {
-    return { success: false, error: e.message };
-  }
-}
+  var colSyllabus = plan.metadata.colIdxSyllabus + 1;
+  var colLectNo = plan.metadata.colIdxLectureNo + 1;
+  var colPlanned = plan.metadata.colIdxPlanned + 1;
+  var colExecuted = plan.metadata.colIdxExecuted + 1;
+  var colRemark = plan.metadata.colIdxRemark + 1;
 
-/* ═══════════════════════════════════════════════════════════════
-   ACADEMIC SCHEDULE & DOCUMENTS (TIMETABLES & CALENDARS)
-   ═══════════════════════════════════════════════════════════════ */
+  var maxCol = Math.max(colSyllabus, colLectNo, colPlanned, colExecuted, colRemark);
+  var row = new Array(maxCol);
+  for (var i = 0; i < maxCol; i++) row[i] = '';
+
+  var dateStr = data.date || Utilities.formatDate(new Date(), tpSs.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+
+  row[colLectNo - 1] = nextLectNo;
+  row[colSyllabus - 1] = data.topic;
+  row[colPlanned - 1] = dateStr;
+  row[colExecuted - 1] = dateStr;
+  row[colRemark - 1] = data.remark || 'Extra lecture conducted';
+
+  ws.appendRow(row);
+  return { success: true };
+}
 
 function _isAcademicCalendarsFolder(name) {
   if (!name) return false;
-  var n = String(name).trim().toLowerCase();
-  return (n === "academic calendars" || n === "academic calendar" || n === "academic schedules" || n === "academic schedule" || n.indexOf("academic calendar") !== -1);
+  var n = String(name).toLowerCase().trim();
+  return /(academic\s*calendar|timetable|time\s*table|schedule|calendar)/i.test(n);
 }
 
 function _findAcademicFolder(parentFolder, autoCreate) {
-  if (!parentFolder) return null;
-  var subFolders = parentFolder.getFolders();
-  while (subFolders.hasNext()) {
-    var f = subFolders.next();
-    if (_isAcademicCalendarsFolder(f.getName())) {
-      return f;
+  // Check inside parentFolder if provided
+  if (parentFolder) {
+    try {
+      var folders = parentFolder.getFolders();
+      while (folders.hasNext()) {
+        var f = folders.next();
+        if (_isAcademicCalendarsFolder(f.getName())) {
+          return f;
+        }
+      }
+      var searched = parentFolder.searchFolders("title contains 'Academic' or title contains 'Calendar' or title contains 'Timetable'");
+      while (searched.hasNext()) {
+        var sf = searched.next();
+        if (_isAcademicCalendarsFolder(sf.getName())) {
+          return sf;
+        }
+      }
+    } catch(e) {
+      Logger.log("_findAcademicFolder parent search warning: " + e.message);
     }
   }
+
+  // Fallback 1: Search globally in accessible Drive folders
+  var searchNames = [
+    "Academic Calendars & Timetable",
+    "Academic Calendars and Timetable",
+    "Academic Calendar & Timetable",
+    "Academic Calendar",
+    "Academic Calendars",
+    "Timetable & Academic Calendar",
+    "Timetable"
+  ];
+
+  for (var i = 0; i < searchNames.length; i++) {
+    try {
+      var globalFolders = DriveApp.getFoldersByName(searchNames[i]);
+      if (globalFolders.hasNext()) {
+        return globalFolders.next();
+      }
+    } catch(e) {}
+  }
+
+  // Fallback 2: Search Drive with broad query
+  try {
+    var broadSearch = DriveApp.searchFolders("title contains 'Academic' or title contains 'Timetable'");
+    while (broadSearch.hasNext()) {
+      var bf = broadSearch.next();
+      if (_isAcademicCalendarsFolder(bf.getName())) {
+        return bf;
+      }
+    }
+  } catch(e) {}
+
+  // Fallback 3: Auto-create folder if requested
   if (autoCreate) {
     try {
-      return parentFolder.createFolder("Academic Calendars");
+      var targetParent = parentFolder || DriveApp.getRootFolder();
+      var newFolder = targetParent.createFolder("Academic Calendars & Timetable");
+      try {
+        newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch(e) {}
+      return newFolder;
     } catch(e) {
-      Logger.log("Failed to create Academic Calendars folder: " + e.message);
+      Logger.log("Failed to auto-create Academic Calendars & Timetable folder: " + e.message);
     }
   }
+
   return null;
 }
 
 function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
+  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
+  
   if (teachingPlanLink) {
-    var explicitId = extractSpreadsheetId(teachingPlanLink);
-    if (explicitId) return explicitId;
+    var id = extractSpreadsheetId(teachingPlanLink);
+    if (id && id !== MASTER_CONFIG_ID) return id;
   }
-  var globalIds = _getCollegeSheetIds(sheetId);
-  return globalIds.teachingPlanId || sheetId;
+
+  var cleanSheetId = extractSpreadsheetId(sheetId) || sheetId;
+
+  try {
+    var globalTpLink = getGlobalTeachingPlanLink(cleanSheetId);
+    if (globalTpLink) {
+      var gId = extractSpreadsheetId(globalTpLink);
+      if (gId && gId !== MASTER_CONFIG_ID) return gId;
+    }
+  } catch(e) {}
+
+  if (cleanSheetId && cleanSheetId !== MASTER_CONFIG_ID) {
+    try {
+      var ss = _getSpreadsheet(cleanSheetId);
+      if (ss) {
+        var ws = ss.getSheetByName('subjects');
+        if (ws) {
+          var data = ws.getDataRange().getValues();
+          var headers = (data[0] || []).map(function(h) { return String(h).toLowerCase().trim(); });
+          var tpCol = -1;
+          for (var c = 0; c < headers.length; c++) {
+            if (headers[c].indexOf('teaching plan') !== -1 || headers[c].indexOf('syllabus') !== -1 || headers[c].indexOf('tp link') !== -1) {
+              tpCol = c;
+              break;
+            }
+          }
+          if (tpCol !== -1) {
+            for (var r = 1; r < data.length; r++) {
+              var val = String(data[r][tpCol] || '').trim();
+              if (val) {
+                var foundId = extractSpreadsheetId(val);
+                if (foundId && foundId !== MASTER_CONFIG_ID) return foundId;
+              }
+            }
+          }
+        }
+      }
+    } catch(e) {
+      Logger.log("_resolveCollegeTeachingPlanId college subjects scan error: " + e.message);
+    }
+  }
+
+  if (cleanSheetId && cleanSheetId !== MASTER_CONFIG_ID) {
+    return cleanSheetId;
+  }
+
+  return '';
 }
 
 function getAcademicSchedule(sheetId, teachingPlanLink) {
+  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
   try {
     var targetSpreadsheetId = _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink);
+    
+    var effectiveEmail = "";
+    try { effectiveEmail = Session.getEffectiveUser().getEmail(); } catch(e) {}
+    var activeEmail = "";
+    try { activeEmail = Session.getActiveUser().getEmail(); } catch(e) {}
+
     var parentFolder = null;
+    var scannedFolderName = "";
+    var scannedFolderId = "";
+    var folderOwnerEmail = "";
     var targetFile = null;
 
-    if (targetSpreadsheetId) {
+    if (targetSpreadsheetId && targetSpreadsheetId !== MASTER_CONFIG_ID) {
       try {
         targetFile = DriveApp.getFileById(targetSpreadsheetId);
-        var parents = targetFile.getParents();
-        if (parents.hasNext()) {
-          parentFolder = parents.next();
+        if (targetFile) {
+          try {
+            var fileOwner = targetFile.getOwner();
+            if (fileOwner) folderOwnerEmail = fileOwner.getEmail();
+          } catch(e) {}
+          
+          var parents = targetFile.getParents();
+          if (parents.hasNext()) {
+            parentFolder = parents.next();
+            scannedFolderName = parentFolder.getName();
+            scannedFolderId = parentFolder.getId();
+            try {
+              var folderOwner = parentFolder.getOwner();
+              if (folderOwner && !folderOwnerEmail) folderOwnerEmail = folderOwner.getEmail();
+            } catch(e) {}
+          }
         }
       } catch(e) {
-        Logger.log("Could not find parent folder via getFileById: " + e.message);
+        Logger.log("Drive getFileById warning: " + e.message);
       }
     }
 
-    if (!parentFolder) {
-      var defaultFolderIter = DriveApp.getFoldersByName("Academic Calendars");
-      if (defaultFolderIter.hasNext()) {
-        parentFolder = defaultFolderIter.next();
+    // Smart resolution of Academic folder across Drive
+    var academicFolder = _findAcademicFolder(parentFolder, false);
+
+    var allFiles = [];
+    var seenIds = {};
+
+    function collectFilesFromFolder(folder) {
+      if (!folder) return;
+      try {
+        var fileIterator = folder.getFiles();
+        while (fileIterator.hasNext()) {
+          var file = fileIterator.next();
+          if (file.getId() === targetSpreadsheetId || file.getId() === MASTER_CONFIG_ID) continue;
+          if (seenIds[file.getId()]) continue;
+          seenIds[file.getId()] = true;
+          var thumbLink = '';
+          try { thumbLink = file.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400' : ''; } catch(e) { thumbLink = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'; }
+          var updated = '';
+          try { updated = file.getLastUpdated().toISOString(); } catch(e) {}
+          allFiles.push({
+            id: file.getId(),
+            name: file.getName(),
+            mimeType: file.getMimeType(),
+            webViewLink: file.getUrl(),
+            thumbnailLink: thumbLink,
+            lastUpdated: updated
+          });
+        }
+        var childFolders = folder.getFolders();
+        while (childFolders.hasNext()) {
+          collectFilesFromFolder(childFolders.next());
+        }
+      } catch(e) {}
+    }
+
+    if (academicFolder) {
+      scannedFolderName = academicFolder.getName();
+      scannedFolderId = academicFolder.getId();
+      collectFilesFromFolder(academicFolder);
+    } else if (parentFolder) {
+      collectFilesFromFolder(parentFolder);
+    }
+
+    // If still no files found, perform broad search in Drive for calendar / timetable files
+    if (allFiles.length === 0) {
+      try {
+        var broadFileSearch = DriveApp.searchFiles(
+          "title contains 'timetable' or title contains 'time table' or " +
+          "title contains 'calendar' or title contains 'calender' or " +
+          "title contains 'schedule' or title contains 'academic'"
+        );
+        var count = 0;
+        while (broadFileSearch.hasNext() && count < 30) {
+          var sf = broadFileSearch.next();
+          if (sf.getId() === targetSpreadsheetId || sf.getId() === MASTER_CONFIG_ID) continue;
+          if (!seenIds[sf.getId()]) {
+            seenIds[sf.getId()] = true;
+            count++;
+            var thumb = '';
+            try { thumb = sf.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400' : ''; } catch(ex) { thumb = 'https://drive.google.com/thumbnail?id=' + sf.getId() + '&sz=w400'; }
+            var upd = '';
+            try { upd = sf.getLastUpdated().toISOString(); } catch(ex) {}
+            allFiles.push({
+              id: sf.getId(),
+              name: sf.getName(),
+              mimeType: sf.getMimeType(),
+              webViewLink: sf.getUrl(),
+              thumbnailLink: thumb,
+              lastUpdated: upd
+            });
+          }
+        }
+      } catch(e) {
+        Logger.log("Broad file search warning: " + e.message);
       }
     }
 
-    if (!parentFolder) {
-      return {
-        success: true,
-        timetables: [],
-        calendars: [],
-        folderId: "",
-        folderName: "Academic Calendars",
-        notice: "Folder not found in Drive"
-      };
-    }
-
-    var acadFolder = _findAcademicFolder(parentFolder, false) || parentFolder;
-    var timetables = [];
-    var calendars = [];
-    var files = acadFolder.getFiles();
-
-    while (files.hasNext()) {
-      var file = files.next();
-      var fName = file.getName();
-      var mime = file.getMimeType();
-      var thumb = "";
-      try { thumb = file.getThumbnail() ? file.getThumbnail().getUrl() : ""; } catch(te) {}
-
-      var fileObj = {
-        id: file.getId(),
-        name: fName,
-        mimeType: mime,
-        webViewLink: file.getUrl(),
-        thumbnailLink: thumb,
-        lastUpdated: file.getLastUpdated().toISOString()
-      };
-
-      var fLower = fName.toLowerCase();
-      if (fLower.indexOf("timetable") !== -1 || fLower.indexOf("time table") !== -1 || fLower.indexOf("time-table") !== -1 || fLower.indexOf("tt") !== -1) {
-        timetables.push(fileObj);
-      } else {
-        calendars.push(fileObj);
-      }
-    }
+    allFiles.sort(function(a, b) { return (b.lastUpdated || '') > (a.lastUpdated || '') ? 1 : -1; });
 
     return {
       success: true,
-      timetables: timetables,
-      calendars: calendars,
-      folderId: acadFolder.getId(),
-      folderName: acadFolder.getName()
+      mode: "AUTO_DRIVE_DISCOVERY",
+      effectiveEmail: effectiveEmail,
+      activeEmail: activeEmail,
+      folderOwnerEmail: folderOwnerEmail,
+      scannedFolderName: scannedFolderName || (academicFolder ? academicFolder.getName() : "Google Drive"),
+      scannedFolderId: scannedFolderId || (academicFolder ? academicFolder.getId() : ""),
+      files: allFiles,
+      timetable: allFiles.find(function(f) { return /(timetable|time\s*table|schedule)s?/i.test(f.name); }) || null,
+      calendar: allFiles.find(function(f) { return /(calen[da]r|event|academic)s?/i.test(f.name); }) || null
     };
-  } catch(e) {
+  } catch (err) {
+    return {
+      success: true,
+      mode: "AUTO_DRIVE_EMPTY",
+      files: [],
+      error: null,
+      message: "Drive search completed: " + err.message
+    };
+  }
+}
+
+function extractSpreadsheetId(url) {
+  if (!url) return '';
+  var m = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (m && m[1]) return m[1];
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(url)) return url;
+  return '';
+}
+
+function getSyllabus(link, code, sheetId) {
+  var cacheKey = 'syl_' + (code || '') + '_' + (link ? extractSpreadsheetId(link) : '');
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch(e) {}
+  }
+  try {
+    var points = [];
+
+    // Tier 1: Try direct link if provided
+    if (link) {
+      try {
+        var p = getSyllabusPointsFromLink(link, code);
+        if (p && p.length > 0) points = p;
+      } catch(e1) {
+        Logger.log("getSyllabus Tier 1 error: " + e1.message);
+      }
+    }
+
+    // Tier 2: If Tier 1 failed or no link, resolve Teaching Plan spreadsheet ID via getTargetSheetIds
+    if ((!points || points.length === 0) && code) {
+      try {
+        var targetIds = getTargetSheetIds(code, sheetId);
+        if (targetIds && targetIds.teachingPlanId && targetIds.teachingPlanId !== link) {
+          var p2 = getSyllabusPointsFromLink(targetIds.teachingPlanId, code);
+          if (p2 && p2.length > 0) points = p2;
+        }
+      } catch(e2) {
+        Logger.log("getSyllabus Tier 2 error: " + e2.message);
+      }
+    }
+
+    // Tier 3: Fallback to getTeachingPlan topic extraction
+    if ((!points || points.length === 0) && code) {
+      try {
+        var tpRes = getTeachingPlan(code, null, sheetId);
+        if (tpRes && tpRes.success && tpRes.topics && tpRes.topics.length > 0) {
+          var seen = {};
+          for (var i = 0; i < tpRes.topics.length; i++) {
+            var syl = String(tpRes.topics[i].syllabus || '').trim();
+            if (syl && syl.indexOf('Total') === -1 && syl.indexOf('Signature') === -1) {
+              var lowerSyl = syl.toLowerCase();
+              if (!seen[lowerSyl]) {
+                seen[lowerSyl] = true;
+                points.push(syl);
+              }
+            }
+          }
+        }
+      } catch(e3) {
+        Logger.log("getSyllabus Tier 3 error: " + e3.message);
+      }
+    }
+
+    if (points && points.length > 0) {
+      var res = { success: true, points: points };
+      try { cache.put(cacheKey, JSON.stringify(res), 7200); } catch(ce) {}
+      return res;
+    }
+    return { success: false, points: [], error: 'No syllabus points found for ' + (code || 'subject') };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function looksLikeSubjectCode(name) {
+  if (!name) return false;
+  var val = String(name).trim().toLowerCase().replace(/\s+/g, "");
+  if (!val) return false;
+  if (val.indexOf("sheet") === 0 || val.indexOf("lecture") === 0 || val.indexOf("unit") === 0 || val.indexOf("chap") === 0) return false;
+  if (val.indexOf("syllabus") !== -1 || val.indexOf("plan") !== -1 || val.indexOf("attendance") !== -1 || val.indexOf("index") !== -1) return false;
+  // Numeric subject codes: 4 to 8 digits (e.g. 22401, 314001)
+  if (/^\d{4,8}$/.test(val)) return true;
+  // Alphanumeric subject codes (e.g. CS101, 22401P, DME22401)
+  var hasLetters = /[a-z]/.test(val);
+  var hasNumbers = /[0-9]/.test(val);
+  return hasLetters && hasNumbers && val.length >= 3;
+}
+
+function getSyllabusPointsFromLink(url, code) {
+  var id = extractSpreadsheetId(url);
+  if (!id) {
+    throw new Error("Invalid Google Sheets link. Please check teaching plan link.");
+  }
+  var ss;
+  try {
+    ss = SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Error("Cannot access spreadsheet. Please make sure the link is correct and accessible.");
+  }
+  
+  var sheet = _findSheetByCode(ss, code);
+  
+  if (!sheet) {
+    return [];
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return [];
+  }
+  
+  var colIdx = -1;
+  var headerRowIdx = -1;
+  var keywords = ["syllabus points", "syllabus point", "syllabus", "topic name", "topics", "topic", "session topic", "particulars", "description", "content", "practical topic", "experiment name", "experiments", "experiment", "lab topic", "practical"];
+  
+  for (var r = 0; r < Math.min(data.length, 30); r++) {
+    var row = data[r].map(function(h) { return String(h).trim().toLowerCase(); });
+    
+    for (var k = 0; k < keywords.length; k++) {
+      var idx = row.indexOf(keywords[k]);
+      if (idx !== -1) {
+        colIdx = idx;
+        headerRowIdx = r;
+        break;
+      }
+    }
+    if (colIdx !== -1) break;
+    
+    for (var j = 0; j < row.length; j++) {
+      for (var k = 0; k < keywords.length; k++) {
+        if (row[j].indexOf(keywords[k]) !== -1) {
+          colIdx = j;
+          headerRowIdx = r;
+          break;
+        }
+      }
+      if (colIdx !== -1) break;
+    }
+    if (colIdx !== -1) break;
+  }
+  
+  if (colIdx === -1) {
+    colIdx = 0;
+  }
+  if (headerRowIdx === -1) {
+    headerRowIdx = 0;
+  }
+  
+  function extractFromCol(targetCol) {
+    var pts = [];
+    var seen = {};
+    var hVal = String(data[headerRowIdx][targetCol] || '').trim().toLowerCase();
+    for (var r = headerRowIdx + 1; r < data.length; r++) {
+      if (!data[r] || targetCol >= data[r].length) continue;
+      var val = String(data[r][targetCol]).trim();
+      var lowerVal = val.toLowerCase();
+      if (val && lowerVal !== hVal && !seen[lowerVal]) {
+        seen[lowerVal] = true;
+        pts.push(val);
+      }
+    }
+    return pts;
+  }
+
+  var points = extractFromCol(colIdx);
+
+  var numberCount = points.filter(function(p) {
+    return !isNaN(parseInt(p, 10)) && String(parseInt(p, 10)) === p.trim();
+  }).length;
+
+  if (points.length > 0 && numberCount > points.length * 0.5) {
+    for (var nextC = colIdx + 1; nextC < Math.min(colIdx + 4, data[headerRowIdx].length); nextC++) {
+      var altPoints = extractFromCol(nextC);
+      var altNumCount = altPoints.filter(function(p) {
+        return !isNaN(parseInt(p, 10)) && String(parseInt(p, 10)) === p.trim();
+      }).length;
+      if (altPoints.length > 0 && altNumCount <= altPoints.length * 0.5) {
+        points = altPoints;
+        break;
+      }
+    }
+  }
+
+  return points;
+}
+
+// ══════════════════════════════════════
+// FIREBASE PUSH NOTIFICATION DISPATCHER
+// ══════════════════════════════════════
+var FCM_SERVER_KEY = "AIzaSyBuw7HMI__3oNgMbjQz-q2L1aoIcfn5H9k";
+
+function sendFCMPushNotification(title, body, topic, customData) {
+  topic = topic || "teachers";
+  var url = "https://fcm.googleapis.com/fcm/send";
+  
+  var payload = {
+    to: "/topics/" + topic,
+    notification: {
+      title: title || "VibeMantra Alert",
+      body: body || "New update available.",
+      icon: "icons/icon-192.png",
+      click_action: "FLUTTER_NOTIFICATION_CLICK"
+    },
+    data: customData || { url: "./index.html" }
+  };
+  
+  var options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "Authorization": "key=" + FCM_SERVER_KEY
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+  
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    Logger.log("FCM Response: " + response.getContentText());
+    return JSON.parse(response.getContentText());
+  } catch (e) {
+    Logger.log("FCM Error: " + e.message);
     return { success: false, error: e.message };
   }
 }
 
 function uploadAcademicDocument(data, sheetId) {
+  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
   try {
     if (!data || !data.fileData || !data.fileName) {
       return { success: false, error: "Invalid file data or file name." };
@@ -1750,33 +2517,43 @@ function uploadAcademicDocument(data, sheetId) {
     var parentFolder = null;
     var targetFile = null;
 
-    if (targetSpreadsheetId) {
+    if (targetSpreadsheetId && targetSpreadsheetId !== MASTER_CONFIG_ID) {
       try {
         targetFile = DriveApp.getFileById(targetSpreadsheetId);
-        var parents = targetFile.getParents();
-        if (parents.hasNext()) {
-          parentFolder = parents.next();
+        if (targetFile) {
+          var parents = targetFile.getParents();
+          if (parents.hasNext()) {
+            parentFolder = parents.next();
+          }
         }
-      } catch(e) {}
-    }
-
-    if (!parentFolder) {
-      var defaultFolderIter = DriveApp.getFoldersByName("Academic Calendars");
-      if (defaultFolderIter.hasNext()) {
-        parentFolder = defaultFolderIter.next();
-      } else {
-        parentFolder = DriveApp.getRootFolder();
+      } catch(e) {
+        Logger.log("Drive getFileById warning: " + e.message);
       }
     }
 
-    var uploadFolder = _findAcademicFolder(parentFolder, true) || parentFolder;
-    var rawBase64 = data.fileData;
-    if (rawBase64.indexOf("base64,") !== -1) {
-      rawBase64 = rawBase64.split("base64,")[1];
+    // Auto-resolve or create academic folder
+    var academicFolder = _findAcademicFolder(parentFolder, true);
+    if (!academicFolder) {
+      try {
+        academicFolder = (parentFolder || DriveApp.getRootFolder()).createFolder("Academic Calendars & Timetable");
+        try {
+          academicFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        } catch(e) {}
+      } catch(e) {
+        return { success: false, error: "Drive folder creation failed: " + e.message };
+      }
     }
-    var decodedBlob = Utilities.newBlob(Utilities.base64Decode(rawBase64), data.mimeType || "application/pdf", data.fileName);
-    var uploadedFile = uploadFolder.createFile(decodedBlob);
-    try { uploadedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(se) {}
+
+    var bytes = Utilities.base64Decode(data.fileData);
+    var blob = Utilities.newBlob(bytes, data.mimeType || 'application/pdf', data.fileName);
+
+    var uploadedFile = academicFolder.createFile(blob);
+    try {
+      uploadedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(e) {}
+
+    var thumb = '';
+    try { thumb = uploadedFile.getThumbnail() ? 'https://drive.google.com/thumbnail?id=' + uploadedFile.getId() + '&sz=w400' : ''; } catch(e) { thumb = 'https://drive.google.com/thumbnail?id=' + uploadedFile.getId() + '&sz=w400'; }
 
     return {
       success: true,
@@ -1785,6 +2562,7 @@ function uploadAcademicDocument(data, sheetId) {
         name: uploadedFile.getName(),
         mimeType: uploadedFile.getMimeType(),
         webViewLink: uploadedFile.getUrl(),
+        thumbnailLink: thumb,
         lastUpdated: uploadedFile.getLastUpdated().toISOString()
       }
     };
@@ -1792,3 +2570,47 @@ function uploadAcademicDocument(data, sheetId) {
     return { success: false, error: "Drive Upload Failed: " + err.message };
   }
 }
+
+function getTaughtTopics(code, outputSheetId, sheetId) {
+  try {
+    if (outputSheetId === 'undefined' || outputSheetId === 'null') outputSheetId = '';
+    if (!outputSheetId && sheetId) outputSheetId = getOutputSheetId(sheetId);
+    var cleanOutId = extractSpreadsheetId(outputSheetId);
+    if (!cleanOutId && sheetId) cleanOutId = extractSpreadsheetId(getOutputSheetId(sheetId));
+    if (!cleanOutId) return { success: false, error: 'Invalid Output Sheet Link' };
+    var outSs = SpreadsheetApp.openById(cleanOutId);
+    var sheets = outSs.getSheets();
+    var parsedInput = _parseSubjectCode(code);
+    var found = {};
+    for (var i = 0; i < sheets.length; i++) {
+      var s = sheets[i];
+      var parsedSheet = _parseSubjectCode(s.getName());
+      var cleanName = s.getName().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (parsedSheet.cleanBaseCode !== parsedInput.cleanBaseCode && cleanName.indexOf(parsedInput.cleanBaseCode) === -1) continue;
+      var lc = s.getLastColumn(), lr = s.getLastRow();
+      if (lc < 6 || lr < 6) continue;
+      var rows = s.getRange(1, 1, Math.min(15, lr), lc).getValues(); // only top rows, never full matrix
+      var hdr = -1;
+      for (var r = 0; r < rows.length; r++) {
+        var rowStr = rows[r].map(function (c) { return String(c || '').toLowerCase().trim(); }).join('|');
+        if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) { hdr = r; break; }
+      }
+      if (hdr === -1) hdr = 5;
+      var dateHdr = rows[hdr] || [], topicRow = rows[hdr + 1] || [];
+      var nameCol = -1;
+      for (var c = 0; c < dateHdr.length; c++) if (String(dateHdr[c] || '').toLowerCase().indexOf('name') !== -1) { nameCol = c; break; }
+      if (nameCol === -1) nameCol = 1;
+      for (var c2 = nameCol + 1; c2 < dateHdr.length; c2++) {
+        var dateVal = String(dateHdr[c2] || '').trim().toLowerCase();
+        if (!dateVal || dateVal.indexOf('total') !== -1 || dateVal.indexOf('%') !== -1) continue; // topic exists only under real date columns
+        var tv = String(topicRow[c2] || '').trim();
+        if (tv && tv.toLowerCase() !== 'topic') found[tv] = true;
+      }
+    }
+    return { success: true, topics: Object.keys(found) };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+
+
+function test() { var res = getTeachingPlan('BP704T', '', '1RwP0Yurjx_T9nCmnl4YYv_wowUbC3Py3'); Logger.log(JSON.stringify(res)); return res; }
