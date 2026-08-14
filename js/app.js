@@ -2954,6 +2954,21 @@ const App = (() => {
       });
     });
 
+    // Sort subjects by code and batch sequence for easy reading
+    Object.keys(classMap).forEach(cKey => {
+      classMap[cKey].subjects.sort((a, b) => {
+        const codeA = String(a.code || a.name || '');
+        const codeB = String(b.code || b.name || '');
+        const codeCmp = codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+        if (codeCmp !== 0) return codeCmp;
+        const batchA = String(a.batch || '');
+        const batchB = String(b.batch || '');
+        const batchCmp = batchA.localeCompare(batchB, undefined, { numeric: true, sensitivity: 'base' });
+        if (batchCmp !== 0) return batchCmp;
+        return String(a.facultyName || '').localeCompare(String(b.facultyName || ''));
+      });
+    });
+
     const classKeys = Object.keys(classMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     const primaryClass = state.activeStudentYear || classKeys[0] || 'T. Y.';
     const term = 'TERM II';
@@ -3654,8 +3669,20 @@ Generated: ${formatDisplayDate(new Date())}
           const semObj = item.semesters[semKey];
           if (!semObj.subjectsList || semObj.subjectsList.length === 0) return;
 
+          const sortedSubjectsList = (semObj.subjectsList || []).slice().sort((a, b) => {
+            const codeA = String(a.code || a.name || '');
+            const codeB = String(b.code || b.name || '');
+            const codeCmp = codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+            if (codeCmp !== 0) return codeCmp;
+            const batchA = String(a.batch || '');
+            const batchB = String(b.batch || '');
+            const batchCmp = batchA.localeCompare(batchB, undefined, { numeric: true, sensitivity: 'base' });
+            if (batchCmp !== 0) return batchCmp;
+            return String(a.facultyName || '').localeCompare(String(b.facultyName || ''));
+          });
+
           let subjectItemsHtml = '';
-          semObj.subjectsList.forEach(s => {
+          sortedSubjectsList.forEach(s => {
             const sp = s.percent || 0;
             const barColor = 'var(--success, #34c759)';
             const attVal = (s.attendancePct !== undefined && s.attendancePct !== null)
