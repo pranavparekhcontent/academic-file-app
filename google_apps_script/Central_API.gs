@@ -896,7 +896,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v39_' + sheetId;
+  var cacheKey = 'dash_v40_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -976,7 +976,7 @@ function getInchargeDashboard(sheetId) {
               var headerRowIdx = -1;
               for (var r = 0; r < Math.min(sheetData.length, 25); r++) {
                 var rowStr = sheetData[r].join(' ').toLowerCase();
-                if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no.') !== -1 || rowStr.indexOf('unit') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
+                if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no') !== -1 || rowStr.indexOf('sr no') !== -1 || rowStr.indexOf('practical no') !== -1 || rowStr.indexOf('experiment') !== -1 || rowStr.indexOf('unit') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
                   headerRowIdx = r;
                   break;
                 }
@@ -1674,7 +1674,7 @@ function getTeachingPlan(code, teacher, sheetId) {
     var headerRowIdx = -1;
     for (var r = 0; r < Math.min(data.length, 25); r++) {
       var rowStr = data[r].join(' ').toLowerCase();
-      if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no.') !== -1 || rowStr.indexOf('unit') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
+      if (rowStr.indexOf('lecture no') !== -1 || rowStr.indexOf('sr. no') !== -1 || rowStr.indexOf('sr no') !== -1 || rowStr.indexOf('practical no') !== -1 || rowStr.indexOf('experiment') !== -1 || rowStr.indexOf('unit') !== -1 || rowStr.indexOf('details of topic') !== -1 || rowStr.indexOf('syllabus') !== -1) {
         headerRowIdx = r;
         break;
       }

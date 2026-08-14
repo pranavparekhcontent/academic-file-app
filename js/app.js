@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.8.4)
+ * Academic File PWA — Core Controller (v2.8.5)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
