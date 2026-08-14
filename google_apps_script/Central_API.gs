@@ -1094,6 +1094,7 @@ function getInchargeDashboard(sheetId) {
     // ── 2. Scan Attendance Output Spreadsheet (actual conducted attendance lectures & average attendance) ──
     var attendanceConductedMap = {};
     var attendanceAvgMap = {};
+    var facultyBatchMap = {};
     var totalCollegeP = 0;
     var totalCollegeAttMarks = 0;
 
@@ -1146,6 +1147,29 @@ function getInchargeDashboard(sheetId) {
                 if (cellV !== undefined && cellV !== null && String(cellV).trim() !== '') {
                   conductedLecturesInSheet++;
                 }
+              }
+
+              // Extract verified faculty and batch from attendance output sheet headers
+              var sheetBatch = parsedOSheet.batch || '';
+              var sheetFaculty = '';
+              for (var sr = 0; sr < Math.min(sampleData.length, 6); sr++) {
+                for (var sc = 0; sc < sampleData[sr].length; sc++) {
+                  var cStr = String(sampleData[sr][sc] || '').toLowerCase().trim();
+                  if (cStr.indexOf('batch') !== -1 && !sheetBatch) {
+                    var bVal = String(sampleData[sr][sc + 1] || '').trim();
+                    if (bVal && bVal.toLowerCase() !== 'batch') sheetBatch = bVal;
+                  }
+                  if ((cStr.indexOf('faculty') !== -1 || cStr.indexOf('teacher') !== -1 || cStr.indexOf('staff') !== -1) && !sheetFaculty) {
+                    var fVal = String(sampleData[sr][sc + 1] || '').trim();
+                    if (fVal) sheetFaculty = fVal;
+                  }
+                }
+              }
+              if (sheetBatch && !/^batch/i.test(sheetBatch)) {
+                sheetBatch = 'Batch ' + sheetBatch;
+              }
+              if (sheetBatch && sheetFaculty) {
+                facultyBatchMap[sheetFaculty.toLowerCase() + '_' + parsedOSheet.cleanBaseCode] = sheetBatch;
               }
 
               // Compute average student attendance % for this sheet tab
@@ -1220,6 +1244,13 @@ function getInchargeDashboard(sheetId) {
         subs[s].totalConducted = finalConducted;
         subs[s].percent = finalPct;
         subs[s].avgAttendance = subAvgAtt;
+
+        // Apply verified batch from attendance output if available
+        var cleanCode = _parseSubjectCode(sCode).cleanBaseCode;
+        var verifiedBatch = facultyBatchMap[fac.toLowerCase() + '_' + cleanCode];
+        if (verifiedBatch) {
+          subs[s].batch = verifiedBatch;
+        }
 
         facLectures += finalTotal;
         facConducted += finalConducted;
