@@ -1031,20 +1031,20 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
-              var isSheetPrac = parsedSheet.isPractical || sheetName.toLowerCase().indexOf('pract') !== -1 || sheetName.toLowerCase().indexOf('lab') !== -1;
-              var minTopics = isSheetPrac ? 15 : 45;
-              var effectiveTopicsCount = topicsCount > 5 ? topicsCount : Math.max(topicsCount, conductedCount, minTopics);
-              var statsObj = { totalLectures: effectiveTopicsCount, totalConducted: conductedCount };
+              var isSheetPrac = parsedSheet.isPractical || cleanSheetName.endsWith('P') || cleanSheetName.indexOf('PRACT') !== -1;
+              var statsObj = { totalLectures: topicsCount, totalConducted: conductedCount };
 
-              // Match this tab stats to any subject code
+              // Match this tab stats strictly to subjects of the SAME type (Theory to Theory, Practical to Practical)
               for (var c = 0; c < distinctCodes.length; c++) {
                 var code = distinctCodes[c];
                 var parsedCode = _parseSubjectCode(code);
-                if (parsedSheet.cleanBaseCode === parsedCode.cleanBaseCode ||
-                    cleanSheetName.indexOf(parsedCode.cleanBaseCode) !== -1 ||
-                    sheetName.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
-                  if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
-                    subjectPlanMap[code] = statsObj;
+                var isCodePrac = parsedCode.isPractical || code.toUpperCase().endsWith('P');
+                if (isSheetPrac === isCodePrac) {
+                  var cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  if (cleanSheetName === cleanCode || parsedSheet.cleanBaseCode === parsedCode.cleanBaseCode || (cleanSheetName.indexOf(parsedCode.cleanBaseCode) === 0 && cleanSheetName.length <= parsedCode.cleanBaseCode.length + 3)) {
+                    if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
+                      subjectPlanMap[code] = statsObj;
+                    }
                   }
                 }
               }
@@ -1135,16 +1135,18 @@ function getInchargeDashboard(sheetId) {
               totalCollegeP += subP;
               totalCollegeAttMarks += subMarks;
 
-              // Map to matching subject codes
+              var isOSheetPrac = parsedOSheet.isPractical || cleanOName.endsWith('P') || cleanOName.indexOf('PRACT') !== -1;
               for (var c = 0; c < distinctCodes.length; c++) {
                 var dCode = distinctCodes[c];
                 var parsedDCode = _parseSubjectCode(dCode);
-                if (parsedOSheet.cleanBaseCode === parsedDCode.cleanBaseCode ||
-                    cleanOName.indexOf(parsedDCode.cleanBaseCode) !== -1 ||
-                    oName.toLowerCase().indexOf(dCode.toLowerCase()) !== -1) {
-                  attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
-                  if (sheetAvgAtt > 0) {
-                    attendanceAvgMap[dCode] = sheetAvgAtt;
+                var isDCodePrac = parsedDCode.isPractical || dCode.toUpperCase().endsWith('P');
+                if (isOSheetPrac === isDCodePrac) {
+                  var cleanDCode = dCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  if (cleanOName === cleanDCode || parsedOSheet.cleanBaseCode === parsedDCode.cleanBaseCode || (cleanOName.indexOf(parsedDCode.cleanBaseCode) === 0 && cleanOName.length <= parsedDCode.cleanBaseCode.length + 3)) {
+                    attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
+                    if (sheetAvgAtt > 0) {
+                      attendanceAvgMap[dCode] = sheetAvgAtt;
+                    }
                   }
                 }
               }
@@ -1485,10 +1487,14 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
 
     var isMatch = (!code || code === '*' || code === 'all');
     if (!isMatch) {
-      if (parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode ||
-          cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== -1 ||
-          (parsedSheetCode.cleanBaseCode && parsedInput.cleanBaseCode && parsedSheetCode.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1)) {
-        isMatch = true;
+      var isInputPrac = parsedInput.isPractical || (code && code.toUpperCase().endsWith('P'));
+      var isSheetPrac = parsedSheetCode.isPractical || cleanSheetName.endsWith('P') || cleanSheetName.indexOf('PRACT') !== -1;
+      if (isInputPrac === isSheetPrac) {
+        if (parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode ||
+            cleanSheetName === parsedInput.cleanBaseCode ||
+            (cleanSheetName.indexOf(parsedInput.cleanBaseCode) === 0 && cleanSheetName.length <= parsedInput.cleanBaseCode.length + 3)) {
+          isMatch = true;
+        }
       }
     }
     if (!isMatch) continue;
@@ -2606,6 +2612,7 @@ function getTaughtTopics(code, outputSheetId, sheetId) {
       var s = sheets[i];
       var parsedSheet = _parseSubjectCode(s.getName());
       var cleanName = s.getName().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (parsedSheet.isPractical !== parsedInput.isPractical) continue;
       if (parsedSheet.cleanBaseCode !== parsedInput.cleanBaseCode && cleanName.indexOf(parsedInput.cleanBaseCode) === -1) continue;
       var lc = s.getLastColumn(), lr = s.getLastRow();
       if (lc < 6 || lr < 6) continue;
