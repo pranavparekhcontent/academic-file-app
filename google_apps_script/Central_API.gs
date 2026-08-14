@@ -532,84 +532,167 @@ function getGlobalTeachingPlanLink(sheetId) {
    ═══════════════════════════════════════════════════════════════ */
 
 function _getAcademicInchargeList(sheetId) {
-  var inchList = [];
+  var list = [];
+  if (!sheetId) return list;
   try {
     var ss = _getSpreadsheet(sheetId);
-    var ws = ss.getSheetByName('academic incharge') || ss.getSheetByName('academic incharges') || ss.getSheetByName('incharges') || ss.getSheetByName('incharge');
-    if (ws) {
-      var data = ws.getDataRange().getValues();
-      var nameCol = 0, pinCol = 1, yearCol = 2;
-      if (data.length > 0) {
-        var hdr = data[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
-        for (var c = 0; c < hdr.length; c++) {
-          if (hdr[c].indexOf('name') !== -1 || hdr[c].indexOf('incharge') !== -1 || hdr[c].indexOf('faculty') !== -1) nameCol = c;
-          if (hdr[c].indexOf('pin') !== -1 || hdr[c].indexOf('pass') !== -1) pinCol = c;
-          if (hdr[c].indexOf('year') !== -1 || hdr[c].indexOf('class') !== -1) yearCol = c;
+    if (!ss) return list;
+
+    var sheets = ss.getSheets();
+    if (!sheets || sheets.length === 0) return list;
+
+    var priorityKeywords = ['subjects', 'client', 'config', 'faculty', 'academic', 'incharge', 'coordinator'];
+    var prioritizedSheets = [];
+    var remainingSheets = [];
+
+    for (var s = 0; s < sheets.length; s++) {
+      var sName = sheets[s].getName().toLowerCase();
+      var isPriority = priorityKeywords.some(function(k) { return sName.indexOf(k) !== -1; });
+      if (isPriority) prioritizedSheets.push(sheets[s]);
+      else remainingSheets.push(sheets[s]);
+    }
+
+    var sortedSheets = prioritizedSheets.concat(remainingSheets);
+
+    for (var sIdx = 0; sIdx < sortedSheets.length; sIdx++) {
+      var sheet = sortedSheets[sIdx];
+      var data = sheet.getDataRange().getValues();
+      if (!data || data.length === 0) continue;
+
+      // ── 1. Direct Label/Key-Value Search (e.g. Cell I11 = "Academic Incharge", Cell J11 = 4321) ──
+      for (var r = 0; r < data.length; r++) {
+        for (var c = 0; c < data[r].length; c++) {
+          var cellVal = String(data[r][c] || '').toLowerCase().trim();
+          if (cellVal === 'academic incharge' || cellVal === 'incharge pin' || cellVal === 'academic coordinator' || cellVal === 'incharge' || cellVal === 'academic incharge pin') {
+            var valRight = (c + 1 < data[r].length) ? String(data[r][c + 1] || '').trim() : '';
+            var valBelow = (r + 1 < data.length) ? String(data[r + 1][c] || '').trim() : '';
+            var pinCandidate = valRight || valBelow;
+            if (pinCandidate && pinCandidate.toLowerCase() !== 'link' && pinCandidate.toLowerCase() !== 'text') {
+              list.push({ name: "Academic Incharge", pin: pinCandidate });
+            }
+          }
         }
       }
-      for (var r = 1; r < data.length; r++) {
-        var name = String(data[r][nameCol] || '').trim();
-        var pin = String(data[r][pinCol] || '').trim();
-        var year = yearCol < data[r].length ? String(data[r][yearCol] || '').trim() : '';
-        if (name) {
-          inchList.push({ name: name, pin: pin, year: year });
+
+      // ── 2. Column Headers Search (e.g. Header "Academic Incharge Name", "PIN") ──
+      var inchargeCol = -1;
+      var pinCol = -1;
+      var headerRowIdx = -1;
+
+      for (var r = 0; r < Math.min(data.length, 15); r++) {
+        var row = data[r];
+        var foundIncharge = -1;
+        var foundPin = -1;
+        for (var c = 0; c < row.length; c++) {
+          var val = String(row[c] || '').toLowerCase().trim();
+          if (val.indexOf('academic incharge') !== -1 || val.indexOf('academic coordinator') !== -1 || (val.indexOf('incharge') !== -1 && val.indexOf('name') !== -1) || val.indexOf('coordinator') !== -1) {
+            foundIncharge = c;
+          }
+          if (val.indexOf('pin') !== -1 || val.indexOf('password') !== -1 || val.indexOf('passcode') !== -1) {
+            foundPin = c;
+          }
+        }
+        if (foundIncharge !== -1 && foundPin !== -1) {
+          inchargeCol = foundIncharge;
+          pinCol = foundPin;
+          headerRowIdx = r;
+          break;
         }
       }
+
+      if (inchargeCol !== -1 && pinCol !== -1 && headerRowIdx !== -1) {
+        for (var i = headerRowIdx + 1; i < data.length; i++) {
+          var nameVal = String(data[i][inchargeCol] || '').trim();
+          var pinVal = String(data[i][pinCol] || '').trim();
+          if (nameVal && pinVal) {
+            list.push({ name: nameVal, pin: pinVal });
+          }
+        }
+      }
+
+      // ── 3. Proximity Fallback Search ──
+      if (list.length === 0) {
+        for (var r2 = 0; r2 < data.length; r2++) {
+          for (var c2 = 0; c2 < data[r2].length; c2++) {
+            var cellVal = String(data[r2][c2] || '').toLowerCase().trim();
+            if (cellVal.indexOf('incharge') !== -1 || cellVal.indexOf('coordinator') !== -1) {
+              var candName = (c2 + 1 < data[r2].length && String(data[r2][c2 + 1] || '').trim()) ? String(data[r2][c2 + 1]).trim() : '';
+              var candPin = '';
+              var minR = Math.max(0, r2 - 2), maxR = Math.min(data.length - 1, r2 + 2);
+              var minC = Math.max(0, c2 - 2), maxC = Math.min(data[r2].length - 1, c2 + 3);
+
+              for (var pr = minR; pr <= maxR; pr++) {
+                for (var pc = minC; pc <= maxC; pc++) {
+                  var pVal = String(data[pr][pc] || '').toLowerCase().trim();
+                  if (pVal.indexOf('pin') !== -1 || pVal.indexOf('password') !== -1) {
+                    if (pc + 1 < data[pr].length && String(data[pr][pc + 1] || '').trim()) candPin = String(data[pr][pc + 1]).trim();
+                    else if (pr + 1 < data.length && String(data[pr + 1][pc] || '').trim()) candPin = String(data[pr + 1][pc]).trim();
+                  }
+                  if (candPin) break;
+                }
+                if (candPin) break;
+              }
+
+              if (candName && candPin) {
+                list.push({ name: candName, pin: candPin });
+              } else if (candName && !isNaN(parseInt(candName))) {
+                list.push({ name: "Academic Incharge", pin: candName });
+              }
+            }
+          }
+        }
+      }
+
+      if (list.length > 0) return list;
     }
   } catch(e) {
-    Logger.log("Error fetching academic incharge sheet: " + e.message);
+    Logger.log("_getAcademicInchargeList error: " + e.message);
   }
-  return { success: true, incharges: inchList };
+  return list;
 }
 
 function getAcademicIncharges(sheetId) {
-  var res = _getAcademicInchargeList(sheetId);
-  var safeList = (res.incharges || []).map(function(item) {
-    return { name: item.name, year: item.year };
-  });
-  return { success: true, incharges: safeList };
+  try {
+    var rawList = _getAcademicInchargeList(sheetId);
+    var incharges = [];
+    var seen = {};
+    for (var i = 0; i < rawList.length; i++) {
+      var item = rawList[i];
+      if (item && item.name && !seen[item.name]) {
+        seen[item.name] = true;
+        incharges.push({ name: item.name });
+      }
+    }
+    return { success: true, incharges: incharges };
+  } catch(e) {
+    return { success: false, error: e.message, incharges: [] };
+  }
 }
 
 function academicInchargeLogin(name, pin, sheetId) {
   try {
-    var targetPin = String(pin || '').trim();
-    if (!targetPin) {
-      return { success: false, error: 'Security PIN is required.' };
+    if (!pin) {
+      return { success: false, error: "Security PIN is required." };
     }
-    var res = _getAcademicInchargeList(sheetId);
-    var list = res.incharges || [];
+    var list = _getAcademicInchargeList(sheetId);
+    var targetPin = String(pin).trim();
     var targetName = name ? String(name).trim().toLowerCase() : '';
 
-    if (list.length > 0) {
-      for (var i = 0; i < list.length; i++) {
-        var item = list[i];
-        var itemName = String(item.name || '').trim();
-        var itemPin = String(item.pin || '').trim();
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var itemName = String(item.name || '').trim();
+      var itemPin = String(item.pin || '').trim();
 
-        if (targetName) {
-          if (itemName.toLowerCase() === targetName && (!itemPin || itemPin === targetPin)) {
-            return { success: true, name: itemName, incharge: { name: itemName, year: item.year || '' } };
-          }
-        } else {
-          if (!itemPin || itemPin === targetPin) {
-            return { success: true, name: itemName || "Academic Incharge", incharge: { name: itemName || "Academic Incharge", year: item.year || '' } };
-          }
+      if (targetName) {
+        if (itemName.toLowerCase() === targetName && itemPin === targetPin) {
+          return { success: true, name: itemName };
+        }
+      } else {
+        if (itemPin === targetPin) {
+          return { success: true, name: itemName || "Academic Incharge" };
         }
       }
     }
-
-    if (targetPin === '1234' || targetPin === '0000') {
-      return { success: true, name: name || "Academic Incharge", incharge: { name: name || "Academic Incharge", year: "" } };
-    }
-
-    var tRes = getTeachers(sheetId);
-    var teachers = tRes.teachers || [];
-    for (var t = 0; t < teachers.length; t++) {
-      if (String(teachers[t].pin || '').trim() === targetPin) {
-        return { success: true, name: teachers[t].name || "Academic Incharge", incharge: { name: teachers[t].name, year: "" } };
-      }
-    }
-
     return { success: false, error: "Invalid PIN code for Academic In-charge." };
   } catch(e) {
     return { success: false, error: e.message };

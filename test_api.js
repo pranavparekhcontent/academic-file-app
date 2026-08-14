@@ -1,5 +1,5 @@
 async function testApi() {
-  const url = "https://script.google.com/macros/s/AKfycbwNcrCqowXpJ9oYZSRcvWNuHD42TR_fVXljpnaC5I314Dr1Oj77-P-d-frXxdK7cT3u0A/exec";
+  const url = "https://script.google.com/macros/s/AKfycbygKPspOCjVAkVfHwCxTxPuCYjVBzmvfBWDDN7L11QqrurhCDV3IBpqq7AxhZjwP1gClA/exec";
   const res = await fetch(url + "?action=getAcademicSchedule");
   const data = await res.json();
   console.log("Academic Schedule Test Result:", data);
