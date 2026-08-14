@@ -2122,10 +2122,13 @@ const App = (() => {
 
       return `
         <div class="faculty-progress-card" style="background: ${pal.bg} !important; border-top: 1.8px solid #ffffff !important; border-left: 1.8px solid #ffffff !important; border-bottom: 1.8px solid ${pal.bottomBorder} !important; border-right: 1.8px solid ${pal.bottomBorder} !important; box-shadow: inset 0 1.5px 2px #ffffff, 0 10px 28px ${pal.shadow} !important;">
-          <div class="faculty-card-header" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-            <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
-            <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Coverage</div>
+          <div class="faculty-card-header" style="margin-bottom: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: nowrap;">
+            <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 14.5px; line-height: 1.3; flex: 1; min-width: 0; word-break: break-word; display: flex; align-items: flex-start; gap: 5px;">
+              <i class="ph ph-user-circle" style="color: ${pal.icon}; font-size: 17px; margin-top: 1px; flex-shrink: 0;"></i>
+              <span>${escHtml(f.faculty)}</span>
+            </div>
+            <div style="display: inline-flex; align-items: center; flex-shrink: 0; margin-top: 1px;">
+              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 3px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; line-height: 1.2;">${f.overallPercent}% Coverage</div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 10px;">
