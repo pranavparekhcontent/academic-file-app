@@ -191,12 +191,50 @@ function _mapSubjectCols(headers) {
     code: find(['subject code', 'code'], 0),
     faculty: find(['faculty', 'teacher'], 6),
     pin: find(['pin', 'password'], 7),
+    batches: find(['batches', 'batch'], 8),
     semester: find(['semester', 'sem'], 4),
     year: find(['year', 'class'], 2),
     program: find(['program', 'course'], 3),
     type: find(['type'], 5),
     name: find(['subject name', 'subject', 'name'], 1)
   };
+}
+
+function _parseFacultyBatches(batchesStr, facultyName) {
+  var str = String(batchesStr || '').trim();
+  if (!str || str === 'undefined') return '';
+  var targetFac = String(facultyName || '').trim().toLowerCase();
+
+  // If contains '/', faculties are separated by '/' (e.g. ppp=A,B,C/abc=C,D)
+  if (str.indexOf('/') !== -1 || str.indexOf('=') !== -1) {
+    var parts = str.split('/');
+    for (var p = 0; p < parts.length; p++) {
+      var item = parts[p].trim();
+      if (!item) continue;
+      if (item.indexOf('=') !== -1) {
+        var kv = item.split('=');
+        var fKey = kv[0].trim().toLowerCase();
+        var bVal = kv[1] ? kv[1].trim() : '';
+        if (targetFac && (fKey === targetFac || fKey.indexOf(targetFac) !== -1 || targetFac.indexOf(fKey) !== -1)) {
+          return _formatBatchString(bVal);
+        }
+      }
+    }
+  }
+
+  // Fallback: if single faculty string or direct batch notation
+  return _formatBatchString(str);
+}
+
+function _formatBatchString(bStr) {
+  var raw = String(bStr || '').trim();
+  if (!raw) return '';
+  if (/^batch/i.test(raw)) return raw;
+  var parts = raw.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  if (parts.length > 0) {
+    return 'Batch ' + parts.join(', ');
+  }
+  return raw;
 }
 
 function _parseSubjectCode(code, typeHint, nameHint) {
@@ -379,7 +417,9 @@ function getSubjects(teacher, sheetId) {
   }
 
   for (var i = 1; i < data.length; i++) {
-    var fs = String(data[i][cols.faculty]).toLowerCase().split(',').map(function(x){return x.trim()});
+    var rawFac = String(data[i][cols.faculty] || '');
+    var fs = rawFac.toLowerCase().split(',').map(function(x){return x.trim()});
+    var rawBatches = cols.batches !== -1 && data[i][cols.batches] !== undefined ? String(data[i][cols.batches]).trim() : '';
     if (!teacher || fs.indexOf(teacher.toLowerCase()) !== -1) {
       var sCode = String(data[i][cols.code]).trim();
       var sName = String(data[i][cols.name]).trim();
@@ -388,14 +428,27 @@ function getSubjects(teacher, sheetId) {
       if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
         sType = 'Practical';
       }
-      var explicitBatch = parsedCode.batch;
+      var explicitBatch = _parseFacultyBatches(rawBatches, teacher || (fs[0] || ''));
+      if (!explicitBatch) {
+        explicitBatch = parsedCode.batch;
+      }
       if (!explicitBatch && parsedCode.isPractical && fs.length > 1 && teacher) {
         var tIdx = fs.indexOf(teacher.toLowerCase());
         if (tIdx !== -1) {
           explicitBatch = 'Batch ' + String.fromCharCode(65 + tIdx);
         }
       }
-      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType, batch: explicitBatch || '' };
+      var subObj = {
+        code: sCode,
+        name: sName,
+        year: String(data[i][cols.year]).trim(),
+        program: String(data[i][cols.program]).trim(),
+        semester: String(data[i][cols.semester]).trim(),
+        faculty: rawFac,
+        batches: rawBatches,
+        type: sType,
+        batch: explicitBatch || ''
+      };
       subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
       subObj.outputSheetId = defaultOutId;
       res.push(subObj);
@@ -903,7 +956,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v41_' + sheetId;
+  var cacheKey = 'dash_v44_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -936,6 +989,7 @@ function getInchargeDashboard(sheetId) {
       var sName = String(data[i][cols.name] || '').trim();
       var sYear = String(data[i][cols.year] || '').trim();
       var sSem = String(data[i][cols.semester] || '').trim();
+      var rawBatches = cols.batches !== -1 && data[i][cols.batches] !== undefined ? String(data[i][cols.batches]).trim() : '';
 
       if (!sCode) continue;
 
@@ -951,7 +1005,10 @@ function getInchargeDashboard(sheetId) {
         if (!facName) continue;
         if (!facultyMap[facName]) facultyMap[facName] = [];
 
-        var explicitBatch = _parseSubjectCode(sCode, '', sName).batch;
+        var explicitBatch = _parseFacultyBatches(rawBatches, facName);
+        if (!explicitBatch) {
+          explicitBatch = _parseSubjectCode(sCode, '', sName).batch;
+        }
         if (!explicitBatch && isPracSub && facList.length > 1) {
           explicitBatch = 'Batch ' + String.fromCharCode(65 + f);
         } else if (explicitBatch && !/^batch/i.test(explicitBatch)) {
@@ -964,6 +1021,7 @@ function getInchargeDashboard(sheetId) {
           year: sYear,
           semester: sSem,
           faculty: facName,
+          batches: rawBatches,
           batch: explicitBatch || ''
         });
       }

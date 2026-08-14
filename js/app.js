@@ -2065,9 +2065,49 @@ const App = (() => {
       }
     ];
 
+    // Helper to format batch strings cleanly (e.g. "A,B,C" -> "Batch A, B, C")
+    function formatBatchString(bStr) {
+      const raw = String(bStr || '').trim();
+      if (!raw) return '';
+      if (/^batch/i.test(raw)) return raw;
+      const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        return 'Batch ' + parts.join(', ');
+      }
+      return raw;
+    }
+
+    // Helper to extract faculty's assigned batches from "ppp=A,B,C/abc=C,D" syntax
+    function resolveFacultyBatchesFromStr(batchesStr, facultyName) {
+      const str = String(batchesStr || '').trim();
+      if (!str || str === 'undefined') return '';
+      const targetFac = String(facultyName || '').trim().toLowerCase();
+
+      if (str.includes('/') || str.includes('=')) {
+        const parts = str.split('/');
+        for (let p = 0; p < parts.length; p++) {
+          const item = parts[p].trim();
+          if (!item) continue;
+          if (item.includes('=')) {
+            const kv = item.split('=');
+            const fKey = kv[0].trim().toLowerCase();
+            const bVal = kv[1] ? kv[1].trim() : '';
+            if (targetFac && (fKey === targetFac || fKey.includes(targetFac) || targetFac.includes(fKey))) {
+              return formatBatchString(bVal);
+            }
+          }
+        }
+      }
+      return formatBatchString(str);
+    }
+
     // In-memory helper to resolve exact batch from already-fetched data
     function resolveSubjectBatch(s, facultyName) {
       if (!s) return '';
+      if (s.batches) {
+        const b = resolveFacultyBatchesFromStr(s.batches, facultyName);
+        if (b) return b;
+      }
       if (s.batch && String(s.batch).trim()) return String(s.batch).trim();
       
       const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
@@ -2075,6 +2115,10 @@ const App = (() => {
 
       const allSubs = (state.allData && state.allData.subjects) || [];
       const matchedMaster = allSubs.find(sub => sub.code === s.code);
+      if (matchedMaster && matchedMaster.batches) {
+        const b = resolveFacultyBatchesFromStr(matchedMaster.batches, facultyName);
+        if (b) return b;
+      }
       if (matchedMaster && matchedMaster.faculty) {
         const facArr = String(matchedMaster.faculty).split(',').map(x => x.trim().toLowerCase());
         const fIdx = facArr.indexOf(String(facultyName || '').trim().toLowerCase());
