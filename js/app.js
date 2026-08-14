@@ -2065,6 +2065,45 @@ const App = (() => {
       }
     ];
 
+    // In-memory helper to resolve exact batch from already-fetched data
+    function resolveSubjectBatch(s, facultyName) {
+      if (!s) return '';
+      if (s.batch && String(s.batch).trim()) return String(s.batch).trim();
+      
+      const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
+      if (!isPractical) return '';
+
+      const allSubs = (state.allData && state.allData.subjects) || [];
+      const matchedMaster = allSubs.find(sub => sub.code === s.code);
+      if (matchedMaster && matchedMaster.faculty) {
+        const facArr = String(matchedMaster.faculty).split(',').map(x => x.trim().toLowerCase());
+        const fIdx = facArr.indexOf(String(facultyName || '').trim().toLowerCase());
+        if (fIdx !== -1) {
+          return 'Batch ' + String.fromCharCode(65 + fIdx);
+        }
+      }
+
+      const inchargeFacs = (state.inchargeDashboard && state.inchargeDashboard.faculties) || [];
+      const facultyListForSub = [];
+      inchargeFacs.forEach(f => {
+        if (f.faculty && f.faculty.toLowerCase() !== 'unassigned') {
+          const hasSub = (f.subjects || []).some(sub => sub.code === s.code);
+          if (hasSub && facultyListForSub.indexOf(f.faculty) === -1) {
+            facultyListForSub.push(f.faculty);
+          }
+        }
+      });
+
+      if (facultyListForSub.length > 0) {
+        const fIdx = facultyListForSub.indexOf(facultyName);
+        if (fIdx !== -1) {
+          return 'Batch ' + String.fromCharCode(65 + fIdx);
+        }
+      }
+
+      return 'Batch A';
+    }
+
     const facultyCardsHtml = faculties.map((f, idx) => {
       const pal = rainbowGlassPalettes[idx % rainbowGlassPalettes.length];
 
@@ -2077,6 +2116,7 @@ const App = (() => {
 
         const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
         const unitLabel = isPractical ? 'practicals' : 'lectures';
+        const effectiveBatch = resolveSubjectBatch(s, f.faculty);
 
         const liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name);
         const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 ? `${s.avgAttendance}%` : '--%');
@@ -2089,7 +2129,7 @@ const App = (() => {
             <!-- Row 1: Subject Name & Code -->
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <div style="font-weight: 800; color: #0f172a; font-size: 14px; line-height: 1.3;">
-                ${escHtml(s.name)} ${isPractical && s.batch ? `<span style="display: inline-block; font-size: 11px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(s.batch)}</span>` : ''}
+                ${escHtml(s.name)} ${isPractical && effectiveBatch ? `<span style="display: inline-block; font-size: 11px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(effectiveBatch)}</span>` : ''}
               </div>
               <span style="color: #475569; font-weight: 700; font-size: 12px; flex-shrink: 0;">Code: (${escHtml(s.code)})</span>
             </div>
@@ -3576,17 +3616,9 @@ Generated: ${formatDisplayDate(new Date())}
             classMap[className].validAttCount = (classMap[className].validAttCount || 0) + 1;
           }
 
-          const isPracSub = isPracticalSubject(s);
-          let assignedBatch = s.batch || '';
-          if (!assignedBatch && isPracSub) {
-            const existingSame = classMap[className].semesters[semKey].subjectsList.filter(item => item.code === s.code);
-            assignedBatch = 'Batch ' + String.fromCharCode(65 + existingSame.length);
-          }
-
           classMap[className].semesters[semKey].subjectsList.push({
             ...s,
             facultyName: facultyName,
-            batch: assignedBatch,
             attendancePct: liveSubAtt
           });
         });
@@ -3641,6 +3673,25 @@ Generated: ${formatDisplayDate(new Date())}
             const subType = String(s.type || s.category || s.subjectType || '').trim().toLowerCase();
             const isPractical = subCode.endsWith('P') || subCode.endsWith('PR') || subCode.includes('PRACTICAL') || subCode.includes('LAB') || subName.includes('practical') || subName.includes('lab') || subType === 'practical' || subType === 'lab';
             const unitLabel = isPractical ? 'practicals' : 'lectures';
+            const effectiveBatch = (s.batch && String(s.batch).trim()) ? String(s.batch).trim() : (isPractical ? (function() {
+              const allSubs = (state.allData && state.allData.subjects) || [];
+              const matchedMaster = allSubs.find(sub => sub.code === s.code);
+              if (matchedMaster && matchedMaster.faculty) {
+                const facArr = String(matchedMaster.faculty).split(',').map(x => x.trim().toLowerCase());
+                const fIdx = facArr.indexOf(String(s.facultyName || '').trim().toLowerCase());
+                if (fIdx !== -1) return 'Batch ' + String.fromCharCode(65 + fIdx);
+              }
+              const inchargeFacs = (state.inchargeDashboard && state.inchargeDashboard.faculties) || [];
+              const listForSub = [];
+              inchargeFacs.forEach(f => {
+                if (f.faculty && f.faculty.toLowerCase() !== 'unassigned') {
+                  const hasSub = (f.subjects || []).some(sub => sub.code === s.code);
+                  if (hasSub && listForSub.indexOf(f.faculty) === -1) listForSub.push(f.faculty);
+                }
+              });
+              const fIdx = listForSub.indexOf(s.facultyName);
+              return fIdx !== -1 ? ('Batch ' + String.fromCharCode(65 + fIdx)) : 'Batch A';
+            })() : '');
 
             subjectItemsHtml += `
               <div style="
@@ -3658,7 +3709,7 @@ Generated: ${formatDisplayDate(new Date())}
                     ${escHtml(s.code || 'SUB')}
                   </span>
                   <span style="font-size: 14px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${escHtml(s.name)} ${isPractical && s.batch ? `<span style="font-size: 10.5px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(s.batch)}</span>` : ''}
+                    ${escHtml(s.name)} ${isPractical && effectiveBatch ? `<span style="font-size: 10.5px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(effectiveBatch)}</span>` : ''}
                   </span>
                 </div>
 
