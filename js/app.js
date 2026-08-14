@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.8)
+ * Academic File PWA — Core Controller (v2.8.1)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
@@ -1764,29 +1764,47 @@ const App = (() => {
 
   // ─── LIVE ATTENDANCE STATS HELPERS ───────────────────────
   async function fetchLiveAttendanceStats() {
-    if (state.liveAttendanceMap) return state.liveAttendanceMap;
+    if (!state.liveAttendanceMap) state.liveAttendanceMap = {};
+
+    // 1. Seed from inchargeDashboard subject averages if available
+    if (state.inchargeDashboard && Array.isArray(state.inchargeDashboard.faculties)) {
+      state.inchargeDashboard.faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          if (s && (s.code || s.name)) {
+            const rawCode = String(s.code || s.name).trim().toUpperCase();
+            const cleanCode = rawCode.replace(/[^A-Z0-9]/g, '');
+            const avgVal = Number(s.avgAttendance || s.attendancePercent || s.attendancePct || s.avgAtt);
+            if (cleanCode && !isNaN(avgVal) && avgVal > 0) {
+              if (!state.liveAttendanceMap[cleanCode]) {
+                state.liveAttendanceMap[cleanCode] = { present: avgVal, total: 100 };
+              }
+            }
+          }
+        });
+      });
+    }
+
     try {
       const attRes = await API.getAttendance('', '');
       if (attRes && attRes.success && Array.isArray(attRes.records)) {
-        const statsMap = {};
         attRes.records.forEach(r => {
           const rawCode = String(r.code || '').trim().toUpperCase();
           const cleanCode = rawCode.replace(/[^A-Z0-9]/g, '');
           if (!cleanCode) return;
-          if (!statsMap[cleanCode]) statsMap[cleanCode] = { present: 0, total: 0 };
-          statsMap[cleanCode].total++;
+          if (!state.liveAttendanceMap[cleanCode] || state.liveAttendanceMap[cleanCode].total === 100) {
+            state.liveAttendanceMap[cleanCode] = { present: 0, total: 0 };
+          }
+          state.liveAttendanceMap[cleanCode].total++;
           const stUpper = String(r.status || '').toUpperCase().trim();
           if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
-            statsMap[cleanCode].present++;
+            state.liveAttendanceMap[cleanCode].present++;
           }
         });
-        state.liveAttendanceMap = statsMap;
-        return statsMap;
       }
     } catch (e) {
       console.warn('Failed to fetch live attendance stats:', e);
     }
-    return {};
+    return state.liveAttendanceMap;
   }
 
   function getLiveSubjectAttendancePct(subCode) {
@@ -2755,6 +2773,229 @@ const App = (() => {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
   }
 
+  // ─── DOWNLOAD OFFICIAL DEFAULTERS NOTICE AS .DOCX ─────────
+  function downloadDefaultersNoticeDoc() {
+    const rep = state.activeStudentReport;
+    if (!rep || !rep.studentList || rep.studentList.length === 0) {
+      Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
+      return;
+    }
+
+    const ctx = window.appStartContext || {};
+    const cfg = ctx.config || {};
+    const metaObj = (state.allData && state.allData.metadata) || state.metadata || {};
+
+    const mgmt = ctx.managementName || cfg.management_name || cfg.managementName || metaObj.managementName || (window.ACAD_CONFIG && window.ACAD_CONFIG.managementName) || 'Sinhgad Technical Education Society';
+    const college = ctx.collegeName || cfg.college_name || cfg.collegeName || metaObj.collegeName || (window.ACAD_CONFIG && window.ACAD_CONFIG.collegeName) || 'RMD Institute of Pharmaceutical Education & Research';
+    const ay = cfg.academic_year || cfg.academicYear || cfg.ay || metaObj.academicYear || (window.ACAD_CONFIG && window.ACAD_CONFIG.academicYear) || '2025-26';
+
+    const docMeta = {
+      mgmt: mgmt,
+      college: college,
+      acadYear: ay,
+      className: rep.className || state.activeStudentYear || 'Third Year B. Pharm',
+      periodLabel: rep.periodLabel || 'All Time (Entire Academic Year)',
+      eligibilityThreshold: rep.eligibilityThreshold || 75,
+      defaulterCount: rep.defaulterCount || 0,
+      studentList: rep.studentList || [],
+      subjectColumns: rep.subjectColumns || [],
+      classSubjects: rep.classSubjects || rep.subjectColumns || []
+    };
+
+    const documentXml = buildDefaultersNoticeDocx(docMeta);
+    const enc = new TextEncoder();
+    const blob = zipStore([
+      { name: '[Content_Types].xml', bytes: enc.encode(DOCX_CONTENT_TYPES) },
+      { name: '_rels/.rels', bytes: enc.encode(DOCX_ROOT_RELS) },
+      { name: 'word/document.xml', bytes: enc.encode(documentXml) }
+    ]);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const cleanClass = (docMeta.className || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanAy = String(docMeta.acadYear || '2025-26').replace(/[^a-zA-Z0-9_-]/g, '_');
+    a.download = `Defaulters_Notice_${cleanClass}_${cleanAy}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.show('Downloaded', 'Official Defaulters Notice .docx generated successfully.', 'success');
+  }
+
+  // Build WordprocessingML document.xml for Defaulters Notice.
+  // Matches exact official layout: College & Management Header, Notice body,
+  // 4-Column 2-Up Defaulters list, Subject Teachers Acknowledgment table, and 3 Signatories.
+  function buildDefaultersNoticeDocx(m) {
+    const HEADER_FILL = '383838';      // Charcoal table header
+    const ZEBRA_FILL = 'F6F6F6';       // Subtle alternate row shading
+    const FONT = 'Calibri';            // Universally supported font across desktop & mobile
+
+    const PAGE_W = 11906;              // A4 Portrait dimensions in twips
+    const PAGE_H = 16838;
+    const MARGIN_SIDE = 1080;          // 0.75 in side margins
+    const MARGIN_VERT = 1080;          // 0.75 in top/bottom margins
+    const TEXT_W = PAGE_W - (2 * MARGIN_SIDE); // 9746 twips
+
+    // Helper: Run of text (supports newlines via <w:br/>)
+    const run = (text, { b, color, sz = 20, caps } = {}) => {
+      const size = Math.max(14, sz);
+      const rPr = [`<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/>`];
+      if (b) rPr.push('<w:b/>');
+      if (caps) rPr.push('<w:caps/>');
+      if (color) rPr.push(`<w:color w:val="${color}"/>`);
+      rPr.push(`<w:sz w:val="${size}"/>`);
+      
+      const str = String(text == null ? '' : text);
+      const lines = str.split('\n');
+      const textNodes = lines.map(line => `<w:t xml:space="preserve">${xmlEsc(line)}</w:t>`).join('<w:br/>');
+      
+      return `<w:r><w:rPr>${rPr.join('')}</w:rPr>${textNodes}</w:r>`;
+    };
+
+    // Helper: Paragraph
+    const para = (runsXml, { align, after = 120 } = {}) => {
+      const pPr = [`<w:spacing w:after="${after}" w:line="240" w:lineRule="auto"/>`];
+      if (align) pPr.push(`<w:jc w:val="${align}"/>`);
+      return `<w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml || ''}</w:p>`;
+    };
+
+    // Helper: Table cell
+    const cell = (runsXml, { shade, align = 'left', vAlign = 'center' } = {}) => {
+      const tcPr = [`<w:vAlign w:val="${vAlign}"/>`];
+      if (shade) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${shade}"/>`);
+      const pPr = ['<w:spacing w:before="35" w:after="35" w:line="240" w:lineRule="auto"/>'];
+      if (align) pPr.push(`<w:jc w:val="${align}"/>`);
+      return `<w:tc><w:tcPr>${tcPr.join('')}</w:tcPr><w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml}</w:p></w:tc>`;
+    };
+
+    // Helper: Fixed table builder
+    const table = (cols, rows, { borders = true } = {}) => {
+      const tblWidth = cols.reduce((a, b) => a + b, 0);
+      const grid = `<w:tblGrid>${cols.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+      const bdr = borders
+        ? `<w:tblBorders>
+            <w:top w:val="single" w:sz="4" w:color="7F7F7F"/><w:left w:val="single" w:sz="4" w:color="7F7F7F"/>
+            <w:bottom w:val="single" w:sz="4" w:color="7F7F7F"/><w:right w:val="single" w:sz="4" w:color="7F7F7F"/>
+            <w:insideH w:val="single" w:sz="4" w:color="7F7F7F"/><w:insideV w:val="single" w:sz="4" w:color="7F7F7F"/>
+          </w:tblBorders>`
+        : `<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders>`;
+      return `<w:tbl><w:tblPr>` +
+        `<w:tblW w:w="${tblWidth}" w:type="dxa"/>` +
+        `<w:jc w:val="center"/>` +
+        `<w:tblLayout w:type="fixed"/>` +
+        bdr +
+        `<w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar>` +
+        `</w:tblPr>${grid}${rows}</w:tbl>`;
+    };
+
+    const th = (txt, sz = 19) => run(txt, { b: true, color: 'FFFFFF', sz });
+
+    // ── 1. Defaulters Roster in 2-Up (4-Column) Grid ──
+    const defaulters = (m.studentList || []).filter(st => st.isDefaulter || st.pct < m.eligibilityThreshold);
+    defaulters.sort((a, b) => (parseInt(a.rollNo, 10) || 0) - (parseInt(b.rollNo, 10) || 0));
+
+    const defCols = [1100, 3773, 1100, 3773]; // sum = 9746 twips
+    const defHeaderRow = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>` +
+      cell(th('Roll No.'), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Name of Student'), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Roll No.'), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Name of Student'), { shade: HEADER_FILL, align: 'left' }) +
+      `</w:tr>`;
+
+    let defBodyRows = '';
+    if (defaulters.length === 0) {
+      defBodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+        cell(run(`No defaulters found for this period. (All students have attendance ≥ ${m.eligibilityThreshold}%)`, { b: true, sz: 19 }), { align: 'center' }) +
+        cell(run(''), {}) + cell(run(''), {}) + cell(run(''), {}) +
+        `</w:tr>`;
+    } else {
+      for (let i = 0; i < defaulters.length; i += 2) {
+        const d1 = defaulters[i];
+        const d2 = defaulters[i + 1] || null;
+        const shade = (Math.floor(i / 2) % 2 === 1) ? ZEBRA_FILL : undefined;
+
+        defBodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          cell(run(String(d1.rollNo || ''), { b: true, sz: 19 }), { shade, align: 'center' }) +
+          cell(run(String(d1.name || ''), { sz: 19 }), { shade, align: 'left' }) +
+          cell(run(d2 ? String(d2.rollNo || '') : '', { b: true, sz: 19 }), { shade, align: 'center' }) +
+          cell(run(d2 ? String(d2.name || '') : '', { sz: 19 }), { shade, align: 'left' }) +
+          `</w:tr>`;
+      }
+    }
+    const defaultersTable = table(defCols, defHeaderRow + defBodyRows);
+
+    // ── 2. Subject Teachers Acknowledgment Table ──
+    const ackCols = [5246, 3100, 1400]; // sum = 9746 twips
+    const ackHeaderRow = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>` +
+      cell(th('Subject'), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Teacher'), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Sign'), { shade: HEADER_FILL, align: 'center' }) +
+      `</w:tr>`;
+
+    const subjectSource = (m.classSubjects && m.classSubjects.length > 0) ? m.classSubjects : (m.subjectColumns || []);
+    let ackBodyRows = '';
+
+    if (subjectSource.length === 0) {
+      ackBodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+        cell(run('No active assigned subjects logged.', { sz: 19 }), { align: 'left' }) +
+        cell(run(''), {}) + cell(run(''), {}) +
+        `</w:tr>`;
+    } else {
+      subjectSource.forEach((s, idx) => {
+        const info = formatCompactSubjectHeader(s);
+        const subCode = s.code || info.code || '';
+        const subName = s.name || s.subject || info.fullName || '';
+        const isPrac = info.isPractical || (s.type && String(s.type).toLowerCase().includes('prac'));
+        const typeStr = isPrac ? 'Practical' : 'Theory';
+        const displaySub = subName ? `${subCode} ${subName} – ${typeStr}` : `${subCode} – ${typeStr}`;
+        const teacherName = s.teacherName || s.facultyName || s.faculty || '';
+        const shade = idx % 2 === 1 ? ZEBRA_FILL : undefined;
+
+        ackBodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          cell(run(displaySub, { sz: 18, b: true }), { shade, align: 'left' }) +
+          cell(run(teacherName, { sz: 18 }), { shade, align: 'left' }) +
+          cell(run(' ', { sz: 18 }), { shade, align: 'center' }) +
+          `</w:tr>`;
+      });
+    }
+    const ackTable = table(ackCols, ackHeaderRow + ackBodyRows);
+
+    // ── 3. 3 Signatories Row (Class Teacher / Academic In-charge / Principal) ──
+    const third = Math.floor(TEXT_W / 3);
+    const signCols = [third, third, TEXT_W - (2 * third)];
+    const signTable = table(signCols,
+      `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+      cell(run('Class Teacher', { b: true, sz: 22 }), { align: 'left' }) +
+      cell(run('Academic In-charge', { b: true, sz: 22 }), { align: 'center' }) +
+      cell(run('Principal', { b: true, sz: 22 }), { align: 'right' }) +
+      `</w:tr>`, { borders: false });
+
+    // ── 4. Assemble Document ──
+    const noticeNoticeText = `All the ${m.className} students are informed that below is the list of defaulter students. The students must be present in college for Theory as well as practical otherwise strict action will be taken and will not be eligible for the sessional examination.`;
+
+    const body =
+      para(run(m.mgmt, { b: true, caps: true, sz: 20 }), { align: 'center', after: 30 }) +
+      para(run(m.college, { b: true, sz: 28 }), { align: 'center', after: 50 }) +
+      para(run(`${m.className} Defaulter Students List`, { b: true, caps: true, sz: 24 }), { align: 'center', after: 30 }) +
+      para(run(`Academic Year ${m.acadYear}`, { b: true, sz: 20 }), { align: 'center', after: 180 }) +
+      para(run(noticeNoticeText, { sz: 20 }), { align: 'both', after: 120 }) +
+      para(run(`Defaulters: (${m.periodLabel})`, { b: true, sz: 20 }), { align: 'left', after: 100 }) +
+      defaultersTable +
+      para('', { after: 260 }) +
+      para(run('Subject Teachers Acknowledgment', { b: true, sz: 22 }), { align: 'left', after: 100 }) +
+      ackTable +
+      para('', { after: 750 }) +
+      signTable +
+      `<w:sectPr>` +
+        `<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/>` +
+        `<w:pgMar w:top="${MARGIN_VERT}" w:right="${MARGIN_SIDE}" w:bottom="${MARGIN_VERT}" w:left="${MARGIN_SIDE}" w:header="720" w:footer="720" w:gutter="0"/>` +
+      `</w:sectPr>`;
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
+  }
+
   // ─── ACCREDITATION FILE COMPILER (CARD 15 ACTION) ─────────
   const consoleMessages = [
     "📡 Refreshing lecture logs from Smart Attendance Sheet...",
@@ -2853,10 +3094,6 @@ Generated: ${formatDisplayDate(new Date())}
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // YYYY-MM-DD (build locally to avoid UTC shift)
-    m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
-
     // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26)
     m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
     if (m) {
@@ -2914,13 +3151,12 @@ Generated: ${formatDisplayDate(new Date())}
 
   let activeReportType = 'class';
 
-  function renderReportsPage() {
-    fetchLiveAttendanceStats().catch(() => ({}));
+  async function renderReportsPage() {
+    try {
+      await fetchLiveAttendanceStats().catch(() => ({}));
+    } catch (e) {}
     if (!state.inchargeDashboard || !state.inchargeDashboard.success) {
-      loadInchargeDashboard().then(() => {
-        generateReportType(activeReportType);
-      });
-      return;
+      await loadInchargeDashboard().catch(() => ({}));
     }
     generateReportType(activeReportType);
   }
@@ -2966,14 +3202,12 @@ Generated: ${formatDisplayDate(new Date())}
     }
 
     if (type === 'class') {
-      // 1. Helper to extract class name 100% dynamically from spreadsheet row object (zero hardcoding)
       function extractLiveClassName(item) {
         if (!item) return '';
         const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
         return String(name).trim();
       }
 
-      // 2. Helper to resolve Class name live from subject data (100% dynamic, no hardcoding)
       function resolveSubjectClass(s) {
         const liveName = extractLiveClassName(s);
         if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
@@ -2986,7 +3220,6 @@ Generated: ${formatDisplayDate(new Date())}
         return 'General Academic Class';
       }
 
-      // 3. Group ONLY ASSIGNED subjects from faculties by Class & Semester
       const classMap = {};
 
       faculties.forEach(f => {
@@ -3025,11 +3258,18 @@ Generated: ${formatDisplayDate(new Date())}
             };
           }
 
-          const liveSubAtt = getLiveSubjectAttendancePct(s.code || s.name);
+          let liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && Number(s.avgAttendance) > 0)
+            ? Number(s.avgAttendance)
+            : getLiveSubjectAttendancePct(s.code || s.name);
+          if (liveSubAtt === null && (s.attendancePercent || s.attendancePct || s.avgAtt)) {
+            const fallback = Number(s.attendancePercent || s.attendancePct || s.avgAtt);
+            if (!isNaN(fallback) && fallback > 0) liveSubAtt = fallback;
+          }
+
           classMap[className].subjectsCount++;
           classMap[className].totalLectures += (s.totalLectures || 0);
           classMap[className].totalConducted += (s.totalConducted || 0);
-          if (liveSubAtt !== null) {
+          if (liveSubAtt !== null && !isNaN(liveSubAtt) && liveSubAtt > 0) {
             classMap[className].totalAttPctSum += liveSubAtt;
             classMap[className].validAttCount = (classMap[className].validAttCount || 0) + 1;
           }
@@ -3049,48 +3289,12 @@ Generated: ${formatDisplayDate(new Date())}
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
 
       const classRainbowPalettes = [
-        { // 1. SAPPHIRE BLUE (Cool Royal Blue Glass)
-          bg: 'linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(186, 230, 253, 0.28) 100%)',
-          bottomBorder: 'rgba(2, 132, 199, 0.45)',
-          shadow: '0 8px 24px rgba(2, 132, 199, 0.16)',
-          iconBg: 'rgba(2, 132, 199, 0.15)',
-          iconColor: '#0284c7'
-        },
-        { // 2. CORAL ROSE (Warm Vivid Rose Glass - strong contrast with Blue)
-          bg: 'linear-gradient(135deg, rgba(225, 29, 72, 0.18) 0%, rgba(254, 205, 211, 0.28) 100%)',
-          bottomBorder: 'rgba(225, 29, 72, 0.45)',
-          shadow: '0 8px 24px rgba(225, 29, 72, 0.16)',
-          iconBg: 'rgba(225, 29, 72, 0.15)',
-          iconColor: '#e11d48'
-        },
-        { // 3. EMERALD GREEN (Cool Crisp Green Glass - strong contrast with Rose)
-          bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(167, 243, 208, 0.28) 100%)',
-          bottomBorder: 'rgba(16, 185, 129, 0.45)',
-          shadow: '0 8px 24px rgba(16, 185, 129, 0.16)',
-          iconBg: 'rgba(16, 185, 129, 0.15)',
-          iconColor: '#059669'
-        },
-        { // 4. GOLDEN AMBER (Warm Sunburst Amber Glass - strong contrast with Green)
-          bg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.18) 0%, rgba(254, 240, 138, 0.28) 100%)',
-          bottomBorder: 'rgba(217, 119, 6, 0.45)',
-          shadow: '0 8px 24px rgba(217, 119, 6, 0.16)',
-          iconBg: 'rgba(217, 119, 6, 0.15)',
-          iconColor: '#d97706'
-        },
-        { // 5. AMETHYST VIOLET (Deep Purple Glass - strong contrast with Amber)
-          bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.18) 0%, rgba(221, 214, 254, 0.28) 100%)',
-          bottomBorder: 'rgba(124, 58, 237, 0.45)',
-          shadow: '0 8px 24px rgba(124, 58, 237, 0.16)',
-          iconBg: 'rgba(124, 58, 237, 0.15)',
-          iconColor: '#7c3aed'
-        },
-        { // 6. MANDARIN ORANGE (Warm Tangerine Glass - strong contrast with Purple)
-          bg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.18) 0%, rgba(254, 215, 170, 0.28) 100%)',
-          bottomBorder: 'rgba(234, 88, 12, 0.45)',
-          shadow: '0 8px 24px rgba(234, 88, 12, 0.16)',
-          iconBg: 'rgba(234, 88, 12, 0.15)',
-          iconColor: '#ea580c'
-        }
+        { bg: 'linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(186, 230, 253, 0.28) 100%)', bottomBorder: 'rgba(2, 132, 199, 0.45)', shadow: '0 8px 24px rgba(2, 132, 199, 0.16)', iconBg: 'rgba(2, 132, 199, 0.15)', iconColor: '#0284c7' },
+        { bg: 'linear-gradient(135deg, rgba(225, 29, 72, 0.18) 0%, rgba(254, 205, 211, 0.28) 100%)', bottomBorder: 'rgba(225, 29, 72, 0.45)', shadow: '0 8px 24px rgba(225, 29, 72, 0.16)', iconBg: 'rgba(225, 29, 72, 0.15)', iconColor: '#e11d48' },
+        { bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(167, 243, 208, 0.28) 100%)', bottomBorder: 'rgba(16, 185, 129, 0.45)', shadow: '0 8px 24px rgba(16, 185, 129, 0.16)', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#059669' },
+        { bg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.18) 0%, rgba(254, 240, 138, 0.28) 100%)', bottomBorder: 'rgba(217, 119, 6, 0.45)', shadow: '0 8px 24px rgba(217, 119, 6, 0.16)', iconBg: 'rgba(217, 119, 6, 0.15)', iconColor: '#d97706' },
+        { bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.18) 0%, rgba(221, 214, 254, 0.28) 100%)', bottomBorder: 'rgba(124, 58, 237, 0.45)', shadow: '0 8px 24px rgba(124, 58, 237, 0.16)', iconBg: 'rgba(124, 58, 237, 0.15)', iconColor: '#7c3aed' },
+        { bg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.18) 0%, rgba(254, 215, 170, 0.28) 100%)', bottomBorder: 'rgba(234, 88, 12, 0.45)', shadow: '0 8px 24px rgba(234, 88, 12, 0.16)', iconBg: 'rgba(234, 88, 12, 0.15)', iconColor: '#ea580c' }
       ];
 
       let classNodesHtml = '';
@@ -3101,7 +3305,6 @@ Generated: ${formatDisplayDate(new Date())}
         const isExpanded = activeClassMindmap === clsName;
         const pal = classRainbowPalettes[clsIdx % classRainbowPalettes.length];
 
-        // Render Semesters under this Class
         let semesterBlocksHtml = '';
         const sortedSemKeys = Object.keys(item.semesters).sort((a, b) => item.semesters[a].semNum - item.semesters[b].semNum);
 
@@ -3113,8 +3316,12 @@ Generated: ${formatDisplayDate(new Date())}
           semObj.subjectsList.forEach(s => {
             const sp = s.percent || 0;
             const barColor = 'var(--success, #34c759)';
-            const attVal = s.attendancePct;
-            const attText = (attVal !== null) ? `${attVal}%` : '--%';
+            const attVal = (s.attendancePct !== undefined && s.attendancePct !== null)
+              ? s.attendancePct
+              : ((s.avgAttendance !== undefined && s.avgAttendance !== null && Number(s.avgAttendance) > 0)
+                ? Number(s.avgAttendance)
+                : getLiveSubjectAttendancePct(s.code || s.name));
+            const attText = (attVal !== null && attVal !== undefined && !isNaN(attVal)) ? `${attVal}%` : '--%';
             const attBadgeBg = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.14)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.14)' : 'rgba(255, 59, 48, 0.14)';
             const attBadgeBorder = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.3)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
             const attBadgeColor = (attVal !== null && attVal >= 80) ? 'var(--success, #34c759)' : (attVal !== null && attVal >= 70) ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
@@ -3235,7 +3442,7 @@ Generated: ${formatDisplayDate(new Date())}
       outputEl.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
           <div>
-            <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 900; color: var(--text-main);">Class-Wise Report</h3>
+            <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 900; color: var(--text-main);">🏫 Class-Wise Academic Structure & Attendance</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
               ${escHtml(periodLabel)} · ${classKeys.length} Active Classes · ${totalSubs} assigned subjects
             </span>
@@ -3253,7 +3460,6 @@ Generated: ${formatDisplayDate(new Date())}
         </div>
       `;
     } else if (type === 'student') {
-      // 1. Helper to extract class name 100% dynamically from spreadsheet row object
       function extractLiveClassName(item) {
         if (!item) return '';
         const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
@@ -3271,7 +3477,6 @@ Generated: ${formatDisplayDate(new Date())}
         return 'General Academic Class';
       }
 
-      // 2. Extract distinct active Class/Year names live
       const classNamesSet = {};
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
@@ -3290,7 +3495,6 @@ Generated: ${formatDisplayDate(new Date())}
         state.activeStudentYear = activeClassNames[0];
       }
 
-      // 3. Render Small Year Cards
       let yearCardsHtml = '';
       activeClassNames.forEach(clsName => {
         const isSelected = clsName === state.activeStudentYear;
@@ -3316,7 +3520,7 @@ Generated: ${formatDisplayDate(new Date())}
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">${escHtml(periodLabel)} · Class: <strong>${escHtml(state.activeStudentYear)}</strong></span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-outline" onclick="App.downloadStudentAttendanceDoc()" title="Download print-friendly Word (.docx) report with college header & 3 signature blocks" style="
+            <button class="btn btn-outline" onclick="App.downloadStudentAttendanceDoc()" title="Download full attendance matrix Word (.docx) report with all subjects & signatures" style="
               padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
               display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
               background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(66, 133, 244, 0.4); color: #1d4ed8;
@@ -3324,12 +3528,12 @@ Generated: ${formatDisplayDate(new Date())}
             ">
               <i class="ph ph-file-doc" style="font-size: 15px; color: #2563eb;"></i> Download Report (.docx)
             </button>
-            <button class="btn btn-primary" onclick="window.print()" style="
+            <button class="btn btn-primary" onclick="App.downloadDefaultersNoticeDoc()" title="Generate and download official Defaulters Notice (.docx) with 4-column defaulters table, subject teachers acknowledgment & 3 signatures" style="
               padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
               display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-              background: #8b5cf6; border: none; color: #fff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+              background: #dc2626; border: none; color: #fff; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
             ">
-              Generate Defaulters Notice <i class="ph ph-printer" style="font-size: 14px;"></i>
+              <i class="ph ph-file-doc" style="font-size: 15px; color: #fff;"></i> Generate Defaulters Notice (.docx)
             </button>
           </div>
         </div>
@@ -3504,6 +3708,7 @@ Generated: ${formatDisplayDate(new Date())}
       const subCodeSet = {};
 
       faculties.forEach(f => {
+        const facName = String(f.faculty || '').trim();
         (f.subjects || []).forEach(s => {
           if (!s) return;
           const liveClass = (s.year || s.className || s.class || '').trim();
@@ -3514,6 +3719,7 @@ Generated: ${formatDisplayDate(new Date())}
               if (enriched && enriched.outputSheetId) {
                 s.outputSheetId = enriched.outputSheetId;
               }
+              s.teacherName = facName;
               classSubjects.push(s);
             }
           }
@@ -3529,6 +3735,7 @@ Generated: ${formatDisplayDate(new Date())}
           if (!liveClass || liveClass.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
             if (!subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
+              s.teacherName = s.teacherName || s.faculty || s.facultyName || '';
               classSubjects.push(s);
             }
           }
@@ -3817,6 +4024,7 @@ Generated: ${formatDisplayDate(new Date())}
         className: className,
         studentList: studentList,
         subjectColumns: subjectColumns,
+        classSubjects: classSubjects,
         defaulterCount: defaulterCount,
         eligibilityThreshold: eligibilityThreshold,
         periodLabel: periodLabel
@@ -3891,6 +4099,7 @@ Generated: ${formatDisplayDate(new Date())}
     triggerManualSync,
     downloadTeachingPlanDoc,
     downloadStudentAttendanceDoc,
+    downloadDefaultersNoticeDoc,
     filterTeachingPlan,
     saveTopicRemark,
     startCompilation,
