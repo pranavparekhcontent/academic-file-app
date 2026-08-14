@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.8.1)
+ * Academic File PWA — Core Controller (v2.8.2)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
@@ -2838,7 +2838,7 @@ const App = (() => {
     const TEXT_W = PAGE_W - (2 * MARGIN_SIDE); // 9746 twips
 
     // Helper: Run of text (supports newlines via <w:br/>)
-    const run = (text, { b, color, sz = 20, caps } = {}) => {
+    const run = (text, { b, color, sz = 24, caps } = {}) => {
       const size = Math.max(14, sz);
       const rPr = [`<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/>`];
       if (b) rPr.push('<w:b/>');
@@ -2854,8 +2854,8 @@ const App = (() => {
     };
 
     // Helper: Paragraph
-    const para = (runsXml, { align, after = 120 } = {}) => {
-      const pPr = [`<w:spacing w:after="${after}" w:line="240" w:lineRule="auto"/>`];
+    const para = (runsXml, { align, after = 120, before = 0, line = 240 } = {}) => {
+      const pPr = [`<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="auto"/>`];
       if (align) pPr.push(`<w:jc w:val="${align}"/>`);
       return `<w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml || ''}</w:p>`;
     };
@@ -2885,11 +2885,11 @@ const App = (() => {
         `<w:jc w:val="center"/>` +
         `<w:tblLayout w:type="fixed"/>` +
         bdr +
-        `<w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar>` +
+        `<w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar>` +
         `</w:tblPr>${grid}${rows}</w:tbl>`;
     };
 
-    const th = (txt, sz = 19) => run(txt, { b: true, color: 'FFFFFF', sz });
+    const th = (txt, sz = 26) => run(txt, { b: true, color: 'FFFFFF', sz }); // 13pt bold
 
     // ── 1. Defaulters Roster in 2-Up (4-Column) Grid ──
     const defaulters = (m.studentList || []).filter(st => st.isDefaulter || st.pct < m.eligibilityThreshold);
@@ -2897,17 +2897,17 @@ const App = (() => {
 
     const defCols = [1100, 3773, 1100, 3773]; // sum = 9746 twips
     const defHeaderRow = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>` +
-      cell(th('Roll No.'), { shade: HEADER_FILL, align: 'center' }) +
-      cell(th('Name of Student'), { shade: HEADER_FILL, align: 'left' }) +
-      cell(th('Roll No.'), { shade: HEADER_FILL, align: 'center' }) +
-      cell(th('Name of Student'), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Roll No.', 26), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Name of Student', 26), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Roll No.', 26), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Name of Student', 26), { shade: HEADER_FILL, align: 'left' }) +
       `</w:tr>`;
 
     let defBodyRows = '';
     if (defaulters.length === 0) {
       defBodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-        cell(run(`No defaulters found for this period. (All students have attendance ≥ ${m.eligibilityThreshold}%)`, { b: true, sz: 19 }), { align: 'center' }) +
-        cell(run(''), {}) + cell(run(''), {}) + cell(run(''), {}) +
+        cell(run(`No defaulters found for this period. (All students have attendance ≥ ${m.eligibilityThreshold}%)`, { b: true, sz: 24 }), { align: 'center' }) +
+        cell(run('', { sz: 24 }), {}) + cell(run('', { sz: 24 }), {}) + cell(run('', { sz: 24 }), {}) +
         `</w:tr>`;
     } else {
       for (let i = 0; i < defaulters.length; i += 2) {
@@ -2916,10 +2916,10 @@ const App = (() => {
         const shade = (Math.floor(i / 2) % 2 === 1) ? ZEBRA_FILL : undefined;
 
         defBodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-          cell(run(String(d1.rollNo || ''), { b: true, sz: 19 }), { shade, align: 'center' }) +
-          cell(run(String(d1.name || ''), { sz: 19 }), { shade, align: 'left' }) +
-          cell(run(d2 ? String(d2.rollNo || '') : '', { b: true, sz: 19 }), { shade, align: 'center' }) +
-          cell(run(d2 ? String(d2.name || '') : '', { sz: 19 }), { shade, align: 'left' }) +
+          cell(run(String(d1.rollNo || ''), { b: true, sz: 24 }), { shade, align: 'center' }) +
+          cell(run(String(d1.name || ''), { sz: 24 }), { shade, align: 'left' }) +
+          cell(run(d2 ? String(d2.rollNo || '') : '', { b: true, sz: 24 }), { shade, align: 'center' }) +
+          cell(run(d2 ? String(d2.name || '') : '', { sz: 24 }), { shade, align: 'left' }) +
           `</w:tr>`;
       }
     }
@@ -2928,9 +2928,9 @@ const App = (() => {
     // ── 2. Subject Teachers Acknowledgment Table ──
     const ackCols = [5246, 3100, 1400]; // sum = 9746 twips
     const ackHeaderRow = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>` +
-      cell(th('Subject'), { shade: HEADER_FILL, align: 'left' }) +
-      cell(th('Teacher'), { shade: HEADER_FILL, align: 'left' }) +
-      cell(th('Sign'), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Subject', 26), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Teacher', 26), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Sign', 26), { shade: HEADER_FILL, align: 'center' }) +
       `</w:tr>`;
 
     const subjectSource = (m.classSubjects && m.classSubjects.length > 0) ? m.classSubjects : (m.subjectColumns || []);
@@ -2938,8 +2938,8 @@ const App = (() => {
 
     if (subjectSource.length === 0) {
       ackBodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-        cell(run('No active assigned subjects logged.', { sz: 19 }), { align: 'left' }) +
-        cell(run(''), {}) + cell(run(''), {}) +
+        cell(run('No active assigned subjects logged.', { sz: 24 }), { align: 'left' }) +
+        cell(run('', { sz: 24 }), {}) + cell(run('', { sz: 24 }), {}) +
         `</w:tr>`;
     } else {
       subjectSource.forEach((s, idx) => {
@@ -2952,10 +2952,10 @@ const App = (() => {
         const teacherName = s.teacherName || s.facultyName || s.faculty || '';
         const shade = idx % 2 === 1 ? ZEBRA_FILL : undefined;
 
-        ackBodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-          cell(run(displaySub, { sz: 18, b: true }), { shade, align: 'left' }) +
-          cell(run(teacherName, { sz: 18 }), { shade, align: 'left' }) +
-          cell(run(' ', { sz: 18 }), { shade, align: 'center' }) +
+        ackBodyRows += `<w:tr><w:trPr><w:trHeight w:val="450" w:hRule="atLeast"/><w:cantSplit/></w:trPr>` +
+          cell(run(displaySub, { sz: 24, b: true }), { shade, align: 'left' }) +
+          cell(run(teacherName, { sz: 24 }), { shade, align: 'left' }) +
+          cell(run(' ', { sz: 24 }), { shade, align: 'center' }) +
           `</w:tr>`;
       });
     }
@@ -2966,26 +2966,26 @@ const App = (() => {
     const signCols = [third, third, TEXT_W - (2 * third)];
     const signTable = table(signCols,
       `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-      cell(run('Class Teacher', { b: true, sz: 22 }), { align: 'left' }) +
-      cell(run('Academic In-charge', { b: true, sz: 22 }), { align: 'center' }) +
-      cell(run('Principal', { b: true, sz: 22 }), { align: 'right' }) +
+      cell(run('Class Teacher', { b: true, sz: 26 }), { align: 'left' }) +
+      cell(run('Academic In-charge', { b: true, sz: 26 }), { align: 'center' }) +
+      cell(run('Principal', { b: true, sz: 26 }), { align: 'right' }) +
       `</w:tr>`, { borders: false });
 
     // ── 4. Assemble Document ──
     const noticeNoticeText = `All the ${m.className} students are informed that below is the list of defaulter students. The students must be present in college for Theory as well as practical otherwise strict action will be taken and will not be eligible for the sessional examination.`;
 
     const body =
-      para(run(m.mgmt, { b: true, caps: true, sz: 20 }), { align: 'center', after: 30 }) +
-      para(run(m.college, { b: true, sz: 28 }), { align: 'center', after: 50 }) +
-      para(run(`${m.className} Defaulter Students List`, { b: true, caps: true, sz: 24 }), { align: 'center', after: 30 }) +
-      para(run(`Academic Year ${m.acadYear}`, { b: true, sz: 20 }), { align: 'center', after: 180 }) +
-      para(run(noticeNoticeText, { sz: 20 }), { align: 'both', after: 120 }) +
-      para(run(`Defaulters: (${m.periodLabel})`, { b: true, sz: 20 }), { align: 'left', after: 100 }) +
+      para(run(m.mgmt, { b: true, caps: true, sz: 24 }), { align: 'center', after: 30 }) +
+      para(run(m.college, { b: true, sz: 28 }), { align: 'center', after: 40 }) +
+      para(run(`${m.className} Defaulter Students List`, { b: true, sz: 28 }), { align: 'center', after: 30 }) +
+      para(run(`Academic Year ${m.acadYear}`, { b: true, sz: 26 }), { align: 'center', after: 180 }) +
+      para(run(noticeNoticeText, { sz: 24 }), { align: 'both', after: 140, line: 260 }) +
+      para(run(`Defaulters: (${m.periodLabel})`, { b: true, sz: 26 }), { align: 'left', after: 100 }) +
       defaultersTable +
       para('', { after: 260 }) +
-      para(run('Subject Teachers Acknowledgment', { b: true, sz: 22 }), { align: 'left', after: 100 }) +
+      para(run('Subject Teachers Acknowledgment', { b: true, sz: 28 }), { align: 'left', before: 180, after: 100 }) +
       ackTable +
-      para('', { after: 750 }) +
+      para('', { after: 850 }) +
       signTable +
       `<w:sectPr>` +
         `<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/>` +
