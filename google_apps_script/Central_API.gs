@@ -2334,3 +2334,6 @@ function getTaughtTopics(code, outputSheetId, sheetId) {
   } catch (e) { return { success: false, error: e.message }; }
 }
 
+
+
+function test() { var res = getTeachingPlan('BP704T', '', '1RwP0Yurjx_T9nCmnl4YYv_wowUbC3Py3'); Logger.log(JSON.stringify(res)); return res; }
