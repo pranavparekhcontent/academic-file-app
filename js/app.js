@@ -3013,18 +3013,30 @@ const App = (() => {
           };
         }
 
-        const isDup = classMap[className].subjects.some(existing => existing.code === s.code && existing.facultyName === facultyName);
+        const isPrac = isPracticalSubject(s);
+        const allSubs = (state.allData && state.allData.subjects) || [];
+        const matchedMaster = allSubs.find(sub => sub.code === s.code);
+        const rawBatches = String((s.batches !== undefined ? s.batches : (matchedMaster && matchedMaster.batches)) || '').trim();
+        const hasMultiFaculty = (s.faculty && s.faculty.includes(',')) || (matchedMaster && matchedMaster.faculty && matchedMaster.faculty.includes(','));
+
+        let assignedBatch = s.batch || '';
+        if (!assignedBatch && isPrac) {
+          const sameCodeSubs = classMap[className].subjects.filter(existing => existing.code === s.code);
+          assignedBatch = 'Batch ' + String.fromCharCode(65 + sameCodeSubs.length);
+        }
+
+        const isDup = classMap[className].subjects.some(existing => existing.code === s.code && existing.batch === assignedBatch && existing.originalFaculty === facultyName);
         if (!isDup) {
-          const isPrac = isPracticalSubject(s);
-          let assignedBatch = s.batch || '';
-          if (!assignedBatch && isPrac) {
-            const sameCodeSubs = classMap[className].subjects.filter(existing => existing.code === s.code);
-            assignedBatch = 'Batch ' + String.fromCharCode(65 + sameCodeSubs.length);
+          let displayFaculty = facultyName;
+          // If multi-faculty practical course has no Column I batch configuration, show ? for faculty accountability
+          if (isPrac && hasMultiFaculty && !rawBatches) {
+            displayFaculty = '?';
           }
 
           classMap[className].subjects.push({
             ...s,
-            facultyName: facultyName,
+            facultyName: displayFaculty,
+            originalFaculty: facultyName,
             batch: assignedBatch
           });
         }
