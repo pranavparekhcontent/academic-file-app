@@ -3576,9 +3576,17 @@ Generated: ${formatDisplayDate(new Date())}
             classMap[className].validAttCount = (classMap[className].validAttCount || 0) + 1;
           }
 
+          const isPracSub = isPracticalSubject(s);
+          let assignedBatch = s.batch || '';
+          if (!assignedBatch && isPracSub) {
+            const existingSame = classMap[className].semesters[semKey].subjectsList.filter(item => item.code === s.code);
+            assignedBatch = 'Batch ' + String.fromCharCode(65 + existingSame.length);
+          }
+
           classMap[className].semesters[semKey].subjectsList.push({
             ...s,
             facultyName: facultyName,
+            batch: assignedBatch,
             attendancePct: liveSubAtt
           });
         });
