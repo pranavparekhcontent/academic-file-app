@@ -896,7 +896,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v37_' + sheetId;
+  var cacheKey = 'dash_v39_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1003,6 +1003,27 @@ function getInchargeDashboard(sheetId) {
               if (colIdxSyllabus === -1) colIdxSyllabus = 2;
               if (colIdxExecuted === -1) colIdxExecuted = (colIdxPlanned !== -1 ? colIdxPlanned + 1 : 4);
 
+              // Check top rows for explicit Total Lectures / Practical cell written by teacher
+              var headerTotalPlanned = 0;
+              try {
+                for (var hr = 0; hr < Math.min(sheetData.length, 20); hr++) {
+                  for (var hc = 0; hc < sheetData[hr].length; hc++) {
+                    var cellVal = String(sheetData[hr][hc] || '').toLowerCase().trim();
+                    if (cellVal.indexOf('total lectures/practical') !== -1 || cellVal.indexOf('total lectures') !== -1 || cellVal.indexOf('total practicals') !== -1 || cellVal.indexOf('total planned') !== -1) {
+                      for (var hc2 = hc + 1; hc2 < sheetData[hr].length; hc2++) {
+                        var val = parseInt(sheetData[hr][hc2]);
+                        if (!isNaN(val) && val > 0) {
+                          headerTotalPlanned = val;
+                          break;
+                        }
+                      }
+                    }
+                    if (headerTotalPlanned > 0) break;
+                  }
+                  if (headerTotalPlanned > 0) break;
+                }
+              } catch(e) {}
+
               var topicsCount = 0;
               var conductedCount = 0;
 
@@ -1016,7 +1037,7 @@ function getInchargeDashboard(sheetId) {
                 if (!syllabus) {
                   for (var c = 0; c < row.length; c++) {
                     var strCell = String(row[c] || '').trim();
-                    if (strCell.length > 5 && !isDateOrNumberVal(row[c]) && strCell.indexOf('Total') === -1 && strCell.indexOf('Signature') === -1) {
+                    if (strCell.length > 0 && !isDateOrNumberVal(row[c]) && strCell.indexOf('Total') === -1 && strCell.indexOf('Signature') === -1) {
                       syllabus = strCell;
                       break;
                     }
@@ -1031,7 +1052,8 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
-              var statsObj = { totalLectures: topicsCount, totalConducted: conductedCount };
+              var finalPlannedTopics = (headerTotalPlanned > 0) ? headerTotalPlanned : topicsCount;
+              var statsObj = { totalLectures: finalPlannedTopics, totalConducted: conductedCount };
 
               // Match this tab stats to any subject code
               for (var c = 0; c < distinctCodes.length; c++) {
@@ -1175,8 +1197,8 @@ function getInchargeDashboard(sheetId) {
         var subAvgAtt = attendanceAvgMap[sCode] || 0;
 
         var finalConducted = Math.max(info.totalConducted || 0, attConducted);
-        var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : Math.max(finalConducted, 45);
-        var finalPct = finalTotal > 0 ? Math.min(100, Math.round((finalConducted / finalTotal) * 100)) : 0;
+        var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : finalConducted;
+        var finalPct = finalTotal > 0 ? Math.round((finalConducted / finalTotal) * 100) : 0;
 
         subs[s].totalLectures = finalTotal;
         subs[s].totalConducted = finalConducted;
@@ -1191,7 +1213,7 @@ function getInchargeDashboard(sheetId) {
         }
       }
 
-      var facPct = facLectures > 0 ? Math.min(100, Math.round((facConducted / facLectures) * 100)) : 0;
+      var facPct = facLectures > 0 ? Math.round((facConducted / facLectures) * 100) : 0;
       var facAvgAtt = facAttCount > 0 ? Math.round(facAttSum / facAttCount) : 0;
 
       grandTotalLectures += facLectures;
@@ -1209,7 +1231,7 @@ function getInchargeDashboard(sheetId) {
       });
     }
 
-    var avgCoverage = grandTotalLectures > 0 ? Math.min(100, Math.round((grandTotalConducted / grandTotalLectures) * 100)) : 0;
+    var avgCoverage = grandTotalLectures > 0 ? Math.round((grandTotalConducted / grandTotalLectures) * 100) : 0;
     var overallCollegeAvgAtt = totalCollegeAttMarks > 0 ? Math.round((totalCollegeP / totalCollegeAttMarks) * 100) : 0;
 
     var result = {

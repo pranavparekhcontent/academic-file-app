@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.8.3)
+ * Academic File PWA — Core Controller (v2.8.4)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
@@ -3554,7 +3554,7 @@ Generated: ${formatDisplayDate(new Date())}
       let subjectRows = '';
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
-          const pct = s.totalLectures > 0 ? Math.min(100, Math.round(((s.totalConducted || 0) / s.totalLectures) * 100)) : 0;
+          const pct = s.totalLectures > 0 ? Math.round(((s.totalConducted || 0) / s.totalLectures) * 100) : 0;
           const statusBadge = pct >= 80 ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Completed / On Track</span>' :
                               pct >= 50 ? '<span style="background: rgba(2,132,199,0.15); color: #0284c7; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">In Progress</span>' :
                               '<span style="background: rgba(245,158,11,0.15); color: #d97706; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px;">Needs Conduction</span>';
@@ -3568,7 +3568,7 @@ Generated: ${formatDisplayDate(new Date())}
               <td style="padding: 12px 14px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <div style="flex: 1; height: 8px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden; min-width: 70px;">
-                    <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px;"></div>
+                    <div style="width: ${Math.min(100, pct)}%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px;"></div>
                   </div>
                   <span style="font-weight: 900; color: #0f172a; font-size: 12px;">${pct}%</span>
                 </div>
