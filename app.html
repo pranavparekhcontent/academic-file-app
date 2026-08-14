@@ -404,17 +404,24 @@
             <div class="file-preview-backdrop" onclick="App.closeFilePreview()"></div>
             <div class="file-preview-content">
               <div class="file-preview-header">
-                <h3 id="file-preview-title">File Preview</h3>
-                <div style="display: flex; gap: 8px;">
-                  <a id="file-preview-open" href="#" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 8px 16px;">
-                    <i class="ph ph-arrow-square-out"></i> Open in Drive
-                  </a>
-                  <button class="btn-lock" onclick="App.closeFilePreview()" style="width: 36px; height: 36px; border-radius: 50%;">
-                    <i class="ph ph-x"></i>
+                <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                  <i class="ph ph-file-text" style="font-size: 22px; color: #38bdf8; flex-shrink: 0;"></i>
+                  <h3 id="file-preview-title">File Preview</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                  <button type="button" id="file-preview-download-btn" class="btn-preview-download" onclick="App.downloadCurrentPreviewFile()" title="Download Original File">
+                    <i class="ph ph-download-simple" style="font-size: 15px;"></i> Download File
+                  </button>
+                  <button type="button" class="btn-preview-close" onclick="App.closeFilePreview()" title="Close Preview">
+                    <i class="ph ph-x" style="font-size: 16px;"></i>
                   </button>
                 </div>
               </div>
-              <iframe id="file-preview-iframe" src="" style="width: 100%; flex: 1; border: none; border-radius: 0 0 var(--radius-xl) var(--radius-xl);"></iframe>
+              <div class="file-preview-frame-container" style="position: relative; width: 100%; flex: 1; overflow: hidden; background: #0f172a;">
+                <iframe id="file-preview-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+                <!-- Pop-out blocker shield covering Google Drive's top-right pop-out icon -->
+                <div class="drive-popout-shield"></div>
+              </div>
             </div>
           </div>
         </div>

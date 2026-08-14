@@ -1,5 +1,5 @@
 /**
- * Academic File PWA — Core Controller (v2.1)
+ * Academic File PWA — Core Controller (v2.8)
  * Manages states, inputs, syncing, auto-match remarks, averages, and compiler.
  */
 
@@ -1641,14 +1641,19 @@ const App = (() => {
           const isUpdated = changedIds.has(f.id);
 
           return `
-            <div class="schedule-file-card" data-preview-url="${_escAttr(previewUrl)}" data-file-name="${_escAttr(f.name)}" data-drive-url="${_escAttr(f.webViewLink || '')}" onclick="App.handleFileCardClick(this)" style="--i:${i}; animation-delay: ${i * 0.06}s;">
+            <div class="schedule-file-card" data-preview-url="${_escAttr(previewUrl)}" data-file-name="${_escAttr(f.name)}" data-file-id="${_escAttr(f.id)}" onclick="App.handleFileCardClick(this)" style="--i:${i}; animation-delay: ${i * 0.05}s;">
               ${isUpdated ? '<span class="file-update-pip">NEW</span>' : ''}
               <div class="schedule-file-thumb" style="${thumbUrl ? `background-image: url('${_escAttr(thumbUrl)}');` : ''}">
-                ${!thumbUrl ? `<i class="ph ${icon}" style="font-size: 40px; color: ${color};"></i>` : ''}
+                ${!thumbUrl ? `<i class="ph ${icon}" style="font-size: 44px; color: ${color};"></i>` : ''}
               </div>
               <div class="schedule-file-info">
                 <span class="schedule-file-name" title="${_escAttr(f.name)}">${escHtml(displayName)}</span>
-                ${ext ? `<span class="schedule-file-ext" style="color: ${color};">${ext}</span>` : ''}
+                ${ext ? `<span class="schedule-file-ext" style="color: ${color}; font-weight: 800;">${ext}</span>` : ''}
+              </div>
+              <div class="schedule-file-actions" onclick="event.stopPropagation()">
+                <button type="button" class="btn-card-download" onclick="App.downloadDriveFile('${_escAttr(f.id)}', '${_escAttr(f.name)}', event)" title="Download original ${escHtml(f.name)}">
+                  <i class="ph ph-download-simple" style="font-size: 14px;"></i> Download
+                </button>
               </div>
             </div>
           `;
@@ -1696,23 +1701,24 @@ const App = (() => {
       .replace(/>/g, '&gt;');
   }
 
+  let activePreviewFile = { id: '', name: '', previewUrl: '' };
+
   function handleFileCardClick(el) {
     if (!el) return;
     const previewUrl = el.getAttribute('data-preview-url') || '';
     const fileName = el.getAttribute('data-file-name') || '';
-    const driveUrl = el.getAttribute('data-drive-url') || '';
-    openFilePreview(previewUrl, fileName, driveUrl);
+    const fileId = el.getAttribute('data-file-id') || '';
+    openFilePreview(previewUrl, fileName, fileId);
   }
 
-  function openFilePreview(previewUrl, fileName, driveUrl) {
+  function openFilePreview(previewUrl, fileName, fileId) {
     const modal = document.getElementById('file-preview-modal');
     const iframe = document.getElementById('file-preview-iframe');
     const title = document.getElementById('file-preview-title');
-    const openBtn = document.getElementById('file-preview-open');
     if (!modal) return;
-    title.innerText = fileName || 'File Preview';
-    iframe.src = previewUrl;
-    if (openBtn) openBtn.href = driveUrl || '#';
+    activePreviewFile = { id: fileId || '', name: fileName || 'File Preview', previewUrl: previewUrl || '' };
+    if (title) title.innerText = fileName || 'File Preview';
+    if (iframe) iframe.src = previewUrl;
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
   }
@@ -1722,7 +1728,38 @@ const App = (() => {
     const iframe = document.getElementById('file-preview-iframe');
     if (modal) modal.style.display = 'none';
     if (iframe) iframe.src = '';
+    activePreviewFile = { id: '', name: '', previewUrl: '' };
     document.body.style.overflow = '';
+  }
+
+  function downloadDriveFile(fileId, fileName, event) {
+    if (event) {
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+    }
+    if (!fileId) {
+      Toast.show('Download Unavailable', 'File ID is missing for this document.', 'warning');
+      return;
+    }
+    // Google Drive direct export download URL
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName || 'document';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    Toast.show('Download Started', `Downloading "${fileName || 'document'}"...`, 'info');
+  }
+
+  function downloadCurrentPreviewFile() {
+    if (!activePreviewFile.id) {
+      Toast.show('Download Unavailable', 'No active file found to download.', 'warning');
+      return;
+    }
+    downloadDriveFile(activePreviewFile.id, activePreviewFile.name);
   }
 
   // ─── LIVE ATTENDANCE STATS HELPERS ───────────────────────
@@ -1918,77 +1955,95 @@ const App = (() => {
     }
 
     const rainbowGlassPalettes = [
-      { // 1. VIOLET (Purple 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(196, 181, 253, 0.32) 100%)',
-        bottomBorder: 'rgba(139, 92, 246, 0.50)',
-        shadow: 'rgba(139, 92, 246, 0.22)',
-        title: '#4c1d95', icon: '#7c3aed', subText: '#5b21b6',
-        badgeBg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.92), rgba(167, 139, 250, 0.98))',
-        badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(196, 181, 253, 0.70)'
-      },
-      { // 2. INDIGO (Ultramarine 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.22) 0%, rgba(199, 210, 254, 0.32) 100%)',
-        bottomBorder: 'rgba(99, 102, 241, 0.50)',
-        shadow: 'rgba(99, 102, 241, 0.22)',
-        title: '#1e1b4b', icon: '#4f46e5', subText: '#3730a3',
-        badgeBg: 'linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(129, 140, 248, 0.98))',
-        badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(199, 210, 254, 0.70)'
-      },
-      { // 3. BLUE (Sapphire Light Blue 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.22) 0%, rgba(186, 230, 253, 0.32) 100%)',
-        bottomBorder: 'rgba(0, 122, 255, 0.50)',
-        shadow: 'rgba(0, 122, 255, 0.22)',
+      { // 1. SAPPHIRE BLUE (Cool Royal Blue Glass)
+        bg: 'linear-gradient(135deg, rgba(2, 132, 199, 0.20) 0%, rgba(186, 230, 253, 0.32) 100%)',
+        bottomBorder: 'rgba(2, 132, 199, 0.55)',
+        shadow: 'rgba(2, 132, 199, 0.22)',
         title: '#0c4a6e', icon: '#0284c7', subText: '#0369a1',
-        badgeBg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.92), rgba(0, 195, 255, 0.98))',
+        badgeBg: 'linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(186, 230, 253, 0.70)'
+        subBorder: 'rgba(186, 230, 253, 0.80)'
       },
-      { // 4. CYAN (Teal 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(6, 182, 212, 0.22) 0%, rgba(165, 243, 252, 0.32) 100%)',
-        bottomBorder: 'rgba(6, 182, 212, 0.50)',
-        shadow: 'rgba(6, 182, 212, 0.22)',
-        title: '#164e63', icon: '#0891b2', subText: '#0e7490',
-        badgeBg: 'linear-gradient(135deg, rgba(13, 148, 136, 0.92), rgba(45, 212, 191, 0.98))',
+      { // 2. CORAL ROSE / CRIMSON (Warm Vivid Rose Glass - strong contrast with Blue)
+        bg: 'linear-gradient(135deg, rgba(225, 29, 72, 0.18) 0%, rgba(254, 205, 211, 0.32) 100%)',
+        bottomBorder: 'rgba(225, 29, 72, 0.50)',
+        shadow: 'rgba(225, 29, 72, 0.22)',
+        title: '#881337', icon: '#e11d48', subText: '#9f1239',
+        badgeBg: 'linear-gradient(135deg, rgba(225, 29, 72, 0.95), rgba(251, 113, 133, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(165, 243, 252, 0.70)'
+        subBorder: 'rgba(254, 205, 211, 0.80)'
       },
-      { // 5. GREEN (Emerald 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(167, 243, 208, 0.32) 100%)',
-        bottomBorder: 'rgba(16, 185, 129, 0.50)',
+      { // 3. EMERALD GREEN (Cool Crisp Green Glass - strong contrast with Rose)
+        bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.20) 0%, rgba(167, 243, 208, 0.32) 100%)',
+        bottomBorder: 'rgba(16, 185, 129, 0.55)',
         shadow: 'rgba(16, 185, 129, 0.22)',
         title: '#064e3b', icon: '#059669', subText: '#047857',
-        badgeBg: 'linear-gradient(135deg, rgba(5, 150, 105, 0.92), rgba(52, 211, 153, 0.98))',
+        badgeBg: 'linear-gradient(135deg, rgba(5, 150, 105, 0.95), rgba(52, 211, 153, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(167, 243, 208, 0.70)'
+        subBorder: 'rgba(167, 243, 208, 0.80)'
       },
-      { // 6. LIME (Spring Lime 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(132, 204, 22, 0.22) 0%, rgba(217, 249, 157, 0.32) 100%)',
-        bottomBorder: 'rgba(132, 204, 22, 0.50)',
-        shadow: 'rgba(132, 204, 22, 0.22)',
-        title: '#365314', icon: '#65a30d', subText: '#4d7c0f',
-        badgeBg: 'linear-gradient(135deg, rgba(101, 163, 13, 0.92), rgba(163, 230, 53, 0.98))',
+      { // 4. GOLDEN AMBER (Warm Sunburst Amber Glass - strong contrast with Green)
+        bg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.18) 0%, rgba(254, 240, 138, 0.32) 100%)',
+        bottomBorder: 'rgba(217, 119, 6, 0.50)',
+        shadow: 'rgba(217, 119, 6, 0.22)',
+        title: '#713f12', icon: '#d97706', subText: '#854d0e',
+        badgeBg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.95), rgba(251, 191, 36, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(217, 249, 157, 0.70)'
+        subBorder: 'rgba(254, 240, 138, 0.80)'
       },
-      { // 7. AMBER / GOLD (Sunburst 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(253, 230, 138, 0.32) 100%)',
-        bottomBorder: 'rgba(245, 158, 11, 0.50)',
-        shadow: 'rgba(245, 158, 11, 0.22)',
-        title: '#78350f', icon: '#d97706', subText: '#b45309',
-        badgeBg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.92), rgba(251, 191, 36, 0.98))',
+      { // 5. AMETHYST VIOLET (Deep Purple Glass - strong contrast with Amber)
+        bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.19) 0%, rgba(221, 214, 254, 0.32) 100%)',
+        bottomBorder: 'rgba(124, 58, 237, 0.52)',
+        shadow: 'rgba(124, 58, 237, 0.22)',
+        title: '#4c1d95', icon: '#7c3aed', subText: '#5b21b6',
+        badgeBg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(167, 139, 250, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(253, 230, 138, 0.70)'
+        subBorder: 'rgba(221, 214, 254, 0.80)'
       },
-      { // 8. ORANGE (Coral 3D Specular Glass)
-        bg: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22) 0%, rgba(253, 186, 116, 0.32) 100%)',
-        bottomBorder: 'rgba(249, 115, 22, 0.50)',
-        shadow: 'rgba(249, 115, 22, 0.22)',
-        title: '#7c2d12', icon: '#ea580c', subText: '#c2410c',
-        badgeBg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.92), rgba(251, 146, 60, 0.98))',
+      { // 6. MANDARIN ORANGE (Warm Tangerine Glass - strong contrast with Purple)
+        bg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.18) 0%, rgba(254, 215, 170, 0.32) 100%)',
+        bottomBorder: 'rgba(234, 88, 12, 0.50)',
+        shadow: 'rgba(234, 88, 12, 0.22)',
+        title: '#7c2d12', icon: '#ea580c', subText: '#9a3412',
+        badgeBg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.95), rgba(251, 146, 60, 0.98))',
         badgeColor: '#ffffff', badgeBorder: '#ffffff',
-        subBorder: 'rgba(253, 186, 116, 0.70)'
+        subBorder: 'rgba(254, 215, 170, 0.80)'
+      },
+      { // 7. CARIBBEAN TEAL (Deep Aqua Teal Glass - strong contrast with Orange)
+        bg: 'linear-gradient(135deg, rgba(13, 148, 136, 0.19) 0%, rgba(153, 246, 228, 0.32) 100%)',
+        bottomBorder: 'rgba(13, 148, 136, 0.52)',
+        shadow: 'rgba(13, 148, 136, 0.22)',
+        title: '#134e4a', icon: '#0d9488', subText: '#115e59',
+        badgeBg: 'linear-gradient(135deg, rgba(13, 148, 136, 0.95), rgba(45, 212, 191, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(153, 246, 228, 0.80)'
+      },
+      { // 8. FUCHSIA MAGENTA (Vibrant Orchid Pink Glass - strong contrast with Teal)
+        bg: 'linear-gradient(135deg, rgba(217, 70, 239, 0.18) 0%, rgba(245, 208, 254, 0.32) 100%)',
+        bottomBorder: 'rgba(217, 70, 239, 0.50)',
+        shadow: 'rgba(217, 70, 239, 0.22)',
+        title: '#701a75', icon: '#c026d3', subText: '#86198f',
+        badgeBg: 'linear-gradient(135deg, rgba(192, 38, 211, 0.95), rgba(232, 121, 249, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(245, 208, 254, 0.80)'
+      },
+      { // 9. SPRING LIME (Zesty Light Lime Glass - strong contrast with Magenta)
+        bg: 'linear-gradient(135deg, rgba(101, 163, 13, 0.19) 0%, rgba(217, 249, 157, 0.32) 100%)',
+        bottomBorder: 'rgba(101, 163, 13, 0.52)',
+        shadow: 'rgba(101, 163, 13, 0.22)',
+        title: '#365314', icon: '#65a30d', subText: '#3f6212',
+        badgeBg: 'linear-gradient(135deg, rgba(101, 163, 13, 0.95), rgba(163, 230, 53, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(217, 249, 157, 0.80)'
+      },
+      { // 10. DEEP INDIGO (Ultramarine Cobalt Glass - strong contrast with Lime and Sapphire)
+        bg: 'linear-gradient(135deg, rgba(67, 56, 202, 0.19) 0%, rgba(199, 210, 254, 0.32) 100%)',
+        bottomBorder: 'rgba(67, 56, 202, 0.52)',
+        shadow: 'rgba(67, 56, 202, 0.22)',
+        title: '#1e1b4b', icon: '#4338ca', subText: '#312e81',
+        badgeBg: 'linear-gradient(135deg, rgba(67, 56, 202, 0.95), rgba(129, 140, 248, 0.98))',
+        badgeColor: '#ffffff', badgeBorder: '#ffffff',
+        subBorder: 'rgba(199, 210, 254, 0.80)'
       }
     ];
 
@@ -2052,7 +2107,6 @@ const App = (() => {
           <div class="faculty-card-header" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
             <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              ${f.avgAttendance > 0 ? `<div class="faculty-card-badge" style="background: rgba(255, 255, 255, 0.90) !important; color: ${pal.title} !important; border: 1.5px solid ${pal.bottomBorder} !important; padding: 4px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px;"><i class="ph ph-users"></i> ${f.avgAttendance}% Avg. Att</div>` : ''}
               <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Coverage</div>
             </div>
           </div>
@@ -2454,6 +2508,252 @@ const App = (() => {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
   }
 
+  // ─── DOWNLOAD STUDENT ATTENDANCE REPORT AS .DOCX ──────────
+  function downloadStudentAttendanceDoc() {
+    const rep = state.activeStudentReport;
+    if (!rep || !rep.studentList || rep.studentList.length === 0) {
+      Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
+      return;
+    }
+
+    const ctx = window.appStartContext || {};
+    const cfg = ctx.config || {};
+    const metaObj = (state.allData && state.allData.metadata) || state.metadata || {};
+
+    const mgmt = ctx.managementName || cfg.management_name || cfg.managementName || metaObj.managementName || (window.ACAD_CONFIG && window.ACAD_CONFIG.managementName) || 'Sinhgad Technical Education Society';
+    const college = ctx.collegeName || cfg.college_name || cfg.collegeName || metaObj.collegeName || (window.ACAD_CONFIG && window.ACAD_CONFIG.collegeName) || 'RMD Institute of Pharmaceutical Education & Research';
+    const ay = cfg.academic_year || cfg.academicYear || cfg.ay || metaObj.academicYear || (window.ACAD_CONFIG && window.ACAD_CONFIG.academicYear) || '2024-25';
+
+    const docMeta = {
+      mgmt: mgmt,
+      college: college,
+      acadYear: ay,
+      className: rep.className || state.activeStudentYear || 'Class Report',
+      periodLabel: rep.periodLabel || 'All Time (Entire Academic Year)',
+      eligibilityThreshold: rep.eligibilityThreshold || 75,
+      defaulterCount: rep.defaulterCount || 0,
+      studentList: rep.studentList || [],
+      subjectColumns: rep.subjectColumns || []
+    };
+
+    const documentXml = buildStudentAttendanceDocx(docMeta);
+    const enc = new TextEncoder();
+    const blob = zipStore([
+      { name: '[Content_Types].xml', bytes: enc.encode(DOCX_CONTENT_TYPES) },
+      { name: '_rels/.rels', bytes: enc.encode(DOCX_ROOT_RELS) },
+      { name: 'word/document.xml', bytes: enc.encode(documentXml) }
+    ]);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const cleanClass = (docMeta.className || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanAy = String(docMeta.acadYear || '2024-25').replace(/[^a-zA-Z0-9_-]/g, '_');
+    a.download = `Attendance_Report_${cleanClass}_${cleanAy}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.show('Downloaded', 'Student attendance report .docx generated successfully.', 'success');
+  }
+
+  // Build WordprocessingML document.xml body for Student Attendance & Eligibility Report.
+  // Grayscale / print-friendly, A4 Landscape (or Portrait if <= 3 subjects), 3 Signatories.
+  function buildStudentAttendanceDocx(m) {
+    const HEADER_FILL = '383838';      // Dark gray / charcoal table header
+    const LABEL_FILL = 'EBEBEB';       // Light gray label shading
+    const ZEBRA_FILL = 'F6F6F6';       // Subtle alternate row background
+    const FONT = 'Calibri';            // Universally supported font across desktop & mobile
+    
+    const isLandscape = (m.subjectColumns || []).length >= 4;
+    const PAGE_W = isLandscape ? 16838 : 11906;  // A4 dimensions in twips
+    const PAGE_H = isLandscape ? 11906 : 16838;
+    const MARGIN_SIDE = 720;                     // 0.5 inch side margins
+    const MARGIN_VERT = 1080;                    // 0.75 inch top/bottom margins
+    const TEXT_W = PAGE_W - (2 * MARGIN_SIDE);   // 15398 in landscape, 10466 in portrait
+
+    // Helper: Run of text (supports newlines via <w:br/>)
+    const run = (text, { b, color, sz = 20, caps } = {}) => {
+      const size = Math.max(14, sz);
+      const rPr = [`<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/>`];
+      if (b) rPr.push('<w:b/>');
+      if (caps) rPr.push('<w:caps/>');
+      if (color) rPr.push(`<w:color w:val="${color}"/>`);
+      rPr.push(`<w:sz w:val="${size}"/>`);
+      
+      const str = String(text == null ? '' : text);
+      const lines = str.split('\n');
+      const textNodes = lines.map(line => `<w:t xml:space="preserve">${xmlEsc(line)}</w:t>`).join('<w:br/>');
+      
+      return `<w:r><w:rPr>${rPr.join('')}</w:rPr>${textNodes}</w:r>`;
+    };
+
+    // Helper: Paragraph
+    const para = (runsXml, { align, after = 120 } = {}) => {
+      const pPr = [`<w:spacing w:after="${after}" w:line="240" w:lineRule="auto"/>`];
+      if (align) pPr.push(`<w:jc w:val="${align}"/>`);
+      return `<w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml || ''}</w:p>`;
+    };
+
+    // Helper: Table cell
+    const cell = (runsXml, { shade, align = 'left', vAlign = 'center' } = {}) => {
+      const tcPr = [`<w:vAlign w:val="${vAlign}"/>`];
+      if (shade) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${shade}"/>`);
+      const pPr = ['<w:spacing w:before="30" w:after="30" w:line="240" w:lineRule="auto"/>'];
+      if (align) pPr.push(`<w:jc w:val="${align}"/>`);
+      return `<w:tc><w:tcPr>${tcPr.join('')}</w:tcPr><w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml}</w:p></w:tc>`;
+    };
+
+    // Helper: Fixed table builder
+    const table = (cols, rows, { borders = true } = {}) => {
+      const tblWidth = cols.reduce((a, b) => a + b, 0);
+      const grid = `<w:tblGrid>${cols.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+      const bdr = borders
+        ? `<w:tblBorders>
+            <w:top w:val="single" w:sz="4" w:color="7F7F7F"/><w:left w:val="single" w:sz="4" w:color="7F7F7F"/>
+            <w:bottom w:val="single" w:sz="4" w:color="7F7F7F"/><w:right w:val="single" w:sz="4" w:color="7F7F7F"/>
+            <w:insideH w:val="single" w:sz="4" w:color="7F7F7F"/><w:insideV w:val="single" w:sz="4" w:color="7F7F7F"/>
+          </w:tblBorders>`
+        : `<w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders>`;
+      return `<w:tbl><w:tblPr>` +
+        `<w:tblW w:w="${tblWidth}" w:type="dxa"/>` +
+        `<w:jc w:val="center"/>` +
+        `<w:tblLayout w:type="fixed"/>` +
+        bdr +
+        `<w:tblCellMar><w:top w:w="50" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="50" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar>` +
+        `</w:tblPr>${grid}${rows}</w:tbl>`;
+    };
+
+    // ── 1. Metadata Info Table ──
+    const infoRow = (l1, v1, l2, v2) =>
+      `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+      cell(run(l1, { b: true, sz: 19 }), { shade: LABEL_FILL }) +
+      cell(run(v1, { sz: 19 })) +
+      cell(run(l2, { b: true, sz: 19 }), { shade: LABEL_FILL }) +
+      cell(run(v2, { sz: 19 })) +
+      `</w:tr>`;
+
+    const infoCols = isLandscape ? [2400, 5299, 2400, 5299] : [1900, 3333, 1900, 3333];
+    const infoTable = table(infoCols,
+      infoRow('Class / Program', m.className, 'Academic Year', m.acadYear) +
+      infoRow('Timeperiod Filter', m.periodLabel, 'Eligibility Criteria', `≥ ${m.eligibilityThreshold}% Attendance`) +
+      infoRow('Total Students', `${m.studentList.length} Students`, 'Attendance Status', `${m.defaulterCount > 0 ? `${m.defaulterCount} Defaulter(s) (< ${m.eligibilityThreshold}%)` : 'All Students Eligible'}`)
+    );
+
+    // ── 2. Data Table Column Width Calculations ──
+    const rollW = isLandscape ? 850 : 750;
+    const batchW = isLandscape ? 800 : 700;
+    const avgW = isLandscape ? 1100 : 1000;
+    const statusW = isLandscape ? 1300 : 1200;
+    const nameW = isLandscape ? 2900 : 2500;
+
+    const fixedTotal = rollW + nameW + batchW + avgW + statusW;
+    const subCount = Math.max(1, (m.subjectColumns || []).length);
+    const remainingForSubs = Math.max(subCount * 650, TEXT_W - fixedTotal);
+    const subColW = Math.floor(remainingForSubs / subCount);
+    
+    // Exact column widths array
+    const dataCols = [rollW, nameW, batchW, ...(m.subjectColumns || []).map(() => subColW), avgW, statusW];
+
+    // ── 3. Table Header Row (Repeats across pages via <w:tblHeader/>) ──
+    const th = (txt, sz = 18) => run(txt, { b: true, color: 'FFFFFF', sz });
+    
+    let headerCellsXml =
+      cell(th('Roll No'), { shade: HEADER_FILL, align: 'center' }) +
+      cell(th('Student Name'), { shade: HEADER_FILL, align: 'left' }) +
+      cell(th('Batch'), { shade: HEADER_FILL, align: 'center' });
+
+    (m.subjectColumns || []).forEach(sc => {
+      const info = formatCompactSubjectHeader(sc);
+      const subLabel = info.shortName ? `${info.code}\n${info.shortName}` : info.code;
+      headerCellsXml += cell(th(`${subLabel}\n(%)`, 16), { shade: HEADER_FILL, align: 'center' });
+    });
+
+    headerCellsXml += cell(th('Avg. Att\n(%)'), { shade: HEADER_FILL, align: 'center' });
+    headerCellsXml += cell(th('Eligibility\nStatus'), { shade: HEADER_FILL, align: 'center' });
+
+    const headerRow = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${headerCellsXml}</w:tr>`;
+
+    // ── 4. Table Body Rows ──
+    let bodyRows = '';
+    if (!m.studentList || !m.studentList.length) {
+      bodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(run('No student attendance records found.'), { align: 'center' })}</w:tr>`;
+    } else {
+      m.studentList.forEach((st, i) => {
+        const isDef = st.isDefaulter || (st.pct < m.eligibilityThreshold);
+        const shade = i % 2 === 1 ? ZEBRA_FILL : undefined;
+        const rowFontSz = isLandscape ? 18 : 17;
+
+        let rowCellsXml =
+          cell(run(String(st.rollNo || '-'), { b: isDef, sz: rowFontSz }), { shade, align: 'center' }) +
+          cell(run(String(st.name || '-'), { b: isDef, sz: rowFontSz }), { shade, align: 'left' }) +
+          cell(run(String(st.batch || 'Gen'), { sz: rowFontSz }), { shade, align: 'center' });
+
+        (m.subjectColumns || []).forEach(sc => {
+          const rawCode = sc.code;
+          const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let subData = st.subjectMap ? (st.subjectMap[rawCode] || st.subjectMap[cleanScCode]) : null;
+          if (!subData && st.subjectMap) {
+            for (const k in st.subjectMap) {
+              const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
+                subData = st.subjectMap[k];
+                break;
+              }
+            }
+          }
+
+          let cellTxt = '-';
+          let isSubDef = false;
+          if (subData && subData.total > 0) {
+            const sPct = Math.round((subData.present / subData.total) * 100);
+            cellTxt = `${sPct}%`;
+            isSubDef = sPct < m.eligibilityThreshold;
+          }
+
+          rowCellsXml += cell(run(cellTxt, { b: isSubDef, sz: rowFontSz }), { shade, align: 'center' });
+        });
+
+        const avgText = typeof st.pct === 'number' ? `${st.pct}%` : '-';
+        const statusText = isDef ? 'Defaulter' : 'Eligible';
+
+        rowCellsXml += cell(run(avgText, { b: true, sz: rowFontSz }), { shade, align: 'center' });
+        rowCellsXml += cell(run(statusText, { b: isDef, sz: rowFontSz }), { shade, align: 'center' });
+
+        bodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>${rowCellsXml}</w:tr>`;
+      });
+    }
+
+    const dataTable = table(dataCols, headerRow + bodyRows);
+
+    // ── 5. 3 Signatories Row (Academic In-charge / Class Teacher / Principal) ──
+    const third = Math.floor(TEXT_W / 3);
+    const signCols = [third, third, TEXT_W - (2 * third)];
+    const signTable = table(signCols,
+      `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+      cell(run('Academic In-charge', { b: true, sz: 22 }), { align: 'left' }) +
+      cell(run('Class Teacher', { b: true, sz: 22 }), { align: 'center' }) +
+      cell(run('Principal', { b: true, sz: 22 }), { align: 'right' }) +
+      `</w:tr>`, { borders: false });
+
+    // ── 6. Assemble Complete Document Body & Section Geometry ──
+    const body =
+      para(run(m.mgmt, { b: true, caps: true, sz: 22 }), { align: 'center', after: 40 }) +
+      para(run(m.college, { b: true, sz: 30 }), { align: 'center', after: 60 }) +
+      para(run('STUDENT ATTENDANCE & SESSIONAL ELIGIBILITY REPORT', { b: true, caps: true, sz: 24 }), { align: 'center', after: 200 }) +
+      infoTable +
+      para('', { after: 220 }) +
+      dataTable +
+      para('', { after: 800 }) +
+      signTable +
+      `<w:sectPr>` +
+        `<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}" ${isLandscape ? 'w:orient="landscape"' : ''}/>` +
+        `<w:pgMar w:top="${MARGIN_VERT}" w:right="${MARGIN_SIDE}" w:bottom="${MARGIN_VERT}" w:left="${MARGIN_SIDE}" w:header="720" w:footer="720" w:gutter="0"/>` +
+      `</w:sectPr>`;
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
+  }
 
   // ─── ACCREDITATION FILE COMPILER (CARD 15 ACTION) ─────────
   const consoleMessages = [
@@ -2749,40 +3049,47 @@ Generated: ${formatDisplayDate(new Date())}
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
 
       const classRainbowPalettes = [
-        { // 1. BLUE (Sapphire 3D Specular Glass)
-          bg: 'linear-gradient(135deg, rgba(0, 122, 255, 0.18) 0%, rgba(186, 230, 253, 0.28) 100%)',
-          bottomBorder: 'rgba(0, 122, 255, 0.45)',
-          shadow: '0 8px 24px rgba(0, 122, 255, 0.16)',
-          iconBg: 'rgba(0, 122, 255, 0.15)',
+        { // 1. SAPPHIRE BLUE (Cool Royal Blue Glass)
+          bg: 'linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(186, 230, 253, 0.28) 100%)',
+          bottomBorder: 'rgba(2, 132, 199, 0.45)',
+          shadow: '0 8px 24px rgba(2, 132, 199, 0.16)',
+          iconBg: 'rgba(2, 132, 199, 0.15)',
           iconColor: '#0284c7'
         },
-        { // 2. PURPLE / VIOLET (3D Specular Glass)
-          bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(196, 181, 253, 0.28) 100%)',
-          bottomBorder: 'rgba(139, 92, 246, 0.45)',
-          shadow: '0 8px 24px rgba(139, 92, 246, 0.16)',
-          iconBg: 'rgba(139, 92, 246, 0.15)',
-          iconColor: '#7c3aed'
+        { // 2. CORAL ROSE (Warm Vivid Rose Glass - strong contrast with Blue)
+          bg: 'linear-gradient(135deg, rgba(225, 29, 72, 0.18) 0%, rgba(254, 205, 211, 0.28) 100%)',
+          bottomBorder: 'rgba(225, 29, 72, 0.45)',
+          shadow: '0 8px 24px rgba(225, 29, 72, 0.16)',
+          iconBg: 'rgba(225, 29, 72, 0.15)',
+          iconColor: '#e11d48'
         },
-        { // 3. EMERALD GREEN (3D Specular Glass)
+        { // 3. EMERALD GREEN (Cool Crisp Green Glass - strong contrast with Rose)
           bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(167, 243, 208, 0.28) 100%)',
           bottomBorder: 'rgba(16, 185, 129, 0.45)',
           shadow: '0 8px 24px rgba(16, 185, 129, 0.16)',
           iconBg: 'rgba(16, 185, 129, 0.15)',
           iconColor: '#059669'
         },
-        { // 4. AMBER / GOLD (3D Specular Glass)
-          bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(253, 230, 138, 0.28) 100%)',
-          bottomBorder: 'rgba(245, 158, 11, 0.45)',
-          shadow: '0 8px 24px rgba(245, 158, 11, 0.16)',
-          iconBg: 'rgba(245, 158, 11, 0.15)',
+        { // 4. GOLDEN AMBER (Warm Sunburst Amber Glass - strong contrast with Green)
+          bg: 'linear-gradient(135deg, rgba(217, 119, 6, 0.18) 0%, rgba(254, 240, 138, 0.28) 100%)',
+          bottomBorder: 'rgba(217, 119, 6, 0.45)',
+          shadow: '0 8px 24px rgba(217, 119, 6, 0.16)',
+          iconBg: 'rgba(217, 119, 6, 0.15)',
           iconColor: '#d97706'
         },
-        { // 5. CYAN / TEAL (3D Specular Glass)
-          bg: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18) 0%, rgba(165, 243, 252, 0.28) 100%)',
-          bottomBorder: 'rgba(6, 182, 212, 0.45)',
-          shadow: '0 8px 24px rgba(6, 182, 212, 0.16)',
-          iconBg: 'rgba(6, 182, 212, 0.15)',
-          iconColor: '#0891b2'
+        { // 5. AMETHYST VIOLET (Deep Purple Glass - strong contrast with Amber)
+          bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.18) 0%, rgba(221, 214, 254, 0.28) 100%)',
+          bottomBorder: 'rgba(124, 58, 237, 0.45)',
+          shadow: '0 8px 24px rgba(124, 58, 237, 0.16)',
+          iconBg: 'rgba(124, 58, 237, 0.15)',
+          iconColor: '#7c3aed'
+        },
+        { // 6. MANDARIN ORANGE (Warm Tangerine Glass - strong contrast with Purple)
+          bg: 'linear-gradient(135deg, rgba(234, 88, 12, 0.18) 0%, rgba(254, 215, 170, 0.28) 100%)',
+          bottomBorder: 'rgba(234, 88, 12, 0.45)',
+          shadow: '0 8px 24px rgba(234, 88, 12, 0.16)',
+          iconBg: 'rgba(234, 88, 12, 0.15)',
+          iconColor: '#ea580c'
         }
       ];
 
@@ -3003,18 +3310,28 @@ Generated: ${formatDisplayDate(new Date())}
       });
 
       outputEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; flex-wrap: wrap; gap: 10px;">
           <div>
             <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">👨‍🎓 Student Attendance & Eligibility Report</h3>
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">${escHtml(periodLabel)} · Class: <strong>${escHtml(state.activeStudentYear)}</strong></span>
           </div>
-          <button class="btn btn-primary" onclick="window.print()" style="
-            padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
-            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-            background: #8b5cf6; border: none; color: #fff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
-          ">
-            Generate Defaulters Notice <i class="ph ph-printer" style="font-size: 14px;"></i>
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-outline" onclick="App.downloadStudentAttendanceDoc()" title="Download print-friendly Word (.docx) report with college header & 3 signature blocks" style="
+              padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+              display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+              background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(66, 133, 244, 0.4); color: #1d4ed8;
+              box-shadow: 0 2px 8px rgba(66, 133, 244, 0.12);
+            ">
+              <i class="ph ph-file-doc" style="font-size: 15px; color: #2563eb;"></i> Download Report (.docx)
+            </button>
+            <button class="btn btn-primary" onclick="window.print()" style="
+              padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+              display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+              background: #8b5cf6; border: none; color: #fff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+            ">
+              Generate Defaulters Notice <i class="ph ph-printer" style="font-size: 14px;"></i>
+            </button>
+          </div>
         </div>
         <div style="margin-bottom: 20px;">
           <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Select Class / Year:</div>
@@ -3068,25 +3385,85 @@ Generated: ${formatDisplayDate(new Date())}
             <i class="ph ph-printer"></i> Print Report
           </button>
         </div>
-        <div style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <th style="padding: 10px 14px;">Subject Name & Code</th>
-                <th style="padding: 10px 14px;">Assigned Faculty</th>
-                <th style="padding: 10px 14px;">Semester</th>
-                <th style="padding: 10px 14px;">Lectures Conducted</th>
-                <th style="padding: 10px 14px;">Completion %</th>
-                <th style="padding: 10px 14px; text-align: right;">Conduction Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${subjectRows || '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #64748b;">No subjects listed.</td></tr>'}
-            </tbody>
-          </table>
+        <div class="smart-matrix-container">
+          <div class="smart-matrix-scroll-wrapper" id="subject-report-scroll-wrapper">
+            <table class="smart-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0;">
+              <thead>
+                <tr style="text-align: left; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                  <th style="padding: 10px 14px;">Subject Name & Code</th>
+                  <th style="padding: 10px 14px;">Assigned Faculty</th>
+                  <th style="padding: 10px 14px;">Semester</th>
+                  <th style="padding: 10px 14px;">Lectures Conducted</th>
+                  <th style="padding: 10px 14px;">Completion %</th>
+                  <th style="padding: 10px 14px; text-align: right;">Conduction Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${subjectRows || '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #64748b;">No subjects listed.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
+
+      const subScrollWrapper = document.getElementById('subject-report-scroll-wrapper');
+      if (subScrollWrapper) enableHorizontalWheelScroll(subScrollWrapper);
     }
+  }
+
+  function enableHorizontalWheelScroll(el) {
+    if (!el || el._hasWheelScroll) return;
+    el._hasWheelScroll = true;
+    el.addEventListener('wheel', (e) => {
+      // Intercept wheel when scrolling vertically over a horizontally scrollable element
+      if (el.scrollWidth > el.clientWidth) {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          const maxScrollLeft = el.scrollWidth - el.clientWidth;
+          const canScrollLeft = el.scrollLeft > 0 && e.deltaY < 0;
+          const canScrollRight = el.scrollLeft < maxScrollLeft - 1 && e.deltaY > 0;
+          if (canScrollLeft || canScrollRight) {
+            e.preventDefault();
+            el.scrollLeft += e.deltaY * 0.95;
+          }
+        }
+      }
+    }, { passive: false });
+  }
+
+  function formatCompactSubjectHeader(sc) {
+    const cleanCode = String(sc.code || '').trim().toUpperCase();
+    let name = String(sc.name || '').trim();
+    if (name.toUpperCase() === cleanCode) name = '';
+
+    const isPractical = cleanCode.endsWith('P') || cleanCode.endsWith('PR') || /practical|lab/i.test(name) || /practical|lab/i.test(sc.type || '');
+
+    let shortName = name;
+    if (shortName) {
+      if (shortName === shortName.toUpperCase() && shortName.length > 4) {
+        shortName = shortName.toLowerCase().replace(/(^|\s|\/|\-|\()([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+        shortName = shortName.replace(/\b(i|ii|iii|iv|v|vi|vii|viii)\b/gi, m => m.toUpperCase());
+        shortName = shortName.replace(/\b(bp|mph|bpharm|mpharm|pci|gpat)\b/gi, m => m.toUpperCase());
+      }
+      shortName = shortName
+        .replace(/\bPharmaceutical\b/gi, 'Pharm.')
+        .replace(/\bPharmacology\b/gi, 'Pharmacol.')
+        .replace(/\bPharmacognosy\b/gi, 'Pharmacog.')
+        .replace(/\bPhytochemistry\b/gi, 'Phytochem.')
+        .replace(/\bJurisprudence\b/gi, 'Jurisprud.')
+        .replace(/\bMedicinal\b/gi, 'Med.')
+        .replace(/\bChemistry\b/gi, 'Chem.')
+        .replace(/\bIndustrial\b/gi, 'Indust.')
+        .replace(/\bPharmacy\b/gi, 'Pharm.')
+        .replace(/\bPractical\b/gi, 'Pract.')
+        .replace(/\band\b/gi, '&');
+    }
+
+    return {
+      code: cleanCode,
+      shortName: shortName,
+      fullName: name || cleanCode,
+      isPractical: isPractical
+    };
   }
 
   function selectStudentYearCard(className) {
@@ -3318,19 +3695,43 @@ Generated: ${formatDisplayDate(new Date())}
       });
 
       // 4. Render Table Headers and Rows
-      // Get unique subject columns based on classSubjects
-      const subjectColumns = classSubjects.filter(s => s.code).map(s => ({ code: s.code, name: s.subject || s.name || s.code }));
-      
+      // Deduplicate unique subject columns based on classSubjects
+      const subjectColumns = [];
+      const seenCodes = new Set();
+      classSubjects.forEach(s => {
+        if (!s.code) return;
+        const clean = String(s.code).trim().toUpperCase();
+        if (!seenCodes.has(clean)) {
+          seenCodes.add(clean);
+          subjectColumns.push({
+            code: s.code,
+            name: s.subject || s.name || s.code,
+            type: s.type || s.category
+          });
+        }
+      });
+
+      const totalSubs = subjectColumns.length;
+      const isDense = totalSubs >= 6;
+      const colMinWidth = totalSubs > 8 ? 64 : totalSubs >= 6 ? 74 : 88;
+      const colMaxWidth = totalSubs > 8 ? 80 : totalSubs >= 6 ? 96 : 120;
+      const cellPadding = totalSubs > 8 ? '6px 4px' : totalSubs >= 6 ? '7px 6px' : '9px 8px';
+      const fontSizePct = totalSubs > 8 ? '11px' : totalSubs >= 6 ? '11.5px' : '12.5px';
+
       let subjectHeadersHtml = subjectColumns.map(sc => {
-        const subName = (sc.name && sc.name !== sc.code) ? sc.name : '';
+        const info = formatCompactSubjectHeader(sc);
         return `
-          <th style="padding: 10px 14px; text-align: center; vertical-align: middle; min-width: 110px;" title="${escHtml(sc.name || sc.code)} (${escHtml(sc.code)})">
-            ${subName ? `
-              <div style="font-size: 11px; font-weight: 800; color: var(--text-main); line-height: 1.25; margin-bottom: 2px;">${escHtml(subName)}</div>
-              <div style="font-size: 10px; font-weight: 700; color: var(--accent-purple, #8b5cf6);">(${escHtml(sc.code)}) %</div>
-            ` : `
-              <div style="font-size: 12px; font-weight: 800; color: var(--text-main);">${escHtml(sc.code)} %</div>
-            `}
+          <th style="padding: 6px 4px; text-align: center; vertical-align: middle; min-width: ${colMinWidth}px; max-width: ${colMaxWidth}px;" title="${escHtml(info.fullName)} (${escHtml(info.code)})">
+            <div class="smart-matrix-subj-pill" style="color: #000000; font-weight: 900;">
+              ${escHtml(info.code)}
+              ${info.isPractical ? '<span style="font-size: 8.5px; opacity: 0.9; font-weight: 900;">[P]</span>' : ''}
+            </div>
+            ${info.shortName ? `
+              <div style="font-size: 9.5px; font-weight: 800; color: #000000; line-height: 1.15; max-height: 22px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word;" title="${escHtml(info.fullName)}">
+                ${escHtml(info.shortName)}
+              </div>
+            ` : ''}
+            <div style="font-size: 9px; font-weight: 900; color: #000000; margin-top: 1px;">% Att</div>
           </th>
         `;
       }).join('');
@@ -3356,16 +3757,15 @@ Generated: ${formatDisplayDate(new Date())}
               }
             }
           }
-          let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
-          let subPct = 0;
+          let cellHtml = `<span style="color: #000000; font-weight: 700; opacity: 0.5;">-</span>`;
           if (subData && subData.total > 0) {
-            subPct = Math.round((subData.present / subData.total) * 100);
-            const color = subPct < eligibilityThreshold ? '#ff3b30' : 'var(--text-main)';
-            cellHtml = `<span style="color: ${color}; font-weight: ${subPct < eligibilityThreshold ? '800' : '600'};">${subPct}%</span>`;
+            const subPct = Math.round((subData.present / subData.total) * 100);
+            const isSubDefaulter = subPct < eligibilityThreshold;
+            cellHtml = `<span class="smart-matrix-cell-pct" style="color: #000000; font-weight: ${isSubDefaulter ? '900' : '800'}; font-size: ${fontSizePct};">${subPct}%</span>`;
             sumPct += subPct;
             activeSubCount++;
           }
-          subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
+          subjectCellsHtml += `<td style="padding: ${cellPadding}; text-align: center; vertical-align: middle; color: #000000;">${cellHtml}</td>`;
         });
 
         // Compute average attendance across subjects
@@ -3374,54 +3774,90 @@ Generated: ${formatDisplayDate(new Date())}
         st.isDefaulter = avgPct < eligibilityThreshold;
         if (st.isDefaulter) defaulterCount++;
 
-        const statusBadge = st.isDefaulter ?
-          `<span style="background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Defaulter)</span>` :
-          `<span style="background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.35); padding: 5px 14px; border-radius: 20px; font-weight: 800; font-size: 12px; white-space: nowrap;">${st.pct}% (Eligible)</span>`;
+        // Defaulters = Soft Red Hue, Others = Soft Green Hue
+        const rowClass = st.isDefaulter ? 'smart-matrix-row-defaulter' : 'smart-matrix-row-eligible';
+        const rowBg = st.isDefaulter ? 'rgba(254, 226, 226, 0.85)' : 'rgba(220, 252, 231, 0.85)';
+        const stickyBg = st.isDefaulter ? '#fee2e2' : '#dcfce7';
+        const rowBorder = st.isDefaulter ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)';
 
-        const rowBg = st.isDefaulter ? 'rgba(255, 59, 48, 0.05)' : 'transparent';
-        const nameColor = st.isDefaulter ? '#ff3b30' : 'var(--text-main)';
+        const statusBadge = st.isDefaulter ?
+          `<span style="background: #fecaca; color: #000000; border: 1.5px solid #dc2626; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Defaulter)</span>` :
+          `<span style="background: #bbf7d0; color: #000000; border: 1.5px solid #059669; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Eligible)</span>`;
 
         rowsHtml += `
-          <tr style="border-bottom: 1px solid var(--colorless-glass-base); background: ${rowBg};">
-            <td style="padding: 12px 16px; font-weight: 800; color: var(--text-main); font-size: 13px;">${escHtml(st.rollNo)}</td>
-            <td style="padding: 12px 16px; font-weight: 800; color: ${nameColor}; font-size: 13px;">${escHtml(st.name)}</td>
-            <td style="padding: 12px 16px;">
-              <span style="background: var(--colorless-glass-hover); color: var(--accent-purple, #8b5cf6); border: 1px solid rgba(139, 92, 246, 0.25); padding: 4px 12px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800;">
-                ${escHtml(st.batch || 'General')}
+          <tr class="${rowClass}" style="border-bottom: 1px solid ${rowBorder}; background: ${rowBg};">
+            <td class="smart-matrix-sticky-roll" style="padding: ${cellPadding}; font-weight: 900; color: #000000; font-size: 12px; background: ${stickyBg}; border-right: 1px solid ${rowBorder};">
+              ${escHtml(st.rollNo)}
+            </td>
+            <td class="smart-matrix-sticky-name" style="padding: ${isDense ? '6px 8px' : '8px 10px'}; font-weight: 900; color: #000000; font-size: ${isDense ? '11.5px' : '12.5px'}; background: ${stickyBg}; line-height: 1.25; border-right: 1.5px solid ${rowBorder};" title="${escHtml(st.name)}">
+              ${escHtml(st.name)}
+            </td>
+            <td style="padding: ${cellPadding}; text-align: center;">
+              <span style="background: rgba(0, 0, 0, 0.08); color: #000000; border: 1px solid rgba(0, 0, 0, 0.22); padding: 2px 7px; border-radius: 9999px; font-size: 10px; font-weight: 900; white-space: nowrap;">
+                ${escHtml(st.batch || 'Gen')}
               </span>
             </td>
             ${subjectCellsHtml}
-            <td style="padding: 12px 16px; text-align: right;">${statusBadge}</td>
+            <td style="padding: ${isDense ? '6px 8px' : '8px 10px'}; text-align: center; white-space: nowrap;">
+              ${statusBadge}
+            </td>
           </tr>
         `;
       });
 
+      const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
+      let periodLabel = 'All Time (Entire Academic Year)';
+      if (period === 'custom') {
+        const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
+        const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
+        periodLabel = (s && e) ? `Custom (${s} to ${e})` : 'Custom Range';
+      }
+
+      state.activeStudentReport = {
+        className: className,
+        studentList: studentList,
+        subjectColumns: subjectColumns,
+        defaulterCount: defaulterCount,
+        eligibilityThreshold: eligibilityThreshold,
+        periodLabel: periodLabel
+      };
+
       container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 10px 14px; background: var(--colorless-glass-base); border-radius: var(--radius-sm);">
-          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">
-            Total Students: <strong>${studentList.length}</strong> · Subjects Scanned: <strong>${classSubjects.length > 0 ? classSubjects.length : 'All'}</strong>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: var(--radius-sm); backdrop-filter: blur(12px);">
+          <span style="font-size: 12px; font-weight: 800; color: #000000; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span>Total Students: <strong style="color: #000000;">${studentList.length}</strong></span>
+            <span>·</span>
+            <span>Subjects: <strong style="color: #000000;">${subjectColumns.length}</strong></span>
+            <span class="smart-scroll-hint" style="color: #334155;"><i class="ph ph-mouse-simple"></i> Mouse wheel horizontally scrolls subjects</span>
           </span>
-          <span style="font-size: 12px; font-weight: 800; color: ${defaulterCount > 0 ? '#ff3b30' : 'var(--success)'};">
+          <span style="font-size: 12px; font-weight: 900; color: ${defaulterCount > 0 ? '#b91c1c' : '#047857'};">
             ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below ${eligibilityThreshold}%` : `✅ All Students Eligible (≥ ${eligibilityThreshold}%)`}
           </span>
         </div>
-        <div style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid var(--colorless-glass-hover); text-align: left; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <th style="padding: 10px 16px;">Roll No</th>
-                <th style="padding: 10px 16px;">Student Name</th>
-                <th style="padding: 10px 16px;">Batch</th>
-                ${subjectHeadersHtml}
-                <th style="padding: 10px 16px; text-align: right;">Average Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
+        <div class="smart-matrix-container">
+          <div class="smart-matrix-scroll-wrapper" id="student-matrix-scroll-wrapper">
+            <table class="smart-matrix-table">
+              <thead>
+                <tr>
+                  <th class="smart-matrix-sticky-roll" style="padding: 8px 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 900;">Roll</th>
+                  <th class="smart-matrix-sticky-name" style="padding: 8px 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; color: #000000; font-weight: 900;">Student Name</th>
+                  <th style="padding: 8px 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; width: 44px; min-width: 44px; color: #000000; font-weight: 900;">Batch</th>
+                  ${subjectHeadersHtml}
+                  <th style="padding: 8px 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; min-width: 100px; color: #000000; font-weight: 900;">Avg. Attendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
+
+      const scrollWrapper = document.getElementById('student-matrix-scroll-wrapper');
+      if (scrollWrapper) {
+        enableHorizontalWheelScroll(scrollWrapper);
+      }
     } catch (err) {
       console.error('Error fetching live student report:', err);
       if (container) {
@@ -3454,6 +3890,7 @@ Generated: ${formatDisplayDate(new Date())}
     switchView,
     triggerManualSync,
     downloadTeachingPlanDoc,
+    downloadStudentAttendanceDoc,
     filterTeachingPlan,
     saveTopicRemark,
     startCompilation,
@@ -3461,6 +3898,8 @@ Generated: ${formatDisplayDate(new Date())}
     handleFileCardClick,
     openFilePreview,
     closeFilePreview,
+    downloadDriveFile,
+    downloadCurrentPreviewFile,
     loadAcademicIncharges,
     buildInchargeSelector,
     toggleCustomInchargeDropdown,
