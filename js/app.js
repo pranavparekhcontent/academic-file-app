@@ -3174,21 +3174,23 @@ Generated: ${formatDisplayDate(new Date())}
   function generateReportType(type) {
     activeReportType = type || 'class';
 
-    // Highlight active card
-    ['class', 'student', 'subject'].forEach(t => {
-      const el = document.getElementById(`card-report-${t}`);
-      if (el) {
-        if (t === activeReportType) {
-          el.style.border = '2px solid #6366f1';
-          el.style.boxShadow = '0 10px 28px rgba(99, 102, 241, 0.25)';
-          el.style.transform = 'translateY(-2px)';
-        } else {
-          el.style.border = '1px solid rgba(255, 255, 255, 0.8)';
-          el.style.boxShadow = 'none';
-          el.style.transform = 'none';
-        }
+    // Highlight active card with animated glass state
+    const classCard = document.getElementById('card-report-class');
+    const studentCard = document.getElementById('card-report-student');
+    if (classCard) {
+      if (activeReportType === 'class') {
+        classCard.classList.add('is-selected-class');
+      } else {
+        classCard.classList.remove('is-selected-class');
       }
-    });
+    }
+    if (studentCard) {
+      if (activeReportType === 'student') {
+        studentCard.classList.add('is-selected-student');
+      } else {
+        studentCard.classList.remove('is-selected-student');
+      }
+    }
 
     const outputEl = document.getElementById('reports-output-area');
     if (!outputEl) return;
@@ -3455,7 +3457,7 @@ Generated: ${formatDisplayDate(new Date())}
             display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
           ">
-            Generate Class-Wise Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
+            Generate Class-Wise Monthly Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
           </button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -3529,7 +3531,7 @@ Generated: ${formatDisplayDate(new Date())}
               background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(66, 133, 244, 0.4); color: #1d4ed8;
               box-shadow: 0 2px 8px rgba(66, 133, 244, 0.12);
             ">
-              <i class="ph ph-file-doc" style="font-size: 15px; color: #2563eb;"></i> Download Report (.docx)
+              <i class="ph ph-file-doc" style="font-size: 15px; color: #2563eb;"></i> Download Full Report (.docx)
             </button>
             <button class="btn btn-primary" onclick="App.downloadDefaultersNoticeDoc()" title="Generate and download official Defaulters Notice (.docx) with 4-column defaulters table, subject teachers acknowledgment & 3 signatures" style="
               padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);

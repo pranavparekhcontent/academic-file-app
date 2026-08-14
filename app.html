@@ -531,12 +531,12 @@
           <div id="reports-cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
             
             <!-- 1. Class-Wise Report Card -->
-            <div class="glass-folder-card accent-blue report-card-option" id="card-report-class" onclick="App.generateReportType('class')" style="cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; padding: 24px;">
+            <div class="glass-folder-card accent-blue report-card-option is-selected-class" id="card-report-class" onclick="App.generateReportType('class')" style="padding: 24px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                <div style="width: 46px; height: 46px; border-radius: 14px; background: rgba(2, 132, 199, 0.15); display: flex; align-items: center; justify-content: center; color: #0284c7;">
+                <div style="width: 48px; height: 48px; border-radius: 14px; background: rgba(2, 132, 199, 0.15); display: flex; align-items: center; justify-content: center; color: #0284c7; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12);">
                   <i class="ph ph-buildings" style="font-size: 26px;"></i>
                 </div>
-                <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase;">Class-Wise Report</span>
+                <span style="background: rgba(2, 132, 199, 0.15); color: #0284c7; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; border: 1.5px solid rgba(2, 132, 199, 0.3);">Class-Wise Report</span>
               </div>
               <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5; font-weight: 600;">
                 Syllabus completion %, conduct averages, and status distribution aggregated by semester and class.
@@ -544,12 +544,12 @@
             </div>
 
             <!-- 2. Student-Wise Report Card -->
-            <div class="glass-folder-card accent-purple report-card-option" id="card-report-student" onclick="App.generateReportType('student')" style="cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; padding: 24px;">
+            <div class="glass-folder-card accent-purple report-card-option" id="card-report-student" onclick="App.generateReportType('student')" style="padding: 24px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                <div style="width: 46px; height: 46px; border-radius: 14px; background: rgba(139, 92, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #8b5cf6;">
+                <div style="width: 48px; height: 48px; border-radius: 14px; background: rgba(139, 92, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #8b5cf6; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);">
                   <i class="ph ph-student" style="font-size: 26px;"></i>
                 </div>
-                <span style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase;">Student-Wise Report</span>
+                <span style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; border: 1.5px solid rgba(139, 92, 246, 0.3);">Student-Wise Report</span>
               </div>
               <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5; font-weight: 600;">
                 Individual student attendance logs, sessional eligibility tracking, and batch-wise (Batch A/B) breakdown.
