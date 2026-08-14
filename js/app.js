@@ -2005,8 +2005,8 @@ const App = (() => {
         const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
         const unitLabel = isPractical ? 'practicals' : 'lectures';
 
-        const liveSubAtt = getLiveSubjectAttendancePct(s.code || s.name);
-        const liveSubAttText = (liveSubAtt !== null) ? `${liveSubAtt}%` : '--%';
+        const liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name);
+        const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 ? `${s.avgAttendance}%` : '--%');
 
         const semRaw = String(s.semester || 'I').trim();
         const semLabel = /^sem/i.test(semRaw) ? escHtml(semRaw) : `Sem ${escHtml(semRaw)}`;
@@ -2049,9 +2049,12 @@ const App = (() => {
 
       return `
         <div class="faculty-progress-card" style="background: ${pal.bg} !important; border-top: 1.8px solid #ffffff !important; border-left: 1.8px solid #ffffff !important; border-bottom: 1.8px solid ${pal.bottomBorder} !important; border-right: 1.8px solid ${pal.bottomBorder} !important; box-shadow: inset 0 1.5px 2px #ffffff, 0 10px 28px ${pal.shadow} !important;">
-          <div class="faculty-card-header" style="margin-bottom: 12px;">
+          <div class="faculty-card-header" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div class="faculty-card-name" style="color: ${pal.title}; font-weight: 800; font-size: 16px;"><i class="ph ph-user-circle" style="margin-right: 6px; color: ${pal.icon};"></i>${escHtml(f.faculty)}</div>
-            <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Overall</div>
+            <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              ${f.avgAttendance > 0 ? `<div class="faculty-card-badge" style="background: rgba(255, 255, 255, 0.90) !important; color: ${pal.title} !important; border: 1.5px solid ${pal.bottomBorder} !important; padding: 4px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px;"><i class="ph ph-users"></i> ${f.avgAttendance}% Avg. Att</div>` : ''}
+              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 4px 14px; border-radius: 9999px; font-weight: 800;">${f.overallPercent}% Coverage</div>
+            </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 10px;">
             ${subjectRows}
@@ -3183,7 +3186,7 @@ Generated: ${formatDisplayDate(new Date())}
       // Pre-populate studentMap with official roster from API if available
       if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students)) {
         studentsRes.students.forEach(st => {
-          const rNo = String(st.rollNo || st.roll || '').trim();
+          const rNo = String(st.rollNo !== undefined && st.rollNo !== null ? st.rollNo : (st.roll || '')).trim();
           const rName = String(st.name || st.studentName || '').trim();
           const key = rNo || rName;
           if (key) {
@@ -3203,34 +3206,63 @@ Generated: ${formatDisplayDate(new Date())}
       allAttRes.forEach(attRes => {
         if (attRes && attRes.success && Array.isArray(attRes.records)) {
           attRes.records.forEach(r => {
-            const rNo = String(r.rollNo || '').trim();
-            const rName = String(r.name || '').trim();
-            let key = (rNo && studentMap[rNo]) ? rNo : ((rName && studentMap[rName]) ? rName : (rNo || rName));
-            if (!key) return;
+            const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
+            const rNoNum = parseInt(rNo, 10);
+            const rName = String(r.name || '').trim().toLowerCase();
 
-            if (!studentMap[key]) {
-              studentMap[key] = {
+            // Find matching key in studentMap
+            let matchedKey = null;
+            if (rNo && studentMap[rNo]) {
+              matchedKey = rNo;
+            } else if (!isNaN(rNoNum) && studentMap[String(rNoNum)]) {
+              matchedKey = String(rNoNum);
+            } else {
+              for (const k in studentMap) {
+                const s = studentMap[k];
+                if ((rNo && String(s.rollNo).trim() === rNo) ||
+                    (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
+                    (rName && s.name.toLowerCase().trim() === rName)) {
+                  matchedKey = k;
+                  break;
+                }
+              }
+            }
+
+            if (!matchedKey) {
+              matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
+              studentMap[matchedKey] = {
                 rollNo: rNo || 'N/A',
-                name: rName || key,
+                name: r.name || matchedKey,
                 batch: r.batch || 'General',
                 presentCount: 0,
                 totalCount: 0,
                 subjectMap: {}
               };
             }
-            if (rName && studentMap[key].name === key) studentMap[key].name = rName;
-            if (r.batch && r.batch !== 'General') studentMap[key].batch = r.batch;
 
-            const sCode = r.code || 'SUB';
-            if (!studentMap[key].subjectMap[sCode]) {
-              studentMap[key].subjectMap[sCode] = { present: 0, total: 0 };
+            if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
+              studentMap[matchedKey].name = r.name;
             }
-            studentMap[key].totalCount++;
-            studentMap[key].subjectMap[sCode].total++;
+            if (r.batch && r.batch !== 'General') {
+              studentMap[matchedKey].batch = r.batch;
+            }
+
+            const sCode = String(r.code || 'SUB').trim();
+            const cleanSCode = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+            if (!studentMap[matchedKey].subjectMap[sCode]) {
+              studentMap[matchedKey].subjectMap[sCode] = { present: 0, total: 0 };
+            }
+            if (cleanSCode && !studentMap[matchedKey].subjectMap[cleanSCode]) {
+              studentMap[matchedKey].subjectMap[cleanSCode] = studentMap[matchedKey].subjectMap[sCode];
+            }
+
+            studentMap[matchedKey].totalCount++;
+            studentMap[matchedKey].subjectMap[sCode].total++;
             const stUpper = String(r.status || '').toUpperCase().trim();
             if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
-              studentMap[key].presentCount++;
-              studentMap[key].subjectMap[sCode].present++;
+              studentMap[matchedKey].presentCount++;
+              studentMap[matchedKey].subjectMap[sCode].present++;
             }
           });
         }
@@ -3259,7 +3291,7 @@ Generated: ${formatDisplayDate(new Date())}
             batch: st.batch || st.batchGroup || 'General',
             pct: avgPct,
             isDefaulter: avgPct < eligibilityThreshold,
-            subjectMap: {} // Make sure this exists to prevent undefined errors
+            subjectMap: {}
           };
         });
       }
@@ -3308,24 +3340,36 @@ Generated: ${formatDisplayDate(new Date())}
 
       studentList.forEach(st => {
         let sumPct = 0;
+        let activeSubCount = 0;
         let subjectCellsHtml = '';
 
         subjectColumns.forEach(sc => {
-          const subData = st.subjectMap[sc.code];
+          const rawCode = sc.code;
+          const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let subData = st.subjectMap[rawCode] || st.subjectMap[cleanScCode];
+          if (!subData) {
+            for (const k in st.subjectMap) {
+              const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
+                subData = st.subjectMap[k];
+                break;
+              }
+            }
+          }
           let cellHtml = `<span style="color: var(--text-muted);">-</span>`;
           let subPct = 0;
           if (subData && subData.total > 0) {
             subPct = Math.round((subData.present / subData.total) * 100);
             const color = subPct < eligibilityThreshold ? '#ff3b30' : 'var(--text-main)';
             cellHtml = `<span style="color: ${color}; font-weight: ${subPct < eligibilityThreshold ? '800' : '600'};">${subPct}%</span>`;
+            sumPct += subPct;
+            activeSubCount++;
           }
-          sumPct += subPct;
           subjectCellsHtml += `<td style="padding: 12px 16px; text-align: center;">${cellHtml}</td>`;
         });
 
-        // Compute average attendance across ALL active semester subjects in subjectColumns
-        const totalActiveSubjects = subjectColumns.length;
-        const avgPct = totalActiveSubjects > 0 ? Math.round(sumPct / totalActiveSubjects) : (st.pct || 0);
+        // Compute average attendance across subjects
+        const avgPct = activeSubCount > 0 ? Math.round(sumPct / activeSubCount) : (st.pct || 0);
         st.pct = avgPct;
         st.isDefaulter = avgPct < eligibilityThreshold;
         if (st.isDefaulter) defaulterCount++;

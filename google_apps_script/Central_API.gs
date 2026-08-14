@@ -366,6 +366,8 @@ function getSubjects(teacher, sheetId) {
   var data = ws.getDataRange().getValues(), res = [];
   var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
   var cols = _mapSubjectCols(data[0] || []);
+  var collegeIds = _getCollegeSheetIds(sheetId);
+  var defaultOutId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
 
   var teachingPlanIdx = -1;
   for (var c = 0; c < headers.length; c++) {
@@ -378,7 +380,7 @@ function getSubjects(teacher, sheetId) {
 
   for (var i = 1; i < data.length; i++) {
     var fs = String(data[i][cols.faculty]).toLowerCase().split(',').map(function(x){return x.trim()});
-    if (fs.indexOf(teacher.toLowerCase()) !== -1) {
+    if (!teacher || fs.indexOf(teacher.toLowerCase()) !== -1) {
       var sCode = String(data[i][cols.code]).trim();
       var sName = String(data[i][cols.name]).trim();
       var sType = String(data[i][cols.type]).trim();
@@ -388,6 +390,7 @@ function getSubjects(teacher, sheetId) {
       }
       var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType };
       subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
+      subObj.outputSheetId = defaultOutId;
       res.push(subObj);
     }
   }
@@ -1050,8 +1053,12 @@ function getInchargeDashboard(sheetId) {
       Logger.log("Batch teaching plan scan error: " + tpErr.message);
     }
 
-    // ── 2. Scan Attendance Output Spreadsheet (actual conducted attendance lectures) ──
+    // ── 2. Scan Attendance Output Spreadsheet (actual conducted attendance lectures & average attendance) ──
     var attendanceConductedMap = {};
+    var attendanceAvgMap = {};
+    var totalCollegeP = 0;
+    var totalCollegeAttMarks = 0;
+
     try {
       var outId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
       if (outId) {
@@ -1103,6 +1110,28 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
+              // Compute average student attendance % for this sheet tab
+              var subP = 0;
+              var subMarks = 0;
+              if (conductedLecturesInSheet > 0 && lr > hdrIdx + 1) {
+                var numRows = Math.min(150, lr - hdrIdx - 1);
+                var attGrid = oSheet.getRange(hdrIdx + 2, nameCol + 2, numRows, conductedLecturesInSheet).getValues();
+                for (var gr = 0; gr < attGrid.length; gr++) {
+                  for (var gc = 0; gc < attGrid[gr].length; gc++) {
+                    var mVal = String(attGrid[gr][gc] || '').toUpperCase().trim();
+                    if (mVal === 'P' || mVal === '1') {
+                      subP++;
+                      subMarks++;
+                    } else if (mVal === 'A' || mVal === '0') {
+                      subMarks++;
+                    }
+                  }
+                }
+              }
+              var sheetAvgAtt = subMarks > 0 ? Math.round((subP / subMarks) * 100) : 0;
+              totalCollegeP += subP;
+              totalCollegeAttMarks += subMarks;
+
               // Map to matching subject codes
               for (var c = 0; c < distinctCodes.length; c++) {
                 var dCode = distinctCodes[c];
@@ -1111,6 +1140,9 @@ function getInchargeDashboard(sheetId) {
                     cleanOName.indexOf(parsedDCode.cleanBaseCode) !== -1 ||
                     oName.toLowerCase().indexOf(dCode.toLowerCase()) !== -1) {
                   attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
+                  if (sheetAvgAtt > 0) {
+                    attendanceAvgMap[dCode] = sheetAvgAtt;
+                  }
                 }
               }
             }
@@ -1133,11 +1165,14 @@ function getInchargeDashboard(sheetId) {
       var subs = facultyMap[fac];
       var facLectures = 0;
       var facConducted = 0;
+      var facAttSum = 0;
+      var facAttCount = 0;
 
       for (var s = 0; s < subs.length; s++) {
         var sCode = subs[s].code;
         var info = subjectPlanMap[sCode] || { totalLectures: 0, totalConducted: 0 };
         var attConducted = attendanceConductedMap[sCode] || 0;
+        var subAvgAtt = attendanceAvgMap[sCode] || 0;
 
         var finalConducted = Math.max(info.totalConducted || 0, attConducted);
         var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : Math.max(finalConducted, 45);
@@ -1146,12 +1181,19 @@ function getInchargeDashboard(sheetId) {
         subs[s].totalLectures = finalTotal;
         subs[s].totalConducted = finalConducted;
         subs[s].percent = finalPct;
+        subs[s].avgAttendance = subAvgAtt;
 
         facLectures += finalTotal;
         facConducted += finalConducted;
+        if (subAvgAtt > 0) {
+          facAttSum += subAvgAtt;
+          facAttCount++;
+        }
       }
 
       var facPct = facLectures > 0 ? Math.min(100, Math.round((facConducted / facLectures) * 100)) : 0;
+      var facAvgAtt = facAttCount > 0 ? Math.round(facAttSum / facAttCount) : 0;
+
       grandTotalLectures += facLectures;
       grandTotalConducted += facConducted;
       grandTotalSubjects += subs.length;
@@ -1162,11 +1204,13 @@ function getInchargeDashboard(sheetId) {
         totalLectures: facLectures,
         totalConducted: facConducted,
         overallPercent: facPct,
+        avgAttendance: facAvgAtt,
         subjects: subs
       });
     }
 
     var avgCoverage = grandTotalLectures > 0 ? Math.min(100, Math.round((grandTotalConducted / grandTotalLectures) * 100)) : 0;
+    var overallCollegeAvgAtt = totalCollegeAttMarks > 0 ? Math.round((totalCollegeP / totalCollegeAttMarks) * 100) : 0;
 
     var result = {
       success: true,
@@ -1177,7 +1221,8 @@ function getInchargeDashboard(sheetId) {
         totalSubjects: grandTotalSubjects,
         totalLectures: grandTotalLectures,
         totalConducted: grandTotalConducted,
-        avgCoveragePercent: avgCoverage
+        avgCoveragePercent: avgCoverage,
+        overallAvgAttendance: overallCollegeAvgAtt
       },
       faculties: faculties
     };
@@ -1418,24 +1463,34 @@ function getAttendance(code, year, date, outputSheetId, sheetId) {
 }
 
 function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
-  if (!code) return { error: 'No code' };
   if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
   var cleanOutId = extractSpreadsheetId(outputSheetId);
   if (!cleanOutId) return { error: 'Invalid Output Sheet Link' };
-  var outSs; try { outSs = SpreadsheetApp.openById(cleanOutId); } catch(e) { return { error: 'Scan Fail' }; }
+  var outSs; try { outSs = SpreadsheetApp.openById(cleanOutId); } catch(e) { return { error: 'Scan Fail: ' + e.message }; }
   var res = [], sheets = outSs.getSheets();
-  var parsedInput = _parseSubjectCode(code);
+  var parsedInput = code ? _parseSubjectCode(code) : { cleanBaseCode: '' };
+  
   for (var i = 0; i < sheets.length; i++) {
     var s = sheets[i], name = s.getName();
     var parsedSheetCode = _parseSubjectCode(name);
     var cleanSheetName = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (parsedSheetCode.cleanBaseCode !== parsedInput.cleanBaseCode && cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== 0) continue;
+
+    var isMatch = (!code || code === '*' || code === 'all');
+    if (!isMatch) {
+      if (parsedSheetCode.cleanBaseCode === parsedInput.cleanBaseCode ||
+          cleanSheetName.indexOf(parsedInput.cleanBaseCode) !== -1 ||
+          (parsedSheetCode.cleanBaseCode && parsedInput.cleanBaseCode && parsedSheetCode.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1)) {
+        isMatch = true;
+      }
+    }
+    if (!isMatch) continue;
+
     var batch = name.indexOf(" - Batch ") !== -1 ? name.substring(name.indexOf(" - Batch ") + 9).trim() : "";
     var lc = s.getLastColumn(), lr = s.getLastRow();
-    if (lc < 6 || lr < 8) continue;
+    if (lc < 4 || lr < 3) continue;
     
     var attData = s.getDataRange().getValues();
-    if (!attData || attData.length < 8) continue;
+    if (!attData || attData.length < 3) continue;
 
     var hdrRowIdx = -1;
     for (var r = 0; r < Math.min(attData.length, 30); r++) {
@@ -1458,41 +1513,50 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
       return String(cell || '').trim();
     });
     
+    var rollColIdx = -1;
     var nameColIdx = -1;
     var totalPColIdx = -1;
     for (var c = 0; c < hdrs.length; c++) {
       var val = hdrs[c].toLowerCase().trim();
-      if (val.indexOf('name') !== -1) {
+      if (val.indexOf('roll') !== -1 && rollColIdx === -1) {
+        rollColIdx = c;
+      }
+      if (val.indexOf('name') !== -1 && nameColIdx === -1) {
         nameColIdx = c;
       }
-      if (val.indexOf('total p') !== -1) {
-        totalPColIdx = c;
-        break;
+      if (val.indexOf('total p') !== -1 || val.indexOf('% att') !== -1) {
+        if (totalPColIdx === -1) totalPColIdx = c;
       }
     }
+    if (rollColIdx === -1) rollColIdx = 0;
     if (nameColIdx === -1) nameColIdx = 1;
     if (totalPColIdx === -1) {
       for (var c = 0; c < hdrs.length; c++) {
         var val = hdrs[c].toLowerCase().trim();
         if (val.indexOf('total') !== -1 || val.indexOf('% att') !== -1) {
-          totalPColIdx = c;
-          break;
+           totalPColIdx = c;
+           break;
         }
       }
     }
     if (totalPColIdx === -1) totalPColIdx = hdrs.length;
 
     var dates = [];
-    var firstDateColIdx = nameColIdx + 1;
+    var firstDateColIdx = Math.max(rollColIdx, nameColIdx) + 1;
     for (var c = firstDateColIdx; c < totalPColIdx; c++) {
        if (hdrs[c]) dates.push({ index: c, disp: hdrs[c] });
     }
     if (dates.length === 0) continue;
 
+    var effectiveCode = (code && code !== '*' && code !== 'all') ? code : (parsedSheetCode.cleanBaseCode || name);
     var topicRow = attData[hdrRowIdx + 1] || [];
     for (var r = hdrRowIdx + 2; r < attData.length; r++) {
        var rowData = attData[r];
        if (!rowData || rowData.length === 0) continue;
+       var rNo = rowData[rollColIdx];
+       var rName = rowData[nameColIdx];
+       if (!rNo && !rName) continue;
+
        for (var d = 0; d < dates.length; d++) {
           var colIdx = dates[d].index;
           if (colIdx >= rowData.length) continue;
@@ -1503,7 +1567,7 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
              var topicVal = colIdx < topicRow.length ? String(topicRow[colIdx] || '') : '';
              res.push({
                date: dbD,
-               code: code,
+               code: effectiveCode,
                year: year,
                batch: batch,
                faculty: "Assigned",
