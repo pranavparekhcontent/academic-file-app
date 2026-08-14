@@ -2089,7 +2089,7 @@ const App = (() => {
             <!-- Row 1: Subject Name & Code -->
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <div style="font-weight: 800; color: #0f172a; font-size: 14px; line-height: 1.3;">
-                ${escHtml(s.name)}
+                ${escHtml(s.name)} ${isPractical && s.batch ? `<span style="display: inline-block; font-size: 11px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(s.batch)}</span>` : ''}
               </div>
               <span style="color: #475569; font-weight: 700; font-size: 12px; flex-shrink: 0;">Code: (${escHtml(s.code)})</span>
             </div>
@@ -2822,6 +2822,10 @@ const App = (() => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.show('Downloaded', 'Official Defaulters Notice .docx generated successfully.', 'success');
+  }
+
   // ─── DOWNLOAD MONTHLY SYLLABUS PROGRESS AS .DOCX ─────────
   function downloadMonthlySyllabusProgressDoc() {
     const data = state.inchargeDashboard || {};
@@ -2848,14 +2852,14 @@ const App = (() => {
     if (periodFilter === 'custom') {
       const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
       const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
-      periodLabel = (s && e) ? `MONTH - (${s} to ${e})` : 'Custom Date Range';
+      periodLabel = (s && e) ? `PERIOD: ${s} to ${e}` : 'PERIOD: Complete Academic Term';
     } else {
       const now = new Date();
       const monthName = now.toLocaleString('default', { month: 'long' }).toUpperCase();
       const currentYear = now.getFullYear();
       const day = now.getDate();
       const suffix = (day % 10 === 1 && day !== 11) ? 'st' : (day % 10 === 2 && day !== 12) ? 'nd' : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
-      periodLabel = `MONTH - ${monthName} ${currentYear}  (upto ${day}${suffix} ${monthName.slice(0, 3)})`;
+      periodLabel = `MONTH - ${monthName} ${currentYear} (Upto ${day}${suffix} ${monthName.slice(0, 3)})`;
     }
 
     function extractLiveClassName(item) {
@@ -2894,9 +2898,17 @@ const App = (() => {
 
         const isDup = classMap[className].subjects.some(existing => existing.code === s.code && existing.facultyName === facultyName);
         if (!isDup) {
+          const isPrac = isPracticalSubject(s);
+          let assignedBatch = s.batch || '';
+          if (!assignedBatch && isPrac) {
+            const sameCodeSubs = classMap[className].subjects.filter(existing => existing.code === s.code);
+            assignedBatch = 'Batch ' + String.fromCharCode(65 + sameCodeSubs.length);
+          }
+
           classMap[className].subjects.push({
             ...s,
-            facultyName: facultyName
+            facultyName: facultyName,
+            batch: assignedBatch
           });
         }
       });
@@ -2993,20 +3005,20 @@ const App = (() => {
     h1 += cell(run('Sign of Staff', { b: true, sz: 18 }), { shade: thShade, align: 'center', vMerge: 'restart' });
     h1 += '</w:tr>';
 
-    // Header Row 2
+    // Header Row 2 — Clean headers without hardcoded 45/15
     let h2 = '<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>';
     h2 += cell('', { shade: thShade, vMerge: 'continue' });
     h2 += cell('', { shade: thShade, vMerge: 'continue' });
     h2 += cell('', { shade: thShade, vMerge: 'continue' });
-    h2 += cell(run('Theory\n(45)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Tutorials\n(15)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Practicals\n(15)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Theory', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Tutorials', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Practicals', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Theory', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Tutorials', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
-    h2 += cell(run('Practicals', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Theory', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Theory', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Theory', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals', { b: true, sz: 17 }), { shade: thShade, align: 'center' });
     h2 += cell('', { shade: thShade, vMerge: 'continue' });
     h2 += '</w:tr>';
 
@@ -3033,19 +3045,25 @@ const App = (() => {
         const req = Math.max(0, planned - cond);
         const pct = s.percent || (planned > 0 ? Math.round((cond / planned) * 100) : 0);
 
-        const cTh = isPrac ? '-' : String(cond);
-        const cTut = '-';
-        const cPr = isPrac ? String(cond) : '-';
+        const condStr = `${String(cond).padStart(2, '0')}/${String(planned).padStart(2, '0')}`;
+        const reqStr = String(req).padStart(2, '0');
 
-        const rTh = isPrac ? '-' : String(req);
-        const rTut = '-';
-        const rPr = isPrac ? String(req) : '-';
+        const cTh = isPrac ? '-' : condStr;
+        const cTut = ' ';
+        const cPr = isPrac ? condStr : '-';
+
+        const rTh = isPrac ? '-' : reqStr;
+        const rTut = ' ';
+        const rPr = isPrac ? reqStr : '-';
 
         const pTh = isPrac ? '-' : `${pct}%`;
-        const pTut = '-';
+        const pTut = ' ';
         const pPr = isPrac ? `${pct}%` : '-';
 
-        const subDisplayName = s.code ? `${s.name} (${s.code})` : s.name;
+        let subDisplayName = s.code ? `${s.name} (${s.code})` : s.name;
+        if (isPrac && s.batch) {
+          subDisplayName += ` [${s.batch}]`;
+        }
 
         let rXml = cell(run(shortYear, { sz: 18 }), { shade, align: 'center' });
         rXml += cell(run(subDisplayName, { sz: 18 }), { shade, align: 'left' });
@@ -3085,12 +3103,14 @@ const App = (() => {
 
     const headerTitle = m.mgmt ? `${m.mgmt}'s` : '';
     const collegeTitle = m.college || 'Institute of Pharmaceutical Education and Research';
-    const reportTitle = `${m.className} MONTHLY SYLLABUS PROGRESS REPORT - A.Y. ${m.acadYear} (${m.term})\n${m.period}`;
+    const classReportTitle = `${m.className} MONTHLY SYLLABUS PROGRESS REPORT - A.Y. ${m.acadYear} (${m.term})`;
+    const periodSubTitle = m.period ? `${m.period}` : '';
 
     const body =
-      para(run(headerTitle, { b: true, sz: 22, color: '333333' }), { align: 'center', after: 30 }) +
+      (headerTitle ? para(run(headerTitle, { b: true, sz: 22, color: '333333' }), { align: 'center', after: 30 }) : '') +
       para(run(collegeTitle, { b: true, sz: 26, color: '111111' }), { align: 'center', after: 60 }) +
-      para(run(reportTitle, { b: true, sz: 22, color: '1e293b' }), { align: 'center', after: 180 }) +
+      para(run(classReportTitle, { b: true, sz: 22, color: '1e293b' }), { align: 'center', after: 30 }) +
+      (periodSubTitle ? para(run(periodSubTitle, { b: true, sz: 20, color: '475569' }), { align: 'center', after: 180 }) : '') +
       tableXml +
       para('', { after: 800 }) +
       signTbl +
@@ -3630,7 +3650,7 @@ Generated: ${formatDisplayDate(new Date())}
                     ${escHtml(s.code || 'SUB')}
                   </span>
                   <span style="font-size: 14px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${escHtml(s.name)}
+                    ${escHtml(s.name)} ${isPractical && s.batch ? `<span style="font-size: 10.5px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(s.batch)}</span>` : ''}
                   </span>
                 </div>
 

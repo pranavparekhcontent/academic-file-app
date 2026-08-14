@@ -38,32 +38,34 @@ def cell(runs, shade=None, align='center', v_align='center', grid_span=None, v_m
 cols = [1100, 2700, 2300, 850, 850, 850, 850, 850, 850, 850, 850, 850, 1300]
 grid = '<w:tblGrid>' + ''.join([f'<w:gridCol w:w="{w}"/>' for w in cols]) + '</w:tblGrid>'
 
+thShade = 'E8EFF8'
+
 # Header Row 1
 h1 = '<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>'
-h1 += cell(run('Year', b=True, sz=18), shade='E8EFF8', align='center', v_merge='restart')
-h1 += cell(run('Name of Subject', b=True, sz=18), shade='E8EFF8', align='center', v_merge='restart')
-h1 += cell(run('Name of Faculty', b=True, sz=18), shade='E8EFF8', align='center', v_merge='restart')
-h1 += cell(run('Total No. conducted', b=True, sz=18), shade='E8EFF8', align='center', grid_span=3)
-h1 += cell(run('No. required to complete Syllabus', b=True, sz=18), shade='E8EFF8', align='center', grid_span=3)
-h1 += cell(run('Total Syllabus Covered (%)', b=True, sz=18), shade='E8EFF8', align='center', grid_span=3)
-h1 += cell(run('Sign of Staff', b=True, sz=18), shade='E8EFF8', align='center', v_merge='restart')
+h1 += cell(run('Year', b=True, sz=18), shade=thShade, align='center', v_merge='restart')
+h1 += cell(run('Name of Subject', b=True, sz=18), shade=thShade, align='center', v_merge='restart')
+h1 += cell(run('Name of Faculty', b=True, sz=18), shade=thShade, align='center', v_merge='restart')
+h1 += cell(run('Total No. conducted', b=True, sz=18), shade=thShade, align='center', grid_span=3)
+h1 += cell(run('No. required to complete Syllabus', b=True, sz=18), shade=thShade, align='center', grid_span=3)
+h1 += cell(run('Total Syllabus Covered (%)', b=True, sz=18), shade=thShade, align='center', grid_span=3)
+h1 += cell(run('Sign of Staff', b=True, sz=18), shade=thShade, align='center', v_merge='restart')
 h1 += '</w:tr>'
 
-# Header Row 2
+# Header Row 2 — Removed hardcoded (45) and (15)
 h2 = '<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>'
-h2 += cell('', shade='E8EFF8', v_merge='continue')
-h2 += cell('', shade='E8EFF8', v_merge='continue')
-h2 += cell('', shade='E8EFF8', v_merge='continue')
-h2 += cell(run('Theory\n(45)', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Tutorials\n(15)', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Practicals\n(15)', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Theory', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Tutorials', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Practicals', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Theory', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Tutorials', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell(run('Practicals', b=True, sz=16), shade='E8EFF8', align='center')
-h2 += cell('', shade='E8EFF8', v_merge='continue')
+h2 += cell('', shade=thShade, v_merge='continue')
+h2 += cell('', shade=thShade, v_merge='continue')
+h2 += cell('', shade=thShade, v_merge='continue')
+h2 += cell(run('Theory', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Tutorials', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Practicals', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Theory', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Tutorials', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Practicals', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Theory', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Tutorials', b=True, sz=17), shade=thShade, align='center')
+h2 += cell(run('Practicals', b=True, sz=17), shade=thShade, align='center')
+h2 += cell('', shade=thShade, v_merge='continue')
 h2 += '</w:tr>'
 
 # Sample Data rows
@@ -74,23 +76,28 @@ sample_subjects = [
     ('T. Y.', 'Medicinal Chemistry III (BP601T)', 'Ms. Snehal Tuse', False, 15, 45, 33),
     ('T. Y.', 'Pharmacology III (BP602T)', 'Mr. Shubham Waghmare', False, 13, 45, 29),
     ('T. Y.', 'Herbal Drug Technology (BP603T)', 'Dr. S.P. Ghode', False, 14, 45, 31),
-    ('T. Y.', 'Medicinal Chemistry III (BP607P)', 'Ms. Snehal Tuse', True, 6, 15, 40),
-    ('T. Y.', 'Pharmacology III (BP608P)', 'Mr. Shubham Waghmare', True, 6, 15, 40),
-    ('T. Y.', 'Herbal Drug Technology (BP609P)', 'Dr. S.P. Ghode', True, 6, 15, 40),
+    ('T. Y.', 'Medicinal Chemistry III (BP607P) [Batch A]', 'Ms. Snehal Tuse', True, 6, 15, 40),
+    ('T. Y.', 'Pharmacology III (BP608P) [Batch A]', 'Mr. Shubham Waghmare', True, 6, 15, 40),
+    ('T. Y.', 'Herbal Drug Technology (BP609P) [Batch A]', 'Dr. S.P. Ghode', True, 6, 15, 40),
 ]
 
 body_rows = ''
 for i, (yr, sub, fac, is_prac, cond, plan, pct) in enumerate(sample_subjects):
     shade = 'F8FAFC' if i % 2 == 1 else None
     req = max(0, plan - cond)
-    c_th = '-' if is_prac else str(cond)
-    c_tut = '-'
-    c_pr = str(cond) if is_prac else '-'
-    r_th = '-' if is_prac else str(req)
-    r_tut = '-'
-    r_pr = str(req) if is_prac else '-'
+    cond_fmt = f'{cond:02d}/{plan:02d}'
+    req_fmt = f'{req:02d}' if req > 0 else '00'
+    
+    c_th = '-' if is_prac else cond_fmt
+    c_tut = ' '
+    c_pr = cond_fmt if is_prac else '-'
+    
+    r_th = '-' if is_prac else req_fmt
+    r_tut = ' '
+    r_pr = req_fmt if is_prac else '-'
+    
     p_th = '-' if is_prac else f'{pct}%'
-    p_tut = '-'
+    p_tut = ' '
     p_pr = f'{pct}%' if is_prac else '-'
     
     r_xml = cell(run(yr if i == 0 else '', sz=18), shade=shade, align='center')
@@ -127,7 +134,8 @@ doc_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:body>
 {para(run("Shri Jain Vidya Prasarak Mandal's", b=True, sz=22, color='333333'), align='center', after=30)}
 {para(run("Rasiklal M. Dhariwal Institute of Pharmaceutical Education and Research, Chinchwad, Pune-19", b=True, sz=26, color='111111'), align='center', after=60)}
-{para(run("T. Y. MONTHLY SYLLABUS PROGRESS REPORT - A.Y. 2025-26 (TERM II)\\nMONTH - MAY 2026  (upto 19th May)", b=True, sz=22, color='1e293b'), align='center', after=180)}
+{para(run("T. Y. MONTHLY SYLLABUS PROGRESS REPORT - A.Y. 2025-26 (TERM II)", b=True, sz=22, color='1e293b'), align='center', after=30)}
+{para(run("MONTH: MAY 2026 (Upto 19th May)", b=True, sz=20, color='475569'), align='center', after=180)}
 {table_xml}
 {para('', after=800)}
 {sign_tbl}
@@ -150,10 +158,10 @@ rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>'''
 
-out_path = 'C:/Users/PRANAV/Desktop/Syllabus_Progress_Report_Sample.docx'
+out_path = 'C:/Users/PRANAV/Desktop/Syllabus_Progress_Report_Sample_v2.docx'
 with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as z:
     z.writestr('[Content_Types].xml', content_types)
     z.writestr('_rels/.rels', rels)
     z.writestr('word/document.xml', doc_xml)
 
-print('Sample docx successfully written to:', out_path)
+print('Updated sample docx written to:', out_path)

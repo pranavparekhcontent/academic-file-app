@@ -388,7 +388,14 @@ function getSubjects(teacher, sheetId) {
       if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
         sType = 'Practical';
       }
-      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType };
+      var explicitBatch = parsedCode.batch;
+      if (!explicitBatch && parsedCode.isPractical && fs.length > 1 && teacher) {
+        var tIdx = fs.indexOf(teacher.toLowerCase());
+        if (tIdx !== -1) {
+          explicitBatch = 'Batch ' + String.fromCharCode(65 + tIdx);
+        }
+      }
+      var subObj = { code: sCode, name: sName, year: String(data[i][cols.year]).trim(), program: String(data[i][cols.program]).trim(), semester: String(data[i][cols.semester]).trim(), type: sType, batch: explicitBatch || '' };
       subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
       subObj.outputSheetId = defaultOutId;
       res.push(subObj);
@@ -896,7 +903,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v40_' + sheetId;
+  var cacheKey = 'dash_v41_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -938,17 +945,26 @@ function getInchargeDashboard(sheetId) {
       }
 
       var facList = rawFaculty ? rawFaculty.split(',').map(function(x) { return x.trim(); }) : ['Unassigned'];
+      var isPracSub = (_parseSubjectCode(sCode, '', sName).isPractical);
       for (var f = 0; f < facList.length; f++) {
         var facName = facList[f];
         if (!facName) continue;
         if (!facultyMap[facName]) facultyMap[facName] = [];
+
+        var explicitBatch = _parseSubjectCode(sCode, '', sName).batch;
+        if (!explicitBatch && isPracSub && facList.length > 1) {
+          explicitBatch = 'Batch ' + String.fromCharCode(65 + f);
+        } else if (explicitBatch && !/^batch/i.test(explicitBatch)) {
+          explicitBatch = 'Batch ' + explicitBatch;
+        }
 
         facultyMap[facName].push({
           code: sCode,
           name: sName,
           year: sYear,
           semester: sSem,
-          faculty: facName
+          faculty: facName,
+          batch: explicitBatch || ''
         });
       }
     }
