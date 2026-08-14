@@ -455,15 +455,29 @@ function _getCollegeSheetIds(sheetId) {
     var ss = _getSpreadsheet(MASTER_CONFIG_ID);
     var ws = ss.getSheetByName('colleges') || ss.getSheets()[0];
     var data = ws.getDataRange().getValues();
+    if (!data || data.length <= 1) return res;
+
+    var colCollege = 1, colMgmt = 2, colInput = 4, colOutput = 5, colTp = 6;
+    var hdr = data[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
+    for (var c = 0; c < hdr.length; c++) {
+      if (hdr[c].indexOf('college name') !== -1) colCollege = c;
+      else if (hdr[c].indexOf('management name') !== -1) colMgmt = c;
+      else if (hdr[c].indexOf('input sheet') !== -1) colInput = c;
+      else if (hdr[c].indexOf('output') !== -1) colOutput = c;
+      else if (hdr[c].indexOf('teaching plan') !== -1) colTp = c;
+    }
+
+    var cleanTargetSheetId = extractSpreadsheetId(sheetId) || sheetId;
+
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
-      var rawLink = String(row[1] || '');
-      var cId = extractSpreadsheetId(rawLink) || rawLink;
-      if (cId === sheetId || (rawLink && rawLink.indexOf(sheetId) !== -1)) {
-        if (row[2]) res.outputSheetId = String(row[2]).trim();
-        if (row[3]) res.teachingPlanId = String(row[3]).trim();
-        if (row[0]) res.collegeName = String(row[0]).trim();
-        if (row[4]) res.managementName = String(row[4]).trim();
+      var rawInput = String(row[colInput] || '').trim();
+      var cId = extractSpreadsheetId(rawInput) || rawInput;
+      if (cId === cleanTargetSheetId || (rawInput && rawInput.indexOf(cleanTargetSheetId) !== -1)) {
+        res.collegeName = String(row[colCollege] || '').trim();
+        res.managementName = String(row[colMgmt] || '').trim();
+        res.outputSheetId = extractSpreadsheetId(String(row[colOutput] || ''));
+        res.teachingPlanId = extractSpreadsheetId(String(row[colTp] || ''));
         break;
       }
     }
@@ -1535,24 +1549,8 @@ function _resolveCollegeTeachingPlanId(sheetId, teachingPlanLink) {
     var explicitId = extractSpreadsheetId(teachingPlanLink);
     if (explicitId) return explicitId;
   }
-  var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
-  try {
-    var ss = _getSpreadsheet(MASTER_CONFIG_ID);
-    var ws = ss.getSheetByName('colleges') || ss.getSheets()[0];
-    var data = ws.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var rawLink = String(row[1] || '');
-      var cId = extractSpreadsheetId(rawLink) || rawLink;
-      if (cId === sheetId || (rawLink && rawLink.indexOf(sheetId) !== -1)) {
-        if (row[3]) {
-          var id3 = extractSpreadsheetId(String(row[3]).trim());
-          if (id3) return id3;
-        }
-      }
-    }
-  } catch(e) {}
-  return sheetId;
+  var globalIds = _getCollegeSheetIds(sheetId);
+  return globalIds.teachingPlanId || sheetId;
 }
 
 function getAcademicSchedule(sheetId, teachingPlanLink) {

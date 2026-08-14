@@ -2077,7 +2077,11 @@ const App = (() => {
         const isPractical = isPracticalSubject(s) || s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
         const unitLabel = isPractical ? 'practicals' : 'lectures';
         const fallback = isPractical ? 15 : 45;
-        const displayTotal = (s.totalLectures && s.totalLectures > 5) ? Math.max(s.totalLectures, s.totalConducted || 0) : Math.max(s.totalConducted || 0, fallback);
+        let displayTotal = (s.totalLectures && s.totalLectures > 0) ? s.totalLectures : fallback;
+        if (isPractical && displayTotal > 30) {
+          displayTotal = fallback;
+        }
+        displayTotal = Math.max(displayTotal, s.totalConducted || 0);
         const displayConducted = s.totalConducted || 0;
         const displayPercent = displayTotal > 0 ? Math.min(100, Math.round((displayConducted / displayTotal) * 100)) : 0;
 
