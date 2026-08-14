@@ -2222,7 +2222,41 @@ const App = (() => {
       `;
     }).join('');
 
+    const unassignedPracticalCodes = [];
+    const allSubsList = (state.allData && state.allData.subjects) || [];
+    allSubsList.forEach(sub => {
+      const isPrac = sub.type === 'practical' || (sub.code && sub.code.toUpperCase().endsWith('P')) || (sub.name && sub.name.toLowerCase().includes('practical'));
+      if (isPrac && sub.faculty && sub.faculty.includes(',') && (!sub.batches || !sub.batches.trim())) {
+        if (!unassignedPracticalCodes.includes(sub.code)) {
+          unassignedPracticalCodes.push(sub.code);
+        }
+      }
+    });
+
+    let warningToastHtml = '';
+    if (unassignedPracticalCodes.length > 0 && !sessionStorage.getItem('incharge_batch_warn_dismissed')) {
+      warningToastHtml = `
+        <div id="unassigned-batch-toast" style="background: rgba(254, 242, 242, 0.95); backdrop-filter: blur(16px); border: 1.5px solid #f87171; border-radius: 14px; padding: 12px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; box-shadow: 0 8px 24px rgba(239, 68, 68, 0.12);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 24px; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; animation: pulseBlink 1s ease-in-out infinite alternate;">
+              <i class="ph-fill ph-warning-circle"></i>
+            </span>
+            <div>
+              <div style="font-size: 13px; font-weight: 800; color: #991b1b;">Notice: Practical Batches Not Configured in Column I</div>
+              <div style="font-size: 11.5px; font-weight: 600; color: #b91c1c; margin-top: 2px;">
+                Courses <strong>${unassignedPracticalCodes.join(', ')}</strong> have multiple faculty members without specific batch allocation. Please specify batches in Column I (e.g. <code>ppp=A,B/abc=C,D</code>) in your college master sheet.
+              </div>
+            </div>
+          </div>
+          <button type="button" onclick="sessionStorage.setItem('incharge_batch_warn_dismissed','1'); document.getElementById('unassigned-batch-toast').remove();" style="background: #dc2626; color: #ffffff; border: none; font-size: 12px; font-weight: 800; padding: 6px 16px; border-radius: 9999px; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);">
+            OK
+          </button>
+        </div>
+      `;
+    }
+
     container.innerHTML = `
+      ${warningToastHtml}
       ${overallHtml}
       <div class="dashboard-section-header" style="margin: 24px 0 12px;">
         <h3 class="section-title" style="font-size: 16px; color: #0f172a; font-weight: 800;">Faculty Course Execution Progress</h3>
@@ -2930,7 +2964,7 @@ const App = (() => {
     const inchargeName = state.inchargeName || (state.academicIncharges && state.academicIncharges[0] && state.academicIncharges[0].name) || 'Dr. S.P. Ghode';
     const principalName = cfg.principal_name || cfg.principalName || metaObj.principalName || 'Dr. S. G. Walode';
 
-    // Period resolution
+    // Period resolution: Clean Date Range format
     const periodFilter = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
     let periodLabel = '';
     if (periodFilter === 'custom') {
@@ -2939,11 +2973,10 @@ const App = (() => {
       periodLabel = (s && e) ? `PERIOD: ${s} to ${e}` : 'PERIOD: Complete Academic Term';
     } else {
       const now = new Date();
-      const monthName = now.toLocaleString('default', { month: 'long' }).toUpperCase();
+      const dayStr = String(now.getDate()).padStart(2, '0');
+      const monthStr = String(now.getMonth() + 1).padStart(2, '0');
       const currentYear = now.getFullYear();
-      const day = now.getDate();
-      const suffix = (day % 10 === 1 && day !== 11) ? 'st' : (day % 10 === 2 && day !== 12) ? 'nd' : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
-      periodLabel = `MONTH - ${monthName} ${currentYear} (Upto ${day}${suffix} ${monthName.slice(0, 3)})`;
+      periodLabel = `PERIOD: 01/${monthStr}/${currentYear} to ${dayStr}/${monthStr}/${currentYear}`;
     }
 
     function extractLiveClassName(item) {
@@ -3015,17 +3048,13 @@ const App = (() => {
 
     const classKeys = Object.keys(classMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     const primaryClass = state.activeStudentYear || classKeys[0] || 'T. Y.';
-    const term = 'TERM II';
 
     const docMeta = {
       mgmt: mgmt,
       college: college,
       acadYear: ay,
-      term: term,
       period: periodLabel,
       className: primaryClass,
-      inchargeName: inchargeName,
-      principalName: principalName,
       classMap: classMap,
       classKeys: classKeys
     };
@@ -3103,8 +3132,8 @@ const App = (() => {
     const signCols = [half, half];
     const signGrid = `<w:tblGrid>${signCols.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
     const signRow = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
-      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run((m.inchargeName || 'Academic In-charge') + '\nAcademic In-charge', { b: true, sz: 22 })}</w:p></w:tc>` +
-      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run((m.principalName || 'Principal') + '\nPrincipal', { b: true, sz: 22 })}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run('Academic In-charge', { b: true, sz: 22 })}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run('Principal', { b: true, sz: 22 })}</w:p></w:tc>` +
       `</w:tr>`;
     const signTbl = `<w:tbl><w:tblPr><w:tblW w:w="${TEXT_W}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:jc w:val="center"/></w:tblPr>${signGrid}${signRow}</w:tbl>`;
 
@@ -3119,7 +3148,7 @@ const App = (() => {
       if (!/^b\.?\s*pharm/i.test(fullClassName) && !/pharmacy/i.test(fullClassName)) {
         fullClassName = `B.Pharm ${fullClassName}`;
       }
-      const classReportTitle = `${fullClassName} SYLLABUS PROGRESS REPORT - A.Y. ${m.acadYear || '2025-26'} (${m.term || 'TERM II'})`;
+      const classReportTitle = `${fullClassName} SYLLABUS PROGRESS REPORT - A.Y. ${m.acadYear || '2025-26'}`;
 
       let shortYear = cKey;
       if (/third\s*year/i.test(cKey) || /t\.?\s*y\.?/i.test(cKey) || /sem\s*[v|5|6]/i.test(cKey)) shortYear = 'T. Y.';
