@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  UNIFIED CENTRAL API — Google Apps Script Web App (v3.5)
- *  Supports both Smart Attendance PWA and Academic File PWA.
+ *  CENTRAL API — Google Apps Script Web App (v3.6)
+ *  Backend for Academic File PWA & Academic Incharge Dashboard.
  *  Proxies access to college sheets via the sheetId parameter.
  * ═══════════════════════════════════════════════════════════════
  */
@@ -74,7 +74,7 @@ function doGet(e) {
     }
 
     switch (action) {
-      // ── Attendance & Common Routes ──
+      // ── Common & Shared Routes ──
       case 'getTeachers': 
         result = getTeachers(sheetId); 
         break;
@@ -131,7 +131,7 @@ function doGet(e) {
 }
 
 /**
- * Main POST entry point - merges post routes for Attendance and Academic PWAs
+ * Main POST entry point - routes for Academic File PWA
  */
 function doPost(e) {
   try {
@@ -141,11 +141,6 @@ function doPost(e) {
     var result;
 
     switch (action) {
-      // ── Attendance POSTs ──
-      case 'saveAttendance': 
-        result = saveAttendance(data.records, data.outputSheetId, data.collegeName, data.managementName, sheetId); 
-        break;
-
       // ── Academic File POSTs ──
       case 'saveRemark':
         result = saveRemark(data.code, data.rowIndex, data.remark, sheetId);
@@ -1361,174 +1356,7 @@ function getInchargeDashboard(sheetId) {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   SMART ATTENDANCE LOGIC (FULLY RESTORED & UNTOUCHED)
-   ═══════════════════════════════════════════════════════════════ */
 
-function saveAttendance(records, outputSheetId, collegeName, managementName, sheetId) {
-  if (!records || !records.length) return { error: 'No data' };
-  if (!outputSheetId) outputSheetId = getOutputSheetId(sheetId);
-  var res = updateOutputMatrix(records, outputSheetId, collegeName, managementName, sheetId);
-  if (res === true) {
-    try {
-      if (sheetId) CacheService.getScriptCache().remove('dash_' + sheetId);
-      var code = records[0] && records[0].code ? records[0].code : '';
-      var cleanOutId = extractSpreadsheetId(outputSheetId);
-      if (code) {
-        CacheService.getScriptCache().remove('attrep_v1_' + code + '__' + cleanOutId);
-      }
-    } catch(cErr) {}
-    return { success: true, saved: records.length };
-  }
-  return { success: false, error: String(res) };
-}
-
-function updateOutputMatrix(records, outputSheetId, _collegeName, _managementName, sheetId) {
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return "Lock Timeout"; }
-  try {
-    var outSs = SpreadsheetApp.openById(outputSheetId);
-    var grouped = {};
-    for (var i = 0; i < records.length; i++) {
-      var r = records[i], tab = r.code + " - " + getSubjectName(r.code, sheetId);
-      if (r.batch) tab += " - Batch " + r.batch;
-      if (!grouped[tab]) grouped[tab] = {};
-      if (!grouped[tab][r.date]) grouped[tab][r.date] = [];
-      grouped[tab][r.date].push(r);
-    }
-    var limit = (getAttendanceLimit(sheetId).limit || 75) / 100;
-    var config = { collegeName: _collegeName || '', managementName: _managementName || '' };
-    if (!config.collegeName || !config.managementName) {
-      try {
-        var cs = _getSpreadsheet(sheetId).getSheetByName('client sheet') || _getSpreadsheet(sheetId).getSheetByName('subjects');
-        if (cs) {
-          var cd = cs.getDataRange().getValues();
-          for (var cr = 0; cr < cd.length; cr++) {
-            for (var cc = 0; cc < cd[cr].length; cc++) {
-              var cv = String(cd[cr][cc]).trim().toLowerCase();
-              if (!config.collegeName && cv.indexOf('college name') !== -1) {
-                if (cr+1 < cd.length) { var bv = String(cd[cr+1][cc]).trim(); if (bv) config.collegeName = bv; }
-              }
-              if (!config.managementName && cv.indexOf('management name') !== -1) {
-                if (cr+1 < cd.length) { var bv = String(cd[cr+1][cc]).trim(); if (bv) config.managementName = bv; }
-              }
-            }
-          }
-        }
-      } catch(ce) {}
-    }
-    for (var tab in grouped) {
-        var dates = grouped[tab], dKeys = Object.keys(dates), sheet = outSs.getSheetByName(tab);
-        if (!sheet) {
-            sheet = outSs.insertSheet(tab);
-            sheet.getRange("A1:K1").mergeAcross(); sheet.getRange("A2:K2").mergeAcross(); sheet.getRange("A4:K4").mergeAcross();
-            sheet.getRange(6, 1, 1, 6).setValues([["Roll No.", "Name", "Total P", "Total A", "Total", "% Att."]]).setFontWeight("bold").setBackground("#F1F5F9").setHorizontalAlignment("center");
-            sheet.getRange("B7").setValue("Topic").setFontWeight("bold").setHorizontalAlignment("left");
-            var f = dates[dKeys[0]][0], sts = getStudents(f.year, f.batch, sheetId).students || [];
-            sts.sort(function(a,b){return parseInt(a.rollNo)-parseInt(b.rollNo)});
-            var sd = sts.map(function(s){return [s.rollNo, s.name, 0, 0, 0, 0]});
-            if (sd.length > 0) sheet.getRange(8, 1, sd.length, 6).setValues(sd);
-            sheet.setColumnWidth(1, 80); sheet.setColumnWidth(2, 280);
-        }
-        
-        var sheetData = sheet.getDataRange().getValues();
-        var hdrRowIdx = -1;
-        for (var r = 0; r < Math.min(sheetData.length, 30); r++) {
-            var rowStr = sheetData[r].map(function(cell) { return String(cell).toLowerCase().trim(); }).join('|');
-            if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
-                hdrRowIdx = r;
-                break;
-            }
-        }
-        if (hdrRowIdx === -1) {
-            hdrRowIdx = 5;
-        }
-        var hdrRowNumber = hdrRowIdx + 1;
-        
-        for (var k = 0; k < dKeys.length; k++) {
-            var dateKey = dKeys[k], recs = dates[dateKey], dispDate = dbToDisplay(dateKey);
-            var hRows = sheet.getRange(hdrRowNumber, 1, 1, Math.max(sheet.getLastColumn(), 10)).getDisplayValues()[0];
-            var dCol = -1, tpCol = -1;
-            for (var c = 0; c < hRows.length; c++) {
-                var val = hRows[c].trim().toLowerCase();
-                if (val === dispDate.toLowerCase()) dCol = c + 1;
-                if (val.indexOf("total p") !== -1) tpCol = c + 1;
-            }
-            
-            var nameColIdx = -1;
-            for (var c = 0; c < hRows.length; c++) {
-                if (hRows[c].trim().toLowerCase().indexOf('name') !== -1) {
-                    nameColIdx = c;
-                    break;
-                }
-            }
-            if (nameColIdx === -1) nameColIdx = 1;
-            
-            if (dCol === -1 && tpCol !== -1) {
-                sheet.insertColumnBefore(tpCol); dCol = tpCol;
-                sheet.getRange(hdrRowNumber, dCol).setValue(dispDate).setFontWeight("bold").setBackground("#F1F5F9").setHorizontalAlignment("center");
-                sheet.setColumnWidth(dCol, 100);
-                var rs = sheet.getLastRow() - (hdrRowNumber + 1);
-                if (rs > 0) {
-                    var tpL = columnToLetter(dCol+1), taL = columnToLetter(dCol+2), tL = columnToLetter(dCol+3), deL = columnToLetter(dCol);
-                    var firstDateLetter = columnToLetter(nameColIdx + 2);
-                    var fms = [];
-                    for (var r=0; r<rs; r++) {
-                        var rn = r + (hdrRowNumber + 2);
-                        fms.push([
-                          '=COUNTIF(' + firstDateLetter + rn + ':' + deL + rn + ', "P")', 
-                          '=COUNTIF(' + firstDateLetter + rn + ':' + deL + rn + ', "A")', 
-                          '=' + tpL + rn + '+' + taL + rn, 
-                          '=IF(' + tL + rn + '>0,' + tpL + rn + '/' + tL + rn + ',0)'
-                        ]);
-                    }
-                    sheet.getRange(hdrRowNumber + 2, dCol+1, rs, 4).setFormulas(fms);
-                    setupFormulasAndConditions(sheet, rs, dCol+4, hdrRowNumber + 2, nameColIdx + 2, limit*100);
-                }
-            }
-            if (dCol !== -1) {
-                var topic = recs[0] && recs[0].topic ? recs[0].topic : "";
-                sheet.getRange(hdrRowNumber + 1, dCol).setValue(topic).setFontStyle("italic").setHorizontalAlignment("center");
-                
-                var rs = sheet.getLastRow() - (hdrRowNumber + 1);
-                if (rs > 0) {
-                    var ex = sheet.getRange(hdrRowNumber + 2, dCol, rs, 1).getValues(), rolls = sheet.getRange(hdrRowNumber + 2, 1, rs, 1).getValues();
-                    var ups = rolls.map(function(r, idx) {
-                        var roll = String(r[0]), st = ex[idx][0] || "-";
-                        for (var x=0; x<recs.length; x++) { if (String(recs[x].rollNo) === roll) st = recs[x].status; }
-                        return [st];
-                    });
-                    sheet.getRange(hdrRowNumber + 2, dCol, rs, 1).setValues(ups).setHorizontalAlignment("center");
-                }
-            }
-        }
-        try {
-          var f = dates[dKeys[0]][0], info = getSubjectInfo(f.code, sheetId);
-          var row4 = f.code + " - " + info.name + (f.batch ? " | Batch " + f.batch : "") + " | " + info.program + " | " + info.year + " | 01 Jan 2020 to " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd MMM yyyy");
-          sheet.getRange("A1:K1").unmerge().mergeAcross().setValue(config.managementName || "Management Name").setFontWeight("bold").setFontSize(14).setHorizontalAlignment("center");
-          sheet.getRange("A2:K2").unmerge().mergeAcross().setValue(config.collegeName || "College Name").setFontWeight("bold").setFontSize(11).setHorizontalAlignment("center");
-          sheet.getRange("A4:K4").unmerge().mergeAcross().setValue(row4).setFontWeight("bold").setBackground("#E2E8F0").setHorizontalAlignment("center");
-        } catch(e) {}
-    }
-    return true;
-  } catch(e) { return e.message; } finally { lock.releaseLock(); }
-}
-
-function getSubjectName(code, sheetId) {
-  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
-  if (!ws) return "Unknown";
-  var data = ws.getDataRange().getValues();
-  for (var i=1; i<data.length; i++) { if (String(data[i][0]).trim() === String(code).trim()) return String(data[i][1]).trim(); }
-  return "Unknown";
-}
-
-function getSubjectInfo(code, sheetId) {
-  var ss = _getSpreadsheet(sheetId), ws = ss.getSheetByName('subjects');
-  if (!ws) return { name: "Unknown", program: "", year: "" };
-  var data = ws.getDataRange().getValues();
-  for (var i=1; i<data.length; i++) { if (String(data[i][0]).trim() === String(code).trim()) return { name: String(data[i][1]).trim(), year: String(data[i][2]).trim(), program: String(data[i][3]).trim() }; }
-  return { name: "Unknown", program: "", year: "" };
-}
 
 function dbToDisplay(db) {
   if (!db) return '';
@@ -1549,23 +1377,7 @@ function displayToDb(disp) {
   return new Date().getFullYear() + '-' + mm + '-' + dStr + s;
 }
 
-function columnToLetter(column) {
-  var temp, letter = '';
-  while (column > 0) { temp = (column - 1) % 26; letter = String.fromCharCode(temp + 65) + letter; column = (column - temp - 1) / 26; }
-  return letter;
-}
 
-function setupFormulasAndConditions(sheet, rows, pctCol, startRow, startCol, limit) {
-  sheet.getRange(startRow, pctCol, rows, 1).setNumberFormat('0.0%');
-  var dataR = sheet.getRange(startRow, startCol, 1000, Math.max(pctCol - startCol, 1));
-  var pctR = sheet.getRange(startRow, pctCol, 1000, 1);
-  sheet.setConditionalFormatRules([
-    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("P").setFontColor("#15803D").setBackground("#DCFCE7").setRanges([dataR]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("A").setFontColor("#B91C1C").setBackground("#FEE2E2").setRanges([dataR]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(limit / 100).setFontColor("#14532D").setBackground("#BBF7D0").setBold(true).setRanges([pctR]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(limit / 100).setFontColor("#7F1D1D").setBackground("#FECACA").setBold(true).setRanges([pctR]).build()
-  ]);
-}
 
 function getAttendance(code, year, date, outputSheetId, sheetId) {
   var cleanOutId = extractSpreadsheetId(outputSheetId || getOutputSheetId(sheetId));
@@ -2593,45 +2405,7 @@ function getSyllabusPointsFromLink(url, code) {
   return points;
 }
 
-// ══════════════════════════════════════
-// FIREBASE PUSH NOTIFICATION DISPATCHER
-// ══════════════════════════════════════
-var FCM_SERVER_KEY = "AIzaSyBuw7HMI__3oNgMbjQz-q2L1aoIcfn5H9k";
 
-function sendFCMPushNotification(title, body, topic, customData) {
-  topic = topic || "teachers";
-  var url = "https://fcm.googleapis.com/fcm/send";
-  
-  var payload = {
-    to: "/topics/" + topic,
-    notification: {
-      title: title || "VibeMantra Alert",
-      body: body || "New update available.",
-      icon: "icons/icon-192.png",
-      click_action: "FLUTTER_NOTIFICATION_CLICK"
-    },
-    data: customData || { url: "./index.html" }
-  };
-  
-  var options = {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      "Authorization": "key=" + FCM_SERVER_KEY
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-  
-  try {
-    var response = UrlFetchApp.fetch(url, options);
-    Logger.log("FCM Response: " + response.getContentText());
-    return JSON.parse(response.getContentText());
-  } catch (e) {
-    Logger.log("FCM Error: " + e.message);
-    return { success: false, error: e.message };
-  }
-}
 
 function uploadAcademicDocument(data, sheetId) {
   var MASTER_CONFIG_ID = "1p3WoC2s-YYqn9ekqkQ72banxAAd-ujlDoFYpv4fkXmk";
@@ -2738,6 +2512,3 @@ function getTaughtTopics(code, outputSheetId, sheetId) {
   } catch (e) { return { success: false, error: e.message }; }
 }
 
-
-
-function test() { var res = getTeachingPlan('BP704T', '', '1RwP0Yurjx_T9nCmnl4YYv_wowUbC3Py3'); Logger.log(JSON.stringify(res)); return res; }
