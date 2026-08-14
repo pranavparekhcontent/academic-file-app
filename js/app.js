@@ -2822,8 +2822,285 @@ const App = (() => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  // ─── DOWNLOAD MONTHLY SYLLABUS PROGRESS AS .DOCX ─────────
+  function downloadMonthlySyllabusProgressDoc() {
+    const data = state.inchargeDashboard || {};
+    const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+
+    if (!faculties || faculties.length === 0) {
+      Toast.show('No Data Available', 'Please wait for dashboard records to load or refresh.', 'warning');
+      return;
+    }
+
+    const ctx = window.appStartContext || {};
+    const cfg = ctx.config || {};
+    const metaObj = (state.allData && state.allData.metadata) || state.metadata || {};
+
+    const mgmt = ctx.managementName || cfg.management_name || cfg.managementName || metaObj.managementName || (window.ACAD_CONFIG && window.ACAD_CONFIG.managementName) || 'Sinhgad Technical Education Society';
+    const college = ctx.collegeName || cfg.college_name || cfg.collegeName || metaObj.collegeName || (window.ACAD_CONFIG && window.ACAD_CONFIG.collegeName) || 'RMD Institute of Pharmaceutical Education & Research';
+    const ay = cfg.academic_year || cfg.academicYear || cfg.ay || metaObj.academicYear || (window.ACAD_CONFIG && window.ACAD_CONFIG.academicYear) || '2025-26';
+    const inchargeName = state.inchargeName || (state.academicIncharges && state.academicIncharges[0] && state.academicIncharges[0].name) || 'Dr. S.P. Ghode';
+    const principalName = cfg.principal_name || cfg.principalName || metaObj.principalName || 'Dr. S. G. Walode';
+
+    // Period resolution
+    const periodFilter = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
+    let periodLabel = '';
+    if (periodFilter === 'custom') {
+      const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
+      const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
+      periodLabel = (s && e) ? `MONTH - (${s} to ${e})` : 'Custom Date Range';
+    } else {
+      const now = new Date();
+      const monthName = now.toLocaleString('default', { month: 'long' }).toUpperCase();
+      const currentYear = now.getFullYear();
+      const day = now.getDate();
+      const suffix = (day % 10 === 1 && day !== 11) ? 'st' : (day % 10 === 2 && day !== 12) ? 'nd' : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+      periodLabel = `MONTH - ${monthName} ${currentYear}  (upto ${day}${suffix} ${monthName.slice(0, 3)})`;
+    }
+
+    function extractLiveClassName(item) {
+      if (!item) return '';
+      const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
+      return String(name).trim();
+    }
+
+    function resolveSubjectClass(s) {
+      const liveName = extractLiveClassName(s);
+      if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
+        return liveName;
+      }
+      if (s.semester && String(s.semester).trim()) {
+        return `Semester ${String(s.semester).trim()}`;
+      }
+      return 'General Academic Class';
+    }
+
+    const classMap = {};
+    faculties.forEach(f => {
+      const facultyName = String(f.faculty || '').trim();
+      if (!facultyName || facultyName.toLowerCase() === 'unassigned') return;
+
+      (f.subjects || []).forEach(s => {
+        if (!s || (!s.code && !s.name)) return;
+        const className = resolveSubjectClass(s);
+        const subCode = s.code || s.name;
+
+        if (!classMap[className]) {
+          classMap[className] = {
+            className: className,
+            subjects: []
+          };
+        }
+
+        const isDup = classMap[className].subjects.some(existing => existing.code === s.code && existing.facultyName === facultyName);
+        if (!isDup) {
+          classMap[className].subjects.push({
+            ...s,
+            facultyName: facultyName
+          });
+        }
+      });
+    });
+
+    const classKeys = Object.keys(classMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const primaryClass = state.activeStudentYear || classKeys[0] || 'T. Y.';
+    const term = 'TERM II';
+
+    const docMeta = {
+      mgmt: mgmt,
+      college: college,
+      acadYear: ay,
+      term: term,
+      period: periodLabel,
+      className: primaryClass,
+      inchargeName: inchargeName,
+      principalName: principalName,
+      classMap: classMap,
+      classKeys: classKeys
+    };
+
+    const documentXml = buildMonthlySyllabusProgressDocx(docMeta);
+    const enc = new TextEncoder();
+    const blob = zipStore([
+      { name: '[Content_Types].xml', bytes: enc.encode(DOCX_CONTENT_TYPES) },
+      { name: '_rels/.rels', bytes: enc.encode(DOCX_ROOT_RELS) },
+      { name: 'word/document.xml', bytes: enc.encode(documentXml) }
+    ]);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const cleanPeriod = (periodLabel || 'Monthly').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanClass = (primaryClass || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanAy = String(ay || '2025-26').replace(/[^a-zA-Z0-9_-]/g, '_');
+    a.download = `Syllabus_Progress_Report_${cleanPeriod}_${cleanClass}_${cleanAy}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    Toast.show('Downloaded', 'Official Defaulters Notice .docx generated successfully.', 'success');
+    Toast.show('Downloaded', 'Monthly Syllabus Progress Report .docx generated successfully.', 'success');
+  }
+
+  function buildMonthlySyllabusProgressDocx(m) {
+    const FONT = 'Calibri';
+    const PAGE_W = 16838;
+    const PAGE_H = 11906;
+    const MARGIN_SIDE = 720;
+    const MARGIN_VERT = 720;
+    const TEXT_W = PAGE_W - (2 * MARGIN_SIDE);
+
+    const run = (text, { b, color, sz = 20 } = {}) => {
+      const size = Math.max(14, sz);
+      const rPr = [`<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/>`];
+      if (b) rPr.push('<w:b/>');
+      if (color) rPr.push(`<w:color w:val="${color}"/>`);
+      rPr.push(`<w:sz w:val="${size}"/>`);
+      const str = String(text == null ? '' : text);
+      const lines = str.split('\n');
+      const textNodes = lines.map(line => `<w:t xml:space="preserve">${xmlEsc(line)}</w:t>`).join('<w:br/>');
+      return `<w:r><w:rPr>${rPr.join('')}</w:rPr>${textNodes}</w:r>`;
+    };
+
+    const para = (runsXml, { align = 'left', after = 60, before = 0, line = 240 } = {}) => {
+      const pPr = [`<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="auto"/>`];
+      if (align) pPr.push(`<w:jc w:val="${align}"/>`);
+      return `<w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml || ''}</w:p>`;
+    };
+
+    const cell = (runsXml, { shade, align = 'center', vAlign = 'center', gridSpan, vMerge } = {}) => {
+      const tcPr = [`<w:vAlign w:val="${vAlign}"/>`];
+      if (shade) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${shade}"/>`);
+      if (gridSpan && gridSpan > 1) tcPr.push(`<w:gridSpan w:val="${gridSpan}"/>`);
+      if (vMerge === 'restart') tcPr.push('<w:vMerge w:val="restart"/>');
+      else if (vMerge === 'continue') tcPr.push('<w:vMerge/>');
+      const pPr = [`<w:spacing w:before="40" w:after="40" w:line="220" w:lineRule="auto"/><w:jc w:val="${align}"/>`];
+      return `<w:tc><w:tcPr>${tcPr.join('')}</w:tcPr><w:p><w:pPr>${pPr.join('')}</w:pPr>${runsXml || ''}</w:p></w:tc>`;
+    };
+
+    const cols = [1100, 2700, 2300, 850, 850, 850, 850, 850, 850, 850, 850, 850, 1300];
+    const grid = `<w:tblGrid>${cols.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+
+    const thShade = 'E8EFF8';
+
+    // Header Row 1
+    let h1 = '<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>';
+    h1 += cell(run('Year', { b: true, sz: 18 }), { shade: thShade, align: 'center', vMerge: 'restart' });
+    h1 += cell(run('Name of Subject', { b: true, sz: 18 }), { shade: thShade, align: 'center', vMerge: 'restart' });
+    h1 += cell(run('Name of Faculty', { b: true, sz: 18 }), { shade: thShade, align: 'center', vMerge: 'restart' });
+    h1 += cell(run('Total No. conducted', { b: true, sz: 18 }), { shade: thShade, align: 'center', gridSpan: 3 });
+    h1 += cell(run('No. required to complete Syllabus', { b: true, sz: 18 }), { shade: thShade, align: 'center', gridSpan: 3 });
+    h1 += cell(run('Total Syllabus Covered (%)', { b: true, sz: 18 }), { shade: thShade, align: 'center', gridSpan: 3 });
+    h1 += cell(run('Sign of Staff', { b: true, sz: 18 }), { shade: thShade, align: 'center', vMerge: 'restart' });
+    h1 += '</w:tr>';
+
+    // Header Row 2
+    let h2 = '<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>';
+    h2 += cell('', { shade: thShade, vMerge: 'continue' });
+    h2 += cell('', { shade: thShade, vMerge: 'continue' });
+    h2 += cell('', { shade: thShade, vMerge: 'continue' });
+    h2 += cell(run('Theory\n(45)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials\n(15)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals\n(15)', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Theory', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Theory', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Tutorials', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell(run('Practicals', { b: true, sz: 16 }), { shade: thShade, align: 'center' });
+    h2 += cell('', { shade: thShade, vMerge: 'continue' });
+    h2 += '</w:tr>';
+
+    // Body rows
+    let bodyRows = '';
+    let rowIdx = 0;
+
+    (m.classKeys || []).forEach(cKey => {
+      const clsObj = m.classMap[cKey];
+      if (!clsObj || !clsObj.subjects || clsObj.subjects.length === 0) return;
+
+      let shortYear = cKey;
+      if (/third\s*year/i.test(cKey) || /t\.?\s*y\.?/i.test(cKey) || /sem\s*[v|5|6]/i.test(cKey)) shortYear = 'T. Y.';
+      else if (/second\s*year/i.test(cKey) || /s\.?\s*y\.?/i.test(cKey) || /sem\s*[3|4|iii|iv]/i.test(cKey)) shortYear = 'S. Y.';
+      else if (/first\s*year/i.test(cKey) || /f\.?\s*y\.?/i.test(cKey) || /sem\s*[1|2|i|ii]/i.test(cKey)) shortYear = 'F. Y.';
+      else if (/final\s*year/i.test(cKey) || /b\.?\s*pharm.*final/i.test(cKey) || /sem\s*[7|8|vii|viii]/i.test(cKey)) shortYear = 'Final Year';
+
+      clsObj.subjects.forEach((s, sIdx) => {
+        rowIdx++;
+        const shade = rowIdx % 2 === 1 ? 'F8FAFC' : undefined;
+        const isPrac = isPracticalSubject(s);
+        const cond = s.totalConducted || 0;
+        const planned = s.totalLectures || (isPrac ? 15 : 45);
+        const req = Math.max(0, planned - cond);
+        const pct = s.percent || (planned > 0 ? Math.round((cond / planned) * 100) : 0);
+
+        const cTh = isPrac ? '-' : String(cond);
+        const cTut = '-';
+        const cPr = isPrac ? String(cond) : '-';
+
+        const rTh = isPrac ? '-' : String(req);
+        const rTut = '-';
+        const rPr = isPrac ? String(req) : '-';
+
+        const pTh = isPrac ? '-' : `${pct}%`;
+        const pTut = '-';
+        const pPr = isPrac ? `${pct}%` : '-';
+
+        const subDisplayName = s.code ? `${s.name} (${s.code})` : s.name;
+
+        let rXml = cell(run(shortYear, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(subDisplayName, { sz: 18 }), { shade, align: 'left' });
+        rXml += cell(run(s.facultyName || '-', { sz: 18 }), { shade, align: 'left' });
+        rXml += cell(run(cTh, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(cTut, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(cPr, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(rTh, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(rTut, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(rPr, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(pTh, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(pTut, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run(pPr, { sz: 18 }), { shade, align: 'center' });
+        rXml += cell(run('', { sz: 18 }), { shade, align: 'center' });
+
+        bodyRows += `<w:tr><w:trPr><w:cantSplit/></w:trPr>${rXml}</w:tr>`;
+      });
+    });
+
+    if (!bodyRows) {
+      bodyRows = `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(run('No active subject records found.', { sz: 18 }), { align: 'center', gridSpan: 13 })}</w:tr>`;
+    }
+
+    const tblBorders = '<w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="94A3B8"/><w:left w:val="single" w:sz="4" w:space="0" w:color="94A3B8"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="94A3B8"/><w:right w:val="single" w:sz="4" w:space="0" w:color="94A3B8"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/></w:tblBorders>';
+    const tblPr = `<w:tblPr><w:tblW w:w="${cols.reduce((a,b)=>a+b, 0)}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:jc w:val="center"/>${tblBorders}</w:tblPr>`;
+    const tableXml = `<w:tbl>${tblPr}${grid}${h1}${h2}${bodyRows}</w:tbl>`;
+
+    // Signatures Table
+    const half = Math.floor(TEXT_W / 2);
+    const signCols = [half, half];
+    const signGrid = `<w:tblGrid>${signCols.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+    const signRow = `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run((m.inchargeName || 'Academic In-charge') + '\nAcademic In-charge', { b: true, sz: 22 })}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>${run((m.principalName || 'Principal') + '\nPrincipal', { b: true, sz: 22 })}</w:p></w:tc>` +
+      `</w:tr>`;
+    const signTbl = `<w:tbl><w:tblPr><w:tblW w:w="${TEXT_W}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:jc w:val="center"/></w:tblPr>${signGrid}${signRow}</w:tbl>`;
+
+    const headerTitle = m.mgmt ? `${m.mgmt}'s` : '';
+    const collegeTitle = m.college || 'Institute of Pharmaceutical Education and Research';
+    const reportTitle = `${m.className} MONTHLY SYLLABUS PROGRESS REPORT - A.Y. ${m.acadYear} (${m.term})\n${m.period}`;
+
+    const body =
+      para(run(headerTitle, { b: true, sz: 22, color: '333333' }), { align: 'center', after: 30 }) +
+      para(run(collegeTitle, { b: true, sz: 26, color: '111111' }), { align: 'center', after: 60 }) +
+      para(run(reportTitle, { b: true, sz: 22, color: '1e293b' }), { align: 'center', after: 180 }) +
+      tableXml +
+      para('', { after: 800 }) +
+      signTbl +
+      `<w:sectPr>` +
+        `<w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}" w:orient="landscape"/>` +
+        `<w:pgMar w:top="${MARGIN_VERT}" w:right="${MARGIN_SIDE}" w:bottom="${MARGIN_VERT}" w:left="${MARGIN_SIDE}" w:header="720" w:footer="720" w:gutter="0"/>` +
+      `</w:sectPr>`;
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
   }
 
   // Build WordprocessingML document.xml for Defaulters Notice.
@@ -3452,12 +3729,12 @@ Generated: ${formatDisplayDate(new Date())}
               ${escHtml(periodLabel)} · ${classKeys.length} Active Classes · ${totalSubs} assigned subjects
             </span>
           </div>
-          <button class="btn btn-primary" onclick="App.generateReportType('class')" style="
+          <button class="btn btn-primary" onclick="App.downloadMonthlySyllabusProgressDoc()" title="Download official Monthly Syllabus Progress Report (.docx) in landscape table format" style="
             padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
             display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
           ">
-            Generate Class-Wise Monthly Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
+            <i class="ph ph-file-doc" style="font-size: 15px; color: #fff;"></i> Generate Class-Wise Monthly Report <i class="ph ph-caret-right" style="font-size: 13px;"></i>
           </button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -4105,6 +4382,7 @@ Generated: ${formatDisplayDate(new Date())}
     downloadTeachingPlanDoc,
     downloadStudentAttendanceDoc,
     downloadDefaultersNoticeDoc,
+    downloadMonthlySyllabusProgressDoc,
     filterTeachingPlan,
     saveTopicRemark,
     startCompilation,
