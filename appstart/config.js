@@ -29,7 +29,7 @@ const APP_CONFIG = {
 
   // ── Central API Configuration ──────────────────────────────
   // The dedicated standalone GAS script URL for Academic File.
-  CENTRAL_API_URL: "https://script.google.com/macros/s/AKfycby46srlH7Obksz2EEiKcA8rc3EQLVOA7x4FXCiWg9q2X0oKAegveZX4bi75qGMFeyI44g/exec",
+  CENTRAL_API_URL: "https://script.google.com/macros/s/AKfycbwNcrCqowXpJ9oYZSRcvWNuHD42TR_fVXljpnaC5I314Dr1Oj77-P-d-frXxdK7cT3u0A/exec",
 
 
   // ── Config Sheet ──────────────────────────────────────────
