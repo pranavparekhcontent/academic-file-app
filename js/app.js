@@ -2155,12 +2155,6 @@ const App = (() => {
       const pal = rainbowGlassPalettes[idx % rainbowGlassPalettes.length];
 
       const subjectRows = (f.subjects || []).map(s => {
-        const isSubZero = (s.percent === 0);
-        const pctColor = isSubZero ? '#dc2626' : '#059669';
-        const pctBg = isSubZero ? 'rgba(239, 68, 68, 0.10)' : 'rgba(16, 185, 129, 0.10)';
-        const pctBorder = isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)';
-        const sBarColor = isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)';
-
         const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
         const unitLabel = isPractical ? 'practicals' : 'lectures';
         const effectiveBatch = resolveSubjectBatch(s, f.faculty);
