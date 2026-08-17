@@ -951,7 +951,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v46_' + sheetId;
+  var cacheKey = 'dash_v47_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -974,6 +974,7 @@ function getInchargeDashboard(sheetId) {
     var cols = _mapSubjectCols(data[0] || []);
     var facultyMap = {};
     var subjectCodeSet = {};
+    var subjectRefMap = {};
     var distinctCodes = [];
     var collegeName = "";
     var managementName = "";
@@ -991,12 +992,27 @@ function getInchargeDashboard(sheetId) {
       if (!subjectCodeSet[sCode]) {
         subjectCodeSet[sCode] = true;
         distinctCodes.push(sCode);
+        subjectRefMap[sCode] = {
+          code: sCode,
+          name: sName,
+          cleanCode: _parseSubjectCode(sCode, '', sName).cleanBaseCode,
+          cleanName: String(sName || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+        };
       }
 
       var facList = rawFaculty ? rawFaculty.split(',').map(function(x) { return x.trim(); }) : ['Unassigned'];
-      var isPracSub = (_parseSubjectCode(sCode, '', sName).isPractical);
+      // Filter out duplicate faculty names in the same row
+      var uniqueFacList = [];
       for (var f = 0; f < facList.length; f++) {
-        var facName = facList[f];
+        var fn = facList[f];
+        if (fn && uniqueFacList.indexOf(fn) === -1) {
+          uniqueFacList.push(fn);
+        }
+      }
+      var isPracSub = (_parseSubjectCode(sCode, '', sName).isPractical);
+
+      for (var f = 0; f < uniqueFacList.length; f++) {
+        var facName = uniqueFacList[f];
         if (!facName) continue;
         if (!facultyMap[facName]) facultyMap[facName] = [];
 
@@ -1004,15 +1020,15 @@ function getInchargeDashboard(sheetId) {
         if (!explicitBatch) {
           explicitBatch = _parseSubjectCode(sCode, '', sName).batch;
         }
-        if (!explicitBatch && isPracSub && facList.length > 1) {
+        if (!explicitBatch && isPracSub && uniqueFacList.length > 1) {
           explicitBatch = 'Batch ' + String.fromCharCode(65 + f);
         } else if (explicitBatch && !/^batch/i.test(explicitBatch)) {
           explicitBatch = 'Batch ' + explicitBatch;
         }
 
-        // Split multi-batch string (e.g. "Batch A, B, C") into separate entries
+        // Only practical subjects split into multi-batch cards
         var batchList = [];
-        if (explicitBatch && /^Batch\s+/i.test(explicitBatch)) {
+        if (isPracSub && explicitBatch && /^Batch\s+/i.test(explicitBatch)) {
           var afterBatch = explicitBatch.replace(/^Batch\s+/i, '');
           var bParts = afterBatch.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
           if (bParts.length > 1) {
@@ -1020,9 +1036,22 @@ function getInchargeDashboard(sheetId) {
           }
         }
 
+        function addFacultySubject(item) {
+          var isDuplicate = facultyMap[facName].some(function(existing) {
+            if (existing.code !== item.code) return false;
+            if (isPracSub) {
+              return (existing.batch || '') === (item.batch || '');
+            }
+            return true; // For theory subjects, same faculty + same code = duplicate
+          });
+          if (!isDuplicate) {
+            facultyMap[facName].push(item);
+          }
+        }
+
         if (batchList.length > 1) {
           for (var bi = 0; bi < batchList.length; bi++) {
-            facultyMap[facName].push({
+            addFacultySubject({
               code: sCode,
               name: sName,
               year: sYear,
@@ -1033,14 +1062,14 @@ function getInchargeDashboard(sheetId) {
             });
           }
         } else {
-          facultyMap[facName].push({
+          addFacultySubject({
             code: sCode,
             name: sName,
             year: sYear,
             semester: sSem,
             faculty: facName,
             batches: rawBatches,
-            batch: explicitBatch || ''
+            batch: (isPracSub ? explicitBatch : '') || ''
           });
         }
       }
@@ -1148,13 +1177,24 @@ function getInchargeDashboard(sheetId) {
               var finalPlannedTopics = (headerTotalPlanned > 0) ? headerTotalPlanned : topicsCount;
               var statsObj = { totalLectures: finalPlannedTopics, totalConducted: conductedCount };
 
-              // Match this tab stats to any subject code
+              // Match this tab stats to any subject code or name
               for (var c = 0; c < distinctCodes.length; c++) {
                 var code = distinctCodes[c];
-                var parsedCode = _parseSubjectCode(code);
+                var subRef = subjectRefMap[code] || {};
+                var parsedCode = _parseSubjectCode(code, '', subRef.name);
+                var isMatch = false;
+
                 if (parsedSheet.cleanBaseCode === parsedCode.cleanBaseCode ||
                     cleanSheetName.indexOf(parsedCode.cleanBaseCode) !== -1 ||
                     sheetName.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+                  isMatch = true;
+                } else if (subRef.cleanName && (cleanSheetName.indexOf(subRef.cleanName) !== -1 || subRef.cleanName.indexOf(cleanSheetName) !== -1)) {
+                  isMatch = true;
+                } else if (subRef.name && sheetName.toLowerCase().indexOf(subRef.name.toLowerCase()) !== -1) {
+                  isMatch = true;
+                }
+
+                if (isMatch) {
                   if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
                     subjectPlanMap[code] = statsObj;
                   }
@@ -1274,10 +1314,21 @@ function getInchargeDashboard(sheetId) {
               // Map to matching subject codes
               for (var c = 0; c < distinctCodes.length; c++) {
                 var dCode = distinctCodes[c];
-                var parsedDCode = _parseSubjectCode(dCode);
+                var subRef = subjectRefMap[dCode] || {};
+                var parsedDCode = _parseSubjectCode(dCode, '', subRef.name);
+                var isMatch = false;
+
                 if (parsedOSheet.cleanBaseCode === parsedDCode.cleanBaseCode ||
                     cleanOName.indexOf(parsedDCode.cleanBaseCode) !== -1 ||
                     oName.toLowerCase().indexOf(dCode.toLowerCase()) !== -1) {
+                  isMatch = true;
+                } else if (subRef.cleanName && (cleanOName.indexOf(subRef.cleanName) !== -1 || subRef.cleanName.indexOf(cleanOName) !== -1)) {
+                  isMatch = true;
+                } else if (subRef.name && oName.toLowerCase().indexOf(subRef.name.toLowerCase()) !== -1) {
+                  isMatch = true;
+                }
+
+                if (isMatch) {
                   attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
                   if (sheetAvgAtt > 0) {
                     attendanceAvgMap[dCode] = sheetAvgAtt;
@@ -1328,7 +1379,7 @@ function getInchargeDashboard(sheetId) {
         subs[s].totalConducted = finalConducted;
         subs[s].percent = finalPct;
         subs[s].avgAttendance = subAvgAtt;
-        subs[s].hasTeachingPlan = !!subjectPlanMap[sCode];
+        subs[s].hasTeachingPlan = !!(subjectPlanMap[sCode] && subjectPlanMap[sCode].totalLectures > 0);
 
         // Apply verified batch from attendance output if available and batch not already assigned
         var cleanCode = _parseSubjectCode(sCode).cleanBaseCode;

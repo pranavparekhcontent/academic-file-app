@@ -1930,7 +1930,7 @@ const App = (() => {
       });
     });
 
-    const avgCoveragePercent = totalSubjectsCount > 0 ? Math.round(sumCoveragePercent / totalSubjectsCount) : 0;
+    const avgCoveragePercent = totalLectures > 0 ? Math.round((totalConducted / totalLectures) * 100) : (totalSubjectsCount > 0 ? Math.round(sumCoveragePercent / totalSubjectsCount) : 0);
 
     const overallHtml = `
       <div class="incharge-summary-cards">
