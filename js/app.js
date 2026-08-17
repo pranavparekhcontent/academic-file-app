@@ -2924,18 +2924,18 @@ const App = (() => {
         }
       });
 
-      const avgVal = subCount > 0 ? Math.round(sumPct / subCount) : (st.pct || 0);
-      const isDef = avgVal < thresh;
-      const avgStyle = isDef ? 9 : 8;
-      const statusStyle = isDef ? 11 : 10;
+      const avgVal = subCount > 0 ? Math.round(sumPct / subCount) : null;
+      const isDef = (avgVal !== null) && (avgVal < thresh);
+      const avgStyle = avgVal === null ? 6 : (isDef ? 9 : 8);
+      const statusStyle = avgVal === null ? 6 : (isDef ? 11 : 10);
 
-      if (subjects.length > 0) {
+      if (avgVal !== null) {
         rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><f>ROUND(AVERAGE(${firstSubColLetter}${rowNum}:${lastSubColLetter}${rowNum}), 0)</f><v>${avgVal}</v></c>`);
+        rCells.push(`<c r="${statusColLetter}${rowNum}" s="${statusStyle}"><f>IF(${avgColLetter}${rowNum}&gt;=${thresh}, "Eligible", "Defaulter")</f><v>${isDef ? 'Defaulter' : 'Eligible'}</v></c>`);
       } else {
-        rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><v>${avgVal}</v></c>`);
+        rCells.push(`<c r="${avgColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+        rCells.push(`<c r="${statusColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
       }
-
-      rCells.push(`<c r="${statusColLetter}${rowNum}" s="${statusStyle}"><f>IF(${avgColLetter}${rowNum}&gt;=${thresh}, "Eligible", "Defaulter")</f><v>${isDef ? 'Defaulter' : 'Eligible'}</v></c>`);
 
       sheetData.push(`<row r="${rowNum}" ht="20" customHeight="1">${rCells.join('')}</row>`);
     });
@@ -4548,17 +4548,22 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      const defaultOutputSheetId = enrichedSubjects.length > 0 ? enrichedSubjects[0].outputSheetId : '';
+      const classSheetIds = Array.from(new Set(classSubjects.map(s => s.outputSheetId).filter(Boolean)));
       const fetchPromises = [
-        API.getStudents(className).catch(() => ({ success: false })),
-        API.getAttendance('', className, '', defaultOutputSheetId).catch(() => ({ success: false }))
+        API.getStudents(className).catch(() => ({ success: false }))
       ];
+
+      // Fetch attendance ONLY from sheets associated with this class's subjects
+      if (classSheetIds.length > 0) {
+        classSheetIds.forEach(shId => {
+          fetchPromises.push(API.getAttendance('', className, '', shId).catch(() => ({ success: false })));
+        });
+      }
 
       // Also fetch per-subject attendance for distinct subject codes if any
       classSubjects.forEach(sub => {
-        if (sub.code) {
-          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId || defaultOutputSheetId).then(res => {
-            // Inject subject code into records so we know which subject this attendance belongs to
+        if (sub.code && sub.outputSheetId) {
+          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId).then(res => {
             if (res && res.success && Array.isArray(res.records)) {
               res.records.forEach(r => { if (!r.code) r.code = sub.code; });
             }
@@ -4570,6 +4575,11 @@ Generated: ${formatDisplayDate(new Date())}
       const results = await Promise.all(fetchPromises);
       const studentsRes = results[0];
       const allAttRes = results.slice(1);
+
+      // Build strict whitelist of valid subject codes for this class
+      const validClassCodes = new Set(
+        classSubjects.map(s => String(s.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean)
+      );
 
       let studentMap = {};
 
@@ -4640,6 +4650,11 @@ Generated: ${formatDisplayDate(new Date())}
             const sCode = String(r.code || 'SUB').trim();
             const cleanSCode = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+            // Ignore attendance records belonging to other classes or unrelated subjects
+            if (validClassCodes.size > 0 && !validClassCodes.has(cleanSCode)) {
+              return;
+            }
+
             if (!studentMap[matchedKey].subjectMap[sCode]) {
               studentMap[matchedKey].subjectMap[sCode] = { present: 0, total: 0 };
             }
@@ -4662,25 +4677,23 @@ Generated: ${formatDisplayDate(new Date())}
 
       if (Object.keys(studentMap).length > 0) {
         studentList = Object.values(studentMap).map(st => {
-          const avgPct = st.totalCount > 0 ? Math.round((st.presentCount / st.totalCount) * 100) : 0;
           return {
             rollNo: st.rollNo,
             name: st.name,
             batch: st.batch,
-            pct: avgPct,
-            isDefaulter: avgPct < eligibilityThreshold,
+            pct: null,
+            isDefaulter: false,
             subjectMap: st.subjectMap || {}
           };
         });
       } else if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students) && studentsRes.students.length > 0) {
         studentList = studentsRes.students.map(st => {
-          const avgPct = typeof st.attendancePct === 'number' ? st.attendancePct : (st.pct || 80);
           return {
             rollNo: st.rollNo || st.roll || 'N/A',
             name: st.name || st.studentName || 'Student',
             batch: st.batch || st.batchGroup || 'General',
-            pct: avgPct,
-            isDefaulter: avgPct < eligibilityThreshold,
+            pct: null,
+            isDefaulter: false,
             subjectMap: {}
           };
         });
@@ -4781,21 +4794,28 @@ Generated: ${formatDisplayDate(new Date())}
           subjectCellsHtml += `<td style="padding: ${cellPadding}; text-align: center; vertical-align: middle; color: #000000;">${cellHtml}</td>`;
         });
 
-        // Compute average attendance across subjects
-        const avgPct = activeSubCount > 0 ? Math.round(sumPct / activeSubCount) : (st.pct || 0);
-        st.pct = avgPct;
-        st.isDefaulter = avgPct < eligibilityThreshold;
-        if (st.isDefaulter) defaulterCount++;
+        // Compute average attendance across subjects that actually had classes conducted
+        if (activeSubCount === 0) {
+          st.pct = null;
+          st.isDefaulter = false;
+        } else {
+          const avgPct = Math.round(sumPct / activeSubCount);
+          st.pct = avgPct;
+          st.isDefaulter = avgPct < eligibilityThreshold;
+          if (st.isDefaulter) defaulterCount++;
+        }
 
-        // Defaulters = Soft Red Hue, Others = Soft Green Hue
-        const rowClass = st.isDefaulter ? 'smart-matrix-row-defaulter' : 'smart-matrix-row-eligible';
-        const rowBg = st.isDefaulter ? 'rgba(254, 226, 226, 0.85)' : 'rgba(220, 252, 231, 0.85)';
-        const stickyBg = st.isDefaulter ? '#fee2e2' : '#dcfce7';
-        const rowBorder = st.isDefaulter ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)';
+        // Defaulters = Soft Red Hue, Eligible = Soft Green Hue, No Data = Clean Neutral
+        const rowClass = st.pct === null ? 'smart-matrix-row-neutral' : (st.isDefaulter ? 'smart-matrix-row-defaulter' : 'smart-matrix-row-eligible');
+        const rowBg = st.pct === null ? 'rgba(255, 255, 255, 0.85)' : (st.isDefaulter ? 'rgba(254, 226, 226, 0.85)' : 'rgba(220, 252, 231, 0.85)');
+        const stickyBg = st.pct === null ? '#f8fafc' : (st.isDefaulter ? '#fee2e2' : '#dcfce7');
+        const rowBorder = st.pct === null ? 'rgba(0, 0, 0, 0.08)' : (st.isDefaulter ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)');
 
-        const statusBadge = st.isDefaulter ?
-          `<span style="background: #fecaca; color: #000000; border: 1.5px solid #dc2626; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Defaulter)</span>` :
-          `<span style="background: #bbf7d0; color: #000000; border: 1.5px solid #059669; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Eligible)</span>`;
+        const statusBadge = st.pct === null ?
+          `<span style="background: rgba(0, 0, 0, 0.06); color: #64748b; border: 1px solid rgba(0, 0, 0, 0.15); padding: 3px 9px; border-radius: 9999px; font-weight: 800; font-size: 11px; white-space: nowrap;">-- (No Classes)</span>` :
+          (st.isDefaulter ?
+            `<span style="background: #fecaca; color: #000000; border: 1.5px solid #dc2626; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Defaulter)</span>` :
+            `<span style="background: #bbf7d0; color: #000000; border: 1.5px solid #059669; padding: 3px 9px; border-radius: 9999px; font-weight: 900; font-size: 11px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">${st.pct}% (Eligible)</span>`);
 
         rowsHtml += `
           <tr class="${rowClass}" style="border-bottom: 1px solid ${rowBorder}; background: ${rowBg};">
@@ -4836,6 +4856,13 @@ Generated: ${formatDisplayDate(new Date())}
         periodLabel: periodLabel
       };
 
+      const anyConducted = studentList.some(s => s.pct !== null);
+      const topStatusBadgeHtml = !anyConducted ?
+        `<span style="font-size: 12px; font-weight: 800; color: #64748b;">ℹ️ No attendance conducted yet for this semester</span>` :
+        (defaulterCount > 0 ?
+          `<span style="font-size: 12px; font-weight: 900; color: #b91c1c;">⚠️ ${defaulterCount} Defaulter(s) Below ${eligibilityThreshold}%</span>` :
+          `<span style="font-size: 12px; font-weight: 900; color: #047857;">✅ All Students Eligible (≥ ${eligibilityThreshold}%)</span>`);
+
       container.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: var(--radius-sm); backdrop-filter: blur(12px);">
           <span style="font-size: 12px; font-weight: 800; color: #000000; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -4844,9 +4871,7 @@ Generated: ${formatDisplayDate(new Date())}
             <span>Subjects: <strong style="color: #000000;">${subjectColumns.length}</strong></span>
             <span class="smart-scroll-hint" style="color: #334155;"><i class="ph ph-mouse-simple"></i> Mouse wheel horizontally scrolls subjects</span>
           </span>
-          <span style="font-size: 12px; font-weight: 900; color: ${defaulterCount > 0 ? '#b91c1c' : '#047857'};">
-            ${defaulterCount > 0 ? `⚠️ ${defaulterCount} Defaulter(s) Below ${eligibilityThreshold}%` : `✅ All Students Eligible (≥ ${eligibilityThreshold}%)`}
-          </span>
+          ${topStatusBadgeHtml}
         </div>
         <div class="smart-matrix-container">
           <div class="smart-matrix-scroll-wrapper" id="student-matrix-scroll-wrapper">

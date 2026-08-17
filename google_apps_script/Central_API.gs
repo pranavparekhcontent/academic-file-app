@@ -1489,7 +1489,7 @@ function displayToDb(disp) {
 
 function getAttendance(code, year, date, outputSheetId, sheetId) {
   var cleanOutId = extractSpreadsheetId(outputSheetId || getOutputSheetId(sheetId));
-  var cacheKey = 'attrep_v1_' + (code || '') + '_' + (year || '') + '_' + (date || '') + '_' + (cleanOutId || '');
+  var cacheKey = 'attrep_v2_' + (code || '') + '_' + (year || '') + '_' + (date || '') + '_' + (cleanOutId || '');
   var cache = CacheService.getScriptCache();
   var cached = cache.get(cacheKey);
   if (cached) {
@@ -1618,8 +1618,8 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
                year: year,
                batch: batch,
                faculty: "Assigned",
-               rollNo: rowData[0],
-               name: rowData[1],
+               rollNo: rNo,
+               name: rName,
                status: st,
                topic: topicVal
              });
