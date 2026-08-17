@@ -2221,9 +2221,6 @@ const App = (() => {
               <i class="ph ph-user-circle" style="color: ${pal.icon}; font-size: 17px; margin-top: 1px; flex-shrink: 0;"></i>
               <span>${escHtml(f.faculty)}</span>
             </div>
-            <div style="display: inline-flex; align-items: center; flex-shrink: 0; margin-top: 1px;">
-              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 3px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; line-height: 1.2;">${f.overallPercent}% Overall Coverage</div>
-            </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 10px;">
             ${subjectRows}
