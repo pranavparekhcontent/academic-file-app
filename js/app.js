@@ -2187,6 +2187,7 @@ const App = (() => {
                 Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: ${pal.icon} !important;"></i>
               </button>
             </div>
+            ${s.hasTeachingPlan === false ? `<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 4px;"><span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:#b45309;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:2px 8px;border-radius:6px;"><i class="ph ph-warning" style="font-size:12px;"></i> No Teaching Plan Found</span></div>` : ''}
 
             <!-- Row 3: Sem, Lectures & Live Avg Attendance (SINGLE ROW ABOVE STATUS BAR) -->
             <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">

@@ -951,7 +951,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v44_' + sheetId;
+  var cacheKey = 'dash_v45_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1010,15 +1010,39 @@ function getInchargeDashboard(sheetId) {
           explicitBatch = 'Batch ' + explicitBatch;
         }
 
-        facultyMap[facName].push({
-          code: sCode,
-          name: sName,
-          year: sYear,
-          semester: sSem,
-          faculty: facName,
-          batches: rawBatches,
-          batch: explicitBatch || ''
-        });
+        // Split multi-batch string (e.g. "Batch A, B, C") into separate entries
+        var batchList = [];
+        if (explicitBatch && /^Batch\s+/i.test(explicitBatch)) {
+          var afterBatch = explicitBatch.replace(/^Batch\s+/i, '');
+          var bParts = afterBatch.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+          if (bParts.length > 1) {
+            batchList = bParts.map(function(b){ return 'Batch ' + b; });
+          }
+        }
+
+        if (batchList.length > 1) {
+          for (var bi = 0; bi < batchList.length; bi++) {
+            facultyMap[facName].push({
+              code: sCode,
+              name: sName,
+              year: sYear,
+              semester: sSem,
+              faculty: facName,
+              batches: rawBatches,
+              batch: batchList[bi]
+            });
+          }
+        } else {
+          facultyMap[facName].push({
+            code: sCode,
+            name: sName,
+            year: sYear,
+            semester: sSem,
+            faculty: facName,
+            batches: rawBatches,
+            batch: explicitBatch || ''
+          });
+        }
       }
     }
 
@@ -1257,6 +1281,11 @@ function getInchargeDashboard(sheetId) {
                   attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
                   if (sheetAvgAtt > 0) {
                     attendanceAvgMap[dCode] = sheetAvgAtt;
+                    // Also store batch-specific attendance for separate batch cards
+                    if (sheetBatch) {
+                      var batchAttKey = dCode + '|' + sheetBatch.replace(/\s+/g, '').toUpperCase();
+                      attendanceAvgMap[batchAttKey] = sheetAvgAtt;
+                    }
                   }
                 }
               }
@@ -1287,7 +1316,9 @@ function getInchargeDashboard(sheetId) {
         var sCode = subs[s].code;
         var info = subjectPlanMap[sCode] || { totalLectures: 0, totalConducted: 0 };
         var attConducted = attendanceConductedMap[sCode] || 0;
-        var subAvgAtt = attendanceAvgMap[sCode] || 0;
+        // Try batch-specific attendance first, then fall back to code-level
+        var batchAttKey = subs[s].batch ? sCode + '|' + subs[s].batch.replace(/\s+/g, '').toUpperCase() : '';
+        var subAvgAtt = (batchAttKey && attendanceAvgMap[batchAttKey]) || attendanceAvgMap[sCode] || 0;
 
         var finalConducted = Math.max(info.totalConducted || 0, attConducted);
         var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : finalConducted;
@@ -1297,6 +1328,7 @@ function getInchargeDashboard(sheetId) {
         subs[s].totalConducted = finalConducted;
         subs[s].percent = finalPct;
         subs[s].avgAttendance = subAvgAtt;
+        subs[s].hasTeachingPlan = !!subjectPlanMap[sCode];
 
         // Apply verified batch from attendance output if available
         var cleanCode = _parseSubjectCode(sCode).cleanBaseCode;
