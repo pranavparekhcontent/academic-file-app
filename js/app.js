@@ -2673,47 +2673,78 @@ const App = (() => {
   }
 
   // ─── DOWNLOAD STUDENT ATTENDANCE REPORT AS .XLSX ──────────
-  function downloadStudentAttendanceXlsx() {
-    const rep = state.activeStudentReport;
-    if (!rep || !rep.studentList || rep.studentList.length === 0) {
-      Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
-      return;
+  async function downloadStudentAttendanceXlsx() {
+    Toast.show('Preparing Excel Report', 'Compiling multi-class attendance sheets with separate tabs...', 'info');
+
+    // 1. Resolve all active class names
+    const data = state.inchargeDashboard || {};
+    const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+    const classNamesSet = {};
+    faculties.forEach(f => {
+      (f.subjects || []).forEach(s => {
+        if (!s) return;
+        const name = (s.year || s.className || s.class || s.courseYear || s.programYear || '').trim();
+        if (name && !/^semester\s*\d+$/i.test(name) && !/^\d+$/i.test(name)) {
+          classNamesSet[name] = true;
+        } else if (s.semester && String(s.semester).trim()) {
+          classNamesSet[`Semester ${String(s.semester).trim()}`] = true;
+        }
+      });
+    });
+
+    let activeClassNames = Object.keys(classNamesSet);
+    if (activeClassNames.length === 0) {
+      activeClassNames = ['FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm'];
     }
 
-    const ctx = window.appStartContext || {};
-    const cfg = ctx.config || {};
-    const metaObj = (state.allData && state.allData.metadata) || state.metadata || {};
+    try {
+      // Fetch report data for all active classes in parallel
+      const classesData = await Promise.all(activeClassNames.map(cls => fetchStudentReportDataForClass(cls)));
+      const validClasses = classesData.filter(cd => cd && cd.studentList && cd.studentList.length > 0);
+      const toExport = validClasses.length > 0 ? validClasses : classesData;
 
-    const mgmt = ctx.managementName || cfg.management_name || cfg.managementName || metaObj.managementName || (window.ACAD_CONFIG && window.ACAD_CONFIG.managementName) || 'Sinhgad Technical Education Society';
-    const college = ctx.collegeName || cfg.college_name || cfg.collegeName || metaObj.collegeName || (window.ACAD_CONFIG && window.ACAD_CONFIG.collegeName) || 'RMD Institute of Pharmaceutical Education & Research';
-    const ay = cfg.academic_year || cfg.academicYear || cfg.ay || metaObj.academicYear || (window.ACAD_CONFIG && window.ACAD_CONFIG.academicYear) || '2024-25';
+      if (!toExport || toExport.length === 0 || !toExport.some(c => c && c.studentList && c.studentList.length > 0)) {
+        if (state.activeStudentReport && state.activeStudentReport.studentList && state.activeStudentReport.studentList.length > 0) {
+          toExport.push(state.activeStudentReport);
+        } else {
+          Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
+          return;
+        }
+      }
 
-    const docMeta = {
-      mgmt: mgmt,
-      college: college,
-      acadYear: ay,
-      className: rep.className || state.activeStudentYear || 'Class Report',
-      periodLabel: rep.periodLabel || 'All Time (Entire Academic Year)',
-      eligibilityThreshold: rep.eligibilityThreshold || 75,
-      defaulterCount: rep.defaulterCount || 0,
-      studentList: rep.studentList || [],
-      subjectColumns: rep.subjectColumns || []
-    };
+      const ctx = window.appStartContext || {};
+      const cfg = ctx.config || {};
+      const metaObj = (state.allData && state.allData.metadata) || state.metadata || {};
 
-    const files = buildStudentAttendanceXlsxXml(docMeta);
-    const blob = zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const mgmt = ctx.managementName || cfg.management_name || cfg.managementName || metaObj.managementName || (window.ACAD_CONFIG && window.ACAD_CONFIG.managementName) || 'Sinhgad Technical Education Society';
+      const college = ctx.collegeName || cfg.college_name || cfg.collegeName || metaObj.collegeName || (window.ACAD_CONFIG && window.ACAD_CONFIG.collegeName) || 'RMD Institute of Pharmaceutical Education & Research';
+      const ay = cfg.academic_year || cfg.academicYear || cfg.ay || metaObj.academicYear || (window.ACAD_CONFIG && window.ACAD_CONFIG.academicYear) || '2024-25';
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const cleanClass = (docMeta.className || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const cleanAy = String(docMeta.acadYear || '2024-25').replace(/[^a-zA-Z0-9_-]/g, '_');
-    a.download = `Attendance_Report_${cleanClass}_${cleanAy}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    Toast.show('Downloaded', 'Student attendance report .xlsx generated successfully.', 'success');
+      const docMeta = {
+        mgmt: mgmt,
+        college: college,
+        acadYear: ay,
+        periodLabel: (toExport[0] && toExport[0].periodLabel) || 'All Time (Entire Academic Year)',
+        eligibilityThreshold: (toExport[0] && toExport[0].eligibilityThreshold) || 75
+      };
+
+      const files = buildStudentAttendanceXlsxXml(toExport, docMeta);
+      const blob = zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cleanAy = String(docMeta.acadYear || '2024-25').replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `Attendance_Report_All_Classes_${cleanAy}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      Toast.show('Downloaded', `Attendance report with ${toExport.length} class tab(s) generated successfully.`, 'success');
+    } catch (err) {
+      console.error('Failed to generate multi-class Excel workbook:', err);
+      Toast.show('Export Error', 'Failed to generate Excel report: ' + (err.message || err), 'danger');
+    }
   }
 
   // Alias for backward compatibility
@@ -2721,20 +2752,35 @@ const App = (() => {
     downloadStudentAttendanceXlsx();
   }
 
-  // Build full SpreadsheetML (.xlsx) package with formulas, styles, and color rules
-  function buildStudentAttendanceXlsxXml(m) {
+  // Build full SpreadsheetML (.xlsx) package with separate sheet tabs for each class, formulas, styles, and color rules
+  function buildStudentAttendanceXlsxXml(classesDataOrSingle, meta) {
     const enc = new TextEncoder();
-    const students = m.studentList || [];
-    const subjects = m.subjectColumns || [];
+    const classesData = Array.isArray(classesDataOrSingle) ? classesDataOrSingle : [classesDataOrSingle];
+    const m = meta || classesDataOrSingle || {};
     const thresh = m.eligibilityThreshold || 75;
+
+    let sheetOverrides = '';
+    let sheetListXml = '';
+    let workbookRelsXml = '';
+
+    classesData.forEach((cd, idx) => {
+      const sheetId = idx + 1;
+      const rawName = String(cd.className || `Class_${sheetId}`).trim();
+      const safeSheetName = xmlEsc(rawName.substring(0, 31).replace(/[\\/*?:\[\]]/g, ' '));
+      sheetOverrides += `  <Override PartName="/xl/worksheets/sheet${sheetId}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n`;
+      sheetListXml += `    <sheet name="${safeSheetName}" sheetId="${sheetId}" r:id="rId${sheetId}"/>\n`;
+      workbookRelsXml += `  <Relationship Id="rId${sheetId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${sheetId}.xml"/>\n`;
+    });
+
+    const stylesRelId = `rId${classesData.length + 1}`;
+    workbookRelsXml += `  <Relationship Id="${stylesRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>\n`;
 
     const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${sheetOverrides}  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`;
 
     const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2744,15 +2790,12 @@ const App = (() => {
 
     const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
+${workbookRelsXml}</Relationships>`;
 
     const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="Attendance Matrix" sheetId="1" r:id="rId1"/>
-  </sheets>
+${sheetListXml}  </sheets>
 </workbook>`;
 
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2831,175 +2874,196 @@ const App = (() => {
   </cellXfs>
 </styleSheet>`;
 
-    const totalCols = 3 + subjects.length + 2;
-    const lastColLetter = colToLetter(totalCols - 1);
-    const avgColLetter = colToLetter(totalCols - 2);
-    const statusColLetter = colToLetter(totalCols - 1);
-    const firstSubColLetter = colToLetter(3);
-    const lastSubColLetter = colToLetter(3 + subjects.length - 1);
-
-    let sheetData = [];
-    let merges = [];
-
-    // Row 1: College Header
-    sheetData.push(`<row r="1" ht="26" customHeight="1">
-      <c r="A1" s="1" t="inlineStr"><is><t>${xmlEsc((m.college || 'College Name').toUpperCase())}</t></is></c>
-      ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}1" s="1"/>`).join('')}
-    </row>`);
-    merges.push(`A1:${lastColLetter}1`);
-
-    // Row 2: Management & Title
-    sheetData.push(`<row r="2" ht="20" customHeight="1">
-      <c r="A2" s="2" t="inlineStr"><is><t>${xmlEsc(m.mgmt || 'Management')} — STUDENT ATTENDANCE &amp; ELIGIBILITY REPORT</t></is></c>
-      ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}2" s="2"/>`).join('')}
-    </row>`);
-    merges.push(`A2:${lastColLetter}2`);
-
-    // Row 3: Class & AY Meta
-    sheetData.push(`<row r="3" ht="18" customHeight="1">
-      <c r="A3" s="3" t="inlineStr"><is><t>Class / Program: ${xmlEsc(m.className)}</t></is></c>
-      <c r="C3" s="3" t="inlineStr"><is><t>Academic Year: ${xmlEsc(m.acadYear)}</t></is></c>
-      <c r="${avgColLetter}3" s="3" t="inlineStr"><is><t>Min. Required: ${thresh}%</t></is></c>
-    </row>`);
-
-    // Row 4: Report Period
-    sheetData.push(`<row r="4" ht="18" customHeight="1">
-      <c r="A4" s="3" t="inlineStr"><is><t>Report Period: ${xmlEsc(m.periodLabel || 'All Time')}</t></is></c>
-      <c r="${avgColLetter}4" s="3" t="inlineStr"><is><t>Generated: ${new Date().toLocaleDateString('en-GB')}</t></is></c>
-    </row>`);
-
-    // Row 5: Empty space
-    sheetData.push(`<row r="5" ht="8" customHeight="1"/>`);
-
-    // Row 6: Main Table Header
-    let r6Cells = [
-      `<c r="A6" s="4" t="inlineStr"><is><t>Roll No</t></is></c>`,
-      `<c r="B6" s="4" t="inlineStr"><is><t>Student Full Name</t></is></c>`,
-      `<c r="C6" s="4" t="inlineStr"><is><t>Batch</t></is></c>`
+    const files = [
+      { name: '[Content_Types].xml', bytes: enc.encode(contentTypes) },
+      { name: '_rels/.rels', bytes: enc.encode(rootRels) },
+      { name: 'xl/workbook.xml', bytes: enc.encode(workbook) },
+      { name: 'xl/_rels/workbook.xml.rels', bytes: enc.encode(workbookRels) },
+      { name: 'xl/styles.xml', bytes: enc.encode(styles) }
     ];
 
-    subjects.forEach((sc, idx) => {
-      const colL = colToLetter(3 + idx);
-      const subTitle = (sc.code || 'SUB') + (sc.name ? `\n${sc.name}` : '');
-      r6Cells.push(`<c r="${colL}6" s="4" t="inlineStr"><is><t>${xmlEsc(subTitle)}</t></is></c>`);
-    });
+    classesData.forEach((cd, idx) => {
+      const sheetId = idx + 1;
+      const students = cd.studentList || [];
+      const subjects = cd.subjectColumns || [];
+      const totalCols = Math.max(5, 3 + subjects.length + 2);
+      const lastColLetter = colToLetter(totalCols - 1);
+      const avgColLetter = colToLetter(totalCols - 2);
+      const statusColLetter = colToLetter(totalCols - 1);
+      const firstSubColLetter = subjects.length > 0 ? colToLetter(3) : 'D';
+      const lastSubColLetter = subjects.length > 0 ? colToLetter(3 + subjects.length - 1) : 'D';
 
-    r6Cells.push(`<c r="${avgColLetter}6" s="4" t="inlineStr"><is><t>Overall Avg. Attendance</t></is></c>`);
-    r6Cells.push(`<c r="${statusColLetter}6" s="4" t="inlineStr"><is><t>Eligibility Status</t></is></c>`);
+      let sheetData = [];
+      let merges = [];
 
-    sheetData.push(`<row r="6" ht="38" customHeight="1">${r6Cells.join('')}</row>`);
+      // Row 1: College Header
+      sheetData.push(`<row r="1" ht="26" customHeight="1">
+        <c r="A1" s="1" t="inlineStr"><is><t>${xmlEsc((m.college || 'College Name').toUpperCase())}</t></is></c>
+        ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}1" s="1"/>`).join('')}
+      </row>`);
+      merges.push(`A1:${lastColLetter}1`);
 
-    // Student Data Rows (Start at Row 7)
-    const startRow = 7;
-    students.forEach((st, idx) => {
-      const rowNum = startRow + idx;
-      let rCells = [
-        `<c r="A${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.rollNo)}</t></is></c>`,
-        `<c r="B${rowNum}" s="7" t="inlineStr"><is><t>${xmlEsc(st.name)}</t></is></c>`,
-        `<c r="C${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.batch || 'Gen')}</t></is></c>`
+      // Row 2: Management & Title
+      sheetData.push(`<row r="2" ht="20" customHeight="1">
+        <c r="A2" s="2" t="inlineStr"><is><t>${xmlEsc(m.mgmt || 'Management')} — STUDENT ATTENDANCE &amp; ELIGIBILITY REPORT</t></is></c>
+        ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}2" s="2"/>`).join('')}
+      </row>`);
+      merges.push(`A2:${lastColLetter}2`);
+
+      // Row 3: Class & AY Meta
+      sheetData.push(`<row r="3" ht="18" customHeight="1">
+        <c r="A3" s="3" t="inlineStr"><is><t>Class / Program: ${xmlEsc(cd.className || 'Class')}</t></is></c>
+        <c r="C3" s="3" t="inlineStr"><is><t>Academic Year: ${xmlEsc(m.acadYear || '2024-25')}</t></is></c>
+        <c r="${avgColLetter}3" s="3" t="inlineStr"><is><t>Min. Required: ${thresh}%</t></is></c>
+      </row>`);
+
+      // Row 4: Report Period
+      sheetData.push(`<row r="4" ht="18" customHeight="1">
+        <c r="A4" s="3" t="inlineStr"><is><t>Report Period: ${xmlEsc(cd.periodLabel || m.periodLabel || 'All Time')}</t></is></c>
+        <c r="${avgColLetter}4" s="3" t="inlineStr"><is><t>Generated: ${new Date().toLocaleDateString('en-GB')}</t></is></c>
+      </row>`);
+
+      // Row 5: Empty space
+      sheetData.push(`<row r="5" ht="8" customHeight="1"/>`);
+
+      // Row 6: Main Table Header
+      let r6Cells = [
+        `<c r="A6" s="4" t="inlineStr"><is><t>Roll No</t></is></c>`,
+        `<c r="B6" s="4" t="inlineStr"><is><t>Student Full Name</t></is></c>`,
+        `<c r="C6" s="4" t="inlineStr"><is><t>Batch</t></is></c>`
       ];
-
-      let sumPct = 0;
-      let subCount = 0;
 
       subjects.forEach((sc, sIdx) => {
         const colL = colToLetter(3 + sIdx);
-        const rawCode = sc.code;
-        const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        let subData = st.subjectMap ? (st.subjectMap[rawCode] || st.subjectMap[cleanScCode]) : null;
-        if (!subData && st.subjectMap) {
-          for (const k in st.subjectMap) {
-            const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
-              subData = st.subjectMap[k];
-              break;
-            }
-          }
-        }
-
-        if (subData && subData.total > 0) {
-          const subPct = Math.round((subData.present / subData.total) * 100);
-          const cellStyle = subPct < thresh ? 9 : 8; // Red if defaulter, Green if eligible
-          rCells.push(`<c r="${colL}${rowNum}" s="${cellStyle}"><v>${subPct}</v></c>`);
-          sumPct += subPct;
-          subCount++;
-        } else {
-          rCells.push(`<c r="${colL}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
-        }
+        const subTitle = (sc.code || 'SUB') + (sc.name ? `\n${sc.name}` : '');
+        r6Cells.push(`<c r="${colL}6" s="4" t="inlineStr"><is><t>${xmlEsc(subTitle)}</t></is></c>`);
       });
 
-      const avgVal = subCount > 0 ? Math.round(sumPct / subCount) : null;
-      const isDef = (avgVal !== null) && (avgVal < thresh);
-      const avgStyle = avgVal === null ? 6 : (isDef ? 9 : 8);
-      const statusStyle = avgVal === null ? 6 : (isDef ? 11 : 10);
+      r6Cells.push(`<c r="${avgColLetter}6" s="4" t="inlineStr"><is><t>Overall Avg. Attendance</t></is></c>`);
+      r6Cells.push(`<c r="${statusColLetter}6" s="4" t="inlineStr"><is><t>Eligibility Status</t></is></c>`);
 
-      if (avgVal !== null) {
-        rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><f>ROUND(AVERAGE(${firstSubColLetter}${rowNum}:${lastSubColLetter}${rowNum}), 0)</f><v>${avgVal}</v></c>`);
-        rCells.push(`<c r="${statusColLetter}${rowNum}" s="${statusStyle}"><f>IF(${avgColLetter}${rowNum}&gt;=${thresh}, "Eligible", "Defaulter")</f><v>${isDef ? 'Defaulter' : 'Eligible'}</v></c>`);
-      } else {
-        rCells.push(`<c r="${avgColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
-        rCells.push(`<c r="${statusColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+      sheetData.push(`<row r="6" ht="38" customHeight="1">${r6Cells.join('')}</row>`);
+
+      // Student Data Rows
+      const startRow = 7;
+      students.forEach((st, sIdx) => {
+        const rowNum = startRow + sIdx;
+        let rCells = [
+          `<c r="A${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.rollNo)}</t></is></c>`,
+          `<c r="B${rowNum}" s="7" t="inlineStr"><is><t>${xmlEsc(st.name)}</t></is></c>`,
+          `<c r="C${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.batch || 'Gen')}</t></is></c>`
+        ];
+
+        let sumPct = 0;
+        let subCount = 0;
+
+        subjects.forEach((sc, subIdx) => {
+          const colL = colToLetter(3 + subIdx);
+          const rawCode = sc.code;
+          const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let subData = st.subjectMap ? (st.subjectMap[rawCode] || st.subjectMap[cleanScCode]) : null;
+          if (!subData && st.subjectMap) {
+            for (const k in st.subjectMap) {
+              const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
+                subData = st.subjectMap[k];
+                break;
+              }
+            }
+          }
+
+          if (subData && subData.total > 0) {
+            const subPct = Math.round((subData.present / subData.total) * 100);
+            const cellStyle = subPct < thresh ? 9 : 8;
+            rCells.push(`<c r="${colL}${rowNum}" s="${cellStyle}"><v>${subPct}</v></c>`);
+            sumPct += subPct;
+            subCount++;
+          } else {
+            rCells.push(`<c r="${colL}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+          }
+        });
+
+        const avgVal = subCount > 0 ? Math.round(sumPct / subCount) : null;
+        const isDef = (avgVal !== null) && (avgVal < thresh);
+        const avgStyle = avgVal === null ? 6 : (isDef ? 9 : 8);
+        const statusStyle = avgVal === null ? 6 : (isDef ? 11 : 10);
+
+        // Robust Excel Formulas with COUNT and ISNUMBER
+        if (subjects.length > 0) {
+          const avgFormula = `IF(COUNT(${firstSubColLetter}${rowNum}:${lastSubColLetter}${rowNum})&gt;0, ROUND(AVERAGE(${firstSubColLetter}${rowNum}:${lastSubColLetter}${rowNum}), 0), &quot;-&quot;)`;
+          const statusFormula = `IF(ISNUMBER(${avgColLetter}${rowNum}), IF(${avgColLetter}${rowNum}&gt;=${thresh}, &quot;Eligible&quot;, &quot;Defaulter&quot;), &quot;-&quot;)`;
+
+          if (avgVal !== null) {
+            rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><f>${avgFormula}</f><v>${avgVal}</v></c>`);
+            rCells.push(`<c r="${statusColLetter}${rowNum}" s="${statusStyle}"><f>${statusFormula}</f><v>${isDef ? 'Defaulter' : 'Eligible'}</v></c>`);
+          } else {
+            rCells.push(`<c r="${avgColLetter}${rowNum}" s="6"><f>${avgFormula}</f><v>-</v></c>`);
+            rCells.push(`<c r="${statusColLetter}${rowNum}" s="6"><f>${statusFormula}</f><v>-</v></c>`);
+          }
+        } else {
+          rCells.push(`<c r="${avgColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+          rCells.push(`<c r="${statusColLetter}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+        }
+
+        sheetData.push(`<row r="${rowNum}" ht="20" customHeight="1">${rCells.join('')}</row>`);
+      });
+
+      const endDataRow = Math.max(startRow, startRow + students.length - 1);
+
+      // Summary Rows
+      const sumRow1 = endDataRow + 2;
+      const sumRow2 = sumRow1 + 1;
+      const sumRow3 = sumRow2 + 1;
+      const sumRow4 = sumRow3 + 1;
+
+      if (students.length > 0) {
+        sheetData.push(`<row r="${sumRow1}" ht="20" customHeight="1">
+          <c r="A${sumRow1}" s="12" t="inlineStr"><is><t>Total Enrolled Students</t></is></c>
+          <c r="C${sumRow1}" s="13"><f>COUNTA(A${startRow}:A${endDataRow})</f><v>${students.length}</v></c>
+        </row>`);
+        merges.push(`A${sumRow1}:B${sumRow1}`);
+
+        sheetData.push(`<row r="${sumRow2}" ht="20" customHeight="1">
+          <c r="A${sumRow2}" s="12" t="inlineStr"><is><t>Eligible Students (≥ ${thresh}%)</t></is></c>
+          <c r="C${sumRow2}" s="15"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, &quot;Eligible&quot;)</f><v>${students.filter(s => s.pct !== null && s.pct >= thresh).length}</v></c>
+        </row>`);
+        merges.push(`A${sumRow2}:B${sumRow2}`);
+
+        sheetData.push(`<row r="${sumRow3}" ht="20" customHeight="1">
+          <c r="A${sumRow3}" s="12" t="inlineStr"><is><t>Defaulter Students (&lt; ${thresh}%)</t></is></c>
+          <c r="C${sumRow3}" s="14"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, &quot;Defaulter&quot;)</f><v>${students.filter(s => s.pct !== null && s.pct < thresh).length}</v></c>
+        </row>`);
+        merges.push(`A${sumRow3}:B${sumRow3}`);
+
+        sheetData.push(`<row r="${sumRow4}" ht="20" customHeight="1">
+          <c r="A${sumRow4}" s="12" t="inlineStr"><is><t>Overall Class Average Attendance</t></is></c>
+          <c r="C${sumRow4}" s="13"><f>IFERROR(ROUND(AVERAGE(${avgColLetter}${startRow}:${avgColLetter}${endDataRow}), 0), 0)</f><v>${Math.round(students.reduce((a, b) => a + (b.pct || 0), 0) / (students.filter(s => s.pct !== null).length || 1))}</v></c>
+        </row>`);
+        merges.push(`A${sumRow4}:B${sumRow4}`);
       }
 
-      sheetData.push(`<row r="${rowNum}" ht="20" customHeight="1">${rCells.join('')}</row>`);
-    });
+      const sigRow = sumRow4 + 4;
+      sheetData.push(`<row r="${sigRow}" ht="24" customHeight="1">
+        <c r="B${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nClass Teacher</t></is></c>
+        <c r="${colToLetter(Math.floor(totalCols / 2))}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nAcademic Incharge</t></is></c>
+        <c r="${lastColLetter}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nPrincipal / Director</t></is></c>
+      </row>`);
 
-    const endDataRow = startRow + students.length - 1;
+      let colTags = [
+        `<col min="1" max="1" width="12" customWidth="1"/>`,
+        `<col min="2" max="2" width="30" customWidth="1"/>`,
+        `<col min="3" max="3" width="10" customWidth="1"/>`
+      ];
+      subjects.forEach((_, sIdx) => {
+        colTags.push(`<col min="${4 + sIdx}" max="${4 + sIdx}" width="16" customWidth="1"/>`);
+      });
+      colTags.push(`<col min="${totalCols - 1}" max="${totalCols - 1}" width="24" customWidth="1"/>`);
+      colTags.push(`<col min="${totalCols}" max="${totalCols}" width="18" customWidth="1"/>`);
 
-    // Summary Rows
-    const sumRow1 = endDataRow + 2;
-    const sumRow2 = sumRow1 + 1;
-    const sumRow3 = sumRow2 + 1;
-    const sumRow4 = sumRow3 + 1;
-
-    sheetData.push(`<row r="${sumRow1}" ht="20" customHeight="1">
-      <c r="A${sumRow1}" s="12" t="inlineStr"><is><t>Total Enrolled Students</t></is></c>
-      <c r="C${sumRow1}" s="13"><f>COUNTA(A${startRow}:A${endDataRow})</f><v>${students.length}</v></c>
-    </row>`);
-    merges.push(`A${sumRow1}:B${sumRow1}`);
-
-    sheetData.push(`<row r="${sumRow2}" ht="20" customHeight="1">
-      <c r="A${sumRow2}" s="12" t="inlineStr"><is><t>Eligible Students (≥ ${thresh}%)</t></is></c>
-      <c r="C${sumRow2}" s="15"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, "Eligible")</f><v>${students.filter(s => (s.pct || 0) >= thresh).length}</v></c>
-    </row>`);
-    merges.push(`A${sumRow2}:B${sumRow2}`);
-
-    sheetData.push(`<row r="${sumRow3}" ht="20" customHeight="1">
-      <c r="A${sumRow3}" s="12" t="inlineStr"><is><t>Defaulter Students (&lt; ${thresh}%)</t></is></c>
-      <c r="C${sumRow3}" s="14"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, "Defaulter")</f><v>${students.filter(s => (s.pct || 0) < thresh).length}</v></c>
-    </row>`);
-    merges.push(`A${sumRow3}:B${sumRow3}`);
-
-    sheetData.push(`<row r="${sumRow4}" ht="20" customHeight="1">
-      <c r="A${sumRow4}" s="12" t="inlineStr"><is><t>Overall Class Average Attendance</t></is></c>
-      <c r="C${sumRow4}" s="13"><f>ROUND(AVERAGE(${avgColLetter}${startRow}:${avgColLetter}${endDataRow}), 0)</f><v>${Math.round(students.reduce((a, b) => a + (b.pct || 0), 0) / (students.length || 1))}</v></c>
-    </row>`);
-    merges.push(`A${sumRow4}:B${sumRow4}`);
-
-    // Signatures Row
-    const sigRow = sumRow4 + 4;
-    sheetData.push(`<row r="${sigRow}" ht="24" customHeight="1">
-      <c r="B${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nClass Teacher</t></is></c>
-      <c r="${colToLetter(Math.floor(totalCols / 2))}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nAcademic Incharge</t></is></c>
-      <c r="${lastColLetter}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nPrincipal / Director</t></is></c>
-    </row>`);
-
-    // Column Widths
-    let colTags = [
-      `<col min="1" max="1" width="12" customWidth="1"/>`,
-      `<col min="2" max="2" width="30" customWidth="1"/>`,
-      `<col min="3" max="3" width="10" customWidth="1"/>`
-    ];
-    subjects.forEach((_, idx) => {
-      colTags.push(`<col min="${4 + idx}" max="${4 + idx}" width="16" customWidth="1"/>`);
-    });
-    colTags.push(`<col min="${totalCols - 1}" max="${totalCols - 1}" width="24" customWidth="1"/>`);
-    colTags.push(`<col min="${totalCols}" max="${totalCols}" width="18" customWidth="1"/>`);
-
-    const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheetViews>
-    <sheetView tabSelected="1" workbookViewId="0">
+    <sheetView tabSelected="${idx === 0 ? '1' : '0'}" workbookViewId="0">
       <pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/>
     </sheetView>
   </sheetViews>
@@ -3011,14 +3075,10 @@ const App = (() => {
   </mergeCells>
 </worksheet>`;
 
-    return [
-      { name: '[Content_Types].xml', bytes: enc.encode(contentTypes) },
-      { name: '_rels/.rels', bytes: enc.encode(rootRels) },
-      { name: 'xl/workbook.xml', bytes: enc.encode(workbook) },
-      { name: 'xl/_rels/workbook.xml.rels', bytes: enc.encode(workbookRels) },
-      { name: 'xl/styles.xml', bytes: enc.encode(styles) },
-      { name: 'xl/worksheets/sheet1.xml', bytes: enc.encode(worksheet) }
-    ];
+      files.push({ name: `xl/worksheets/sheet${sheetId}.xml`, bytes: enc.encode(worksheet) });
+    });
+
+    return files;
   }
 
   // Build WordprocessingML document.xml body for Student Attendance & Eligibility Report.
@@ -4485,25 +4545,12 @@ Generated: ${formatDisplayDate(new Date())}
     generateReportType('student');
   }
 
-  async function loadStudentReportData(className) {
-    const container = document.getElementById('student-report-table-container');
-    if (!container) return;
-
-    container.innerHTML = `
-      <div style="padding: 36px; text-align: center; color: var(--text-secondary); font-size: 13px;">
-        <i class="ph ph-spinner spinner" style="font-size: 26px; margin-bottom: 8px; color: #8b5cf6; display: block;"></i>
-        Fetching live student roster and attendance across all subject sheets for <strong>${escHtml(className)}</strong>...
-      </div>
-    `;
-
+  async function fetchStudentReportDataForClass(className) {
     try {
-      // 1. Identify all subject codes for this class from inchargeDashboard
       const data = state.inchargeDashboard || {};
       const eligibilityThreshold = (state.allData && state.allData.attendanceLimit) ? state.allData.attendanceLimit : 75;
-
       const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
-      // Get enriched subjects from API to get outputSheetId
       let enrichedSubjects = [];
       try {
         const subjectsRes = await API.getSubjects('');
@@ -4536,7 +4583,6 @@ Generated: ${formatDisplayDate(new Date())}
         });
       });
 
-      // Fallback: if classSubjects is empty, populate from enrichedSubjects or state.allData.subjects
       if (classSubjects.length === 0) {
         const allSubs = (enrichedSubjects.length > 0 ? enrichedSubjects : (state.allData && state.allData.subjects) || []);
         allSubs.forEach(s => {
@@ -4557,14 +4603,12 @@ Generated: ${formatDisplayDate(new Date())}
         API.getStudents(className).catch(() => ({ success: false }))
       ];
 
-      // Fetch attendance ONLY from sheets associated with this class's subjects
       if (classSheetIds.length > 0) {
         classSheetIds.forEach(shId => {
           fetchPromises.push(API.getAttendance('', className, '', shId).catch(() => ({ success: false })));
         });
       }
 
-      // Also fetch per-subject attendance for distinct subject codes if any
       classSubjects.forEach(sub => {
         if (sub.code && sub.outputSheetId) {
           fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId).then(res => {
@@ -4580,14 +4624,12 @@ Generated: ${formatDisplayDate(new Date())}
       const studentsRes = results[0];
       const allAttRes = results.slice(1);
 
-      // Build strict whitelist of valid subject codes for this class
       const validClassCodes = new Set(
         classSubjects.map(s => String(s.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean)
       );
 
       let studentMap = {};
 
-      // Pre-populate studentMap with official roster from API if available
       if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students)) {
         studentsRes.students.forEach(st => {
           const rNo = String(st.rollNo !== undefined && st.rollNo !== null ? st.rollNo : (st.roll || '')).trim();
@@ -4606,7 +4648,6 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      // 3. Process all attendance records across all subject sheets
       allAttRes.forEach(attRes => {
         if (attRes && attRes.success && Array.isArray(attRes.records)) {
           attRes.records.forEach(r => {
@@ -4614,7 +4655,6 @@ Generated: ${formatDisplayDate(new Date())}
             const rNoNum = parseInt(rNo, 10);
             const rName = String(r.name || '').trim().toLowerCase();
 
-            // Find matching key in studentMap
             let matchedKey = null;
             if (rNo && studentMap[rNo]) {
               matchedKey = rNo;
@@ -4654,7 +4694,6 @@ Generated: ${formatDisplayDate(new Date())}
             const sCode = String(r.code || 'SUB').trim();
             const cleanSCode = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-            // Ignore attendance records belonging to other classes or unrelated subjects
             if (validClassCodes.size > 0 && !validClassCodes.has(cleanSCode)) {
               return;
             }
@@ -4678,54 +4717,32 @@ Generated: ${formatDisplayDate(new Date())}
       });
 
       let studentList = [];
-
       if (Object.keys(studentMap).length > 0) {
-        studentList = Object.values(studentMap).map(st => {
-          return {
-            rollNo: st.rollNo,
-            name: st.name,
-            batch: st.batch,
-            pct: null,
-            isDefaulter: false,
-            subjectMap: st.subjectMap || {}
-          };
-        });
+        studentList = Object.values(studentMap).map(st => ({
+          rollNo: st.rollNo,
+          name: st.name,
+          batch: st.batch,
+          pct: null,
+          isDefaulter: false,
+          subjectMap: st.subjectMap || {}
+        }));
       } else if (studentsRes && studentsRes.success && Array.isArray(studentsRes.students) && studentsRes.students.length > 0) {
-        studentList = studentsRes.students.map(st => {
-          return {
-            rollNo: st.rollNo || st.roll || 'N/A',
-            name: st.name || st.studentName || 'Student',
-            batch: st.batch || st.batchGroup || 'General',
-            pct: null,
-            isDefaulter: false,
-            subjectMap: {}
-          };
-        });
+        studentList = studentsRes.students.map(st => ({
+          rollNo: st.rollNo || st.roll || 'N/A',
+          name: st.name || st.studentName || 'Student',
+          batch: st.batch || st.batchGroup || 'General',
+          pct: null,
+          isDefaulter: false,
+          subjectMap: {}
+        }));
       }
 
-      if (!studentList || studentList.length === 0) {
-        container.innerHTML = `
-          <div style="padding: 30px; text-align: center; color: var(--text-secondary); background: var(--colorless-glass-base); border-radius: var(--radius-md);">
-            <i class="ph ph-warning-circle" style="font-size: 32px; color: var(--accent-blue); margin-bottom: 8px;"></i>
-            <h4 style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: var(--text-main);">Live Student Roster Sync</h4>
-            <p style="margin: 0; font-size: 12px; max-width: 520px; margin: 0 auto; color: var(--text-muted);">
-              No individual student attendance records returned for <strong>${escHtml(className)}</strong> from the college spreadsheet backend.
-              Ensure class student roll numbers & names are entered on the college sheet output tab.
-            </p>
-          </div>
-        `;
-        return;
-      }
-
-      // Sort students by Roll No
       studentList.sort((a, b) => {
         const rA = parseInt(a.rollNo, 10) || 0;
         const rB = parseInt(b.rollNo, 10) || 0;
         return rA - rB;
       });
 
-      // 4. Render Table Headers and Rows
-      // Deduplicate unique subject columns based on classSubjects
       const subjectColumns = [];
       const seenCodes = new Set();
       classSubjects.forEach(s => {
@@ -4740,6 +4757,108 @@ Generated: ${formatDisplayDate(new Date())}
           });
         }
       });
+
+      let defaulterCount = 0;
+      studentList.forEach(st => {
+        let sumPct = 0;
+        let activeSubCount = 0;
+        subjectColumns.forEach(sc => {
+          const rawCode = sc.code;
+          const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let subData = st.subjectMap[rawCode] || st.subjectMap[cleanScCode];
+          if (!subData) {
+            for (const k in st.subjectMap) {
+              const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
+                subData = st.subjectMap[k];
+                break;
+              }
+            }
+          }
+          if (subData && subData.total > 0) {
+            const subPct = Math.round((subData.present / subData.total) * 100);
+            sumPct += subPct;
+            activeSubCount++;
+          }
+        });
+
+        if (activeSubCount === 0) {
+          st.pct = null;
+          st.isDefaulter = false;
+        } else {
+          const avgPct = Math.round(sumPct / activeSubCount);
+          st.pct = avgPct;
+          st.isDefaulter = avgPct < eligibilityThreshold;
+          if (st.isDefaulter) defaulterCount++;
+        }
+      });
+
+      const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
+      let periodLabel = 'All Time (Entire Academic Year)';
+      if (period === 'custom') {
+        const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
+        const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
+        periodLabel = (s && e) ? `Custom (${s} to ${e})` : 'Custom Range';
+      }
+
+      return {
+        className: className,
+        studentList: studentList,
+        subjectColumns: subjectColumns,
+        classSubjects: classSubjects,
+        defaulterCount: defaulterCount,
+        eligibilityThreshold: eligibilityThreshold,
+        periodLabel: periodLabel
+      };
+    } catch (e) {
+      console.error(`Error fetching student data for ${className}:`, e);
+      return {
+        className: className,
+        studentList: [],
+        subjectColumns: [],
+        classSubjects: [],
+        defaulterCount: 0,
+        eligibilityThreshold: 75,
+        periodLabel: 'All Time'
+      };
+    }
+  }
+
+  async function loadStudentReportData(className) {
+    const container = document.getElementById('student-report-table-container');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="padding: 36px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+        <i class="ph ph-spinner spinner" style="font-size: 26px; margin-bottom: 8px; color: #8b5cf6; display: block;"></i>
+        Fetching live student roster and attendance across all subject sheets for <strong>${escHtml(className)}</strong>...
+      </div>
+    `;
+
+    try {
+      const repData = await fetchStudentReportDataForClass(className);
+      const studentList = repData.studentList || [];
+      const subjectColumns = repData.subjectColumns || [];
+      const classSubjects = repData.classSubjects || [];
+      const defaulterCount = repData.defaulterCount || 0;
+      const eligibilityThreshold = repData.eligibilityThreshold || 75;
+      const periodLabel = repData.periodLabel || 'All Time';
+
+      state.activeStudentReport = repData;
+
+      if (!studentList || studentList.length === 0) {
+        container.innerHTML = `
+          <div style="padding: 30px; text-align: center; color: var(--text-secondary); background: var(--colorless-glass-base); border-radius: var(--radius-md);">
+            <i class="ph ph-warning-circle" style="font-size: 32px; color: var(--accent-blue); margin-bottom: 8px;"></i>
+            <h4 style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: var(--text-main);">Live Student Roster Sync</h4>
+            <p style="margin: 0; font-size: 12px; max-width: 520px; margin: 0 auto; color: var(--text-muted);">
+              No individual student attendance records returned for <strong>${escHtml(className)}</strong> from the college spreadsheet backend.
+              Ensure class student roll numbers & names are entered on the college sheet output tab.
+            </p>
+          </div>
+        `;
+        return;
+      }
 
       const totalSubs = subjectColumns.length;
       const isDense = totalSubs >= 6;
@@ -4767,13 +4886,8 @@ Generated: ${formatDisplayDate(new Date())}
       }).join('');
 
       let rowsHtml = '';
-      let defaulterCount = 0;
-
       studentList.forEach(st => {
-        let sumPct = 0;
-        let activeSubCount = 0;
         let subjectCellsHtml = '';
-
         subjectColumns.forEach(sc => {
           const rawCode = sc.code;
           const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -4792,24 +4906,10 @@ Generated: ${formatDisplayDate(new Date())}
             const subPct = Math.round((subData.present / subData.total) * 100);
             const isSubDefaulter = subPct < eligibilityThreshold;
             cellHtml = `<span class="smart-matrix-cell-pct" style="color: #000000; font-weight: ${isSubDefaulter ? '900' : '800'}; font-size: ${fontSizePct};">${subPct}%</span>`;
-            sumPct += subPct;
-            activeSubCount++;
           }
           subjectCellsHtml += `<td style="padding: ${cellPadding}; text-align: center; vertical-align: middle; color: #000000;">${cellHtml}</td>`;
         });
 
-        // Compute average attendance across subjects that actually had classes conducted
-        if (activeSubCount === 0) {
-          st.pct = null;
-          st.isDefaulter = false;
-        } else {
-          const avgPct = Math.round(sumPct / activeSubCount);
-          st.pct = avgPct;
-          st.isDefaulter = avgPct < eligibilityThreshold;
-          if (st.isDefaulter) defaulterCount++;
-        }
-
-        // Defaulters = Soft Red Hue, Eligible = Soft Green Hue, No Data = Clean Neutral
         const rowClass = st.pct === null ? 'smart-matrix-row-neutral' : (st.isDefaulter ? 'smart-matrix-row-defaulter' : 'smart-matrix-row-eligible');
         const rowBg = st.pct === null ? 'rgba(255, 255, 255, 0.85)' : (st.isDefaulter ? 'rgba(254, 226, 226, 0.85)' : 'rgba(220, 252, 231, 0.85)');
         const stickyBg = st.pct === null ? '#f8fafc' : (st.isDefaulter ? '#fee2e2' : '#dcfce7');
@@ -4841,24 +4941,6 @@ Generated: ${formatDisplayDate(new Date())}
           </tr>
         `;
       });
-
-      const period = document.getElementById('reports-period-filter') ? document.getElementById('reports-period-filter').value : 'all';
-      let periodLabel = 'All Time (Entire Academic Year)';
-      if (period === 'custom') {
-        const s = document.getElementById('reports-start-date') ? document.getElementById('reports-start-date').value : '';
-        const e = document.getElementById('reports-end-date') ? document.getElementById('reports-end-date').value : '';
-        periodLabel = (s && e) ? `Custom (${s} to ${e})` : 'Custom Range';
-      }
-
-      state.activeStudentReport = {
-        className: className,
-        studentList: studentList,
-        subjectColumns: subjectColumns,
-        classSubjects: classSubjects,
-        defaulterCount: defaulterCount,
-        eligibilityThreshold: eligibilityThreshold,
-        periodLabel: periodLabel
-      };
 
       const anyConducted = studentList.some(s => s.pct !== null);
       const topStatusBadgeHtml = !anyConducted ?
