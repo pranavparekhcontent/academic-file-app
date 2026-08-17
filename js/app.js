@@ -2201,8 +2201,14 @@ const App = (() => {
             </div>
 
             <!-- Row 4: Status Bar / Progress Bar -->
-            <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden;">
+            <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden; margin-top: 2px;">
               <div style="width: ${s.percent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+            </div>
+
+            <!-- Row 5: Respective Subject Coverage below status bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; margin-top: 5px;">
+              <span style="color: #64748b; font-weight: 600;">Syllabus Coverage</span>
+              <span style="color: ${pctColor}; font-weight: 800; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 1.5px 8px; border-radius: 9999px; font-size: 10.5px; line-height: 1.2;">${s.percent}% Coverage</span>
             </div>
           </div>
         `;
@@ -2216,7 +2222,7 @@ const App = (() => {
               <span>${escHtml(f.faculty)}</span>
             </div>
             <div style="display: inline-flex; align-items: center; flex-shrink: 0; margin-top: 1px;">
-              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 3px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; line-height: 1.2;">${f.overallPercent}% Coverage</div>
+              <div class="faculty-card-badge" style="background: ${pal.badgeBg} !important; color: ${pal.badgeColor} !important; border: 1.5px solid ${pal.badgeBorder} !important; padding: 3px 10px; border-radius: 9999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; line-height: 1.2;">${f.overallPercent}% Overall Coverage</div>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 10px;">
