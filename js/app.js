@@ -2392,7 +2392,7 @@ const App = (() => {
 
   // Build a store-only (uncompressed) ZIP blob from [{name, bytes}].
   // Store method keeps .docx valid without a compression dependency.
-  function zipStore(files) {
+  function zipStore(files, mimeType) {
     const enc = new TextEncoder();
     const chunks = [];
     const central = [];
@@ -2427,6 +2427,10 @@ const App = (() => {
       cdSize += recArr.length + c.nameBytes.length;
     });
 
+    const end = new Uint8Array([].concat(
+      u32(0x06054b50), u16(0), u16(0), u16(central.length), u16(central.length),
+      u32(cdSize), u32(cdStart), u16(0)
+    ));
     chunks.push(end);
     return new Blob(chunks, { type: mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
