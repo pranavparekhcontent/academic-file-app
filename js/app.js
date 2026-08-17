@@ -2104,11 +2104,14 @@ const App = (() => {
     // In-memory helper to resolve exact batch from already-fetched data
     function resolveSubjectBatch(s, facultyName) {
       if (!s) return '';
+      if (s.batch && String(s.batch).trim()) {
+        const b = String(s.batch).trim();
+        return /^batch/i.test(b) ? b : `Batch ${b}`;
+      }
       if (s.batches) {
         const b = resolveFacultyBatchesFromStr(s.batches, facultyName);
         if (b) return b;
       }
-      if (s.batch && String(s.batch).trim()) return String(s.batch).trim();
       
       const isPractical = s.type === 'practical' || (s.code && s.code.toUpperCase().endsWith('P')) || (s.name && s.name.toLowerCase().includes('practical'));
       if (!isPractical) return '';

@@ -951,7 +951,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v45_' + sheetId;
+  var cacheKey = 'dash_v46_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1028,7 +1028,7 @@ function getInchargeDashboard(sheetId) {
               year: sYear,
               semester: sSem,
               faculty: facName,
-              batches: rawBatches,
+              batches: batchList[bi],
               batch: batchList[bi]
             });
           }
@@ -1330,10 +1330,10 @@ function getInchargeDashboard(sheetId) {
         subs[s].avgAttendance = subAvgAtt;
         subs[s].hasTeachingPlan = !!subjectPlanMap[sCode];
 
-        // Apply verified batch from attendance output if available
+        // Apply verified batch from attendance output if available and batch not already assigned
         var cleanCode = _parseSubjectCode(sCode).cleanBaseCode;
         var verifiedBatch = facultyBatchMap[fac.toLowerCase() + '_' + cleanCode];
-        if (verifiedBatch) {
+        if (verifiedBatch && !subs[s].batch) {
           subs[s].batch = verifiedBatch;
         }
 
