@@ -2672,23 +2672,40 @@ const App = (() => {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
   }
 
+  // Helper to cleanly resolve class / year name for a subject
+  function resolveSubjectClass(s) {
+    if (!s) return 'General Academic Class';
+    const liveName = String(s.year || s.className || s.class || s.courseYear || s.programYear || s.courseClass || s.course || s.branch || s.department || '').trim();
+    if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
+      return liveName;
+    }
+    if (s.semester && String(s.semester).trim()) {
+      return `Semester ${String(s.semester).trim()}`;
+    }
+    return 'General Academic Class';
+  }
+
   // ─── DOWNLOAD STUDENT ATTENDANCE REPORT AS .XLSX ──────────
   async function downloadStudentAttendanceXlsx() {
-    Toast.show('Preparing Excel Report', 'Compiling multi-class attendance sheets with separate tabs...', 'info');
+    const currentClass = state.activeStudentYear || (state.activeStudentReport && state.activeStudentReport.className) || 'Class Report';
+    Toast.show('Preparing Excel Report', `Compiling attendance report for ${currentClass}...`, 'info');
 
-    // 1. Resolve all active class names
+    // 1. Gather active report data
+    let currentRep = state.activeStudentReport;
+    if (!currentRep || (currentRep.className && currentRep.className.toLowerCase() !== currentClass.toLowerCase()) || !currentRep.studentList || currentRep.studentList.length === 0) {
+      currentRep = await fetchStudentReportDataForClass(currentClass);
+      state.activeStudentReport = currentRep;
+    }
+
+    // 2. Resolve all active class names from incharge dashboard
     const data = state.inchargeDashboard || {};
     const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
     const classNamesSet = {};
     faculties.forEach(f => {
       (f.subjects || []).forEach(s => {
         if (!s) return;
-        const name = (s.year || s.className || s.class || s.courseYear || s.programYear || '').trim();
-        if (name && !/^semester\s*\d+$/i.test(name) && !/^\d+$/i.test(name)) {
-          classNamesSet[name] = true;
-        } else if (s.semester && String(s.semester).trim()) {
-          classNamesSet[`Semester ${String(s.semester).trim()}`] = true;
-        }
+        const cName = resolveSubjectClass(s);
+        if (cName) classNamesSet[cName] = true;
       });
     });
 
@@ -2697,15 +2714,26 @@ const App = (() => {
       activeClassNames = ['FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm'];
     }
 
-    try {
-      // Fetch report data for all active classes in parallel
-      const classesData = await Promise.all(activeClassNames.map(cls => fetchStudentReportDataForClass(cls)));
-      const validClasses = classesData.filter(cd => cd && cd.studentList && cd.studentList.length > 0);
-      const toExport = validClasses.length > 0 ? validClasses : classesData;
+    // Ensure currently viewed class is at the top/first position
+    const otherClasses = activeClassNames.filter(c => c.toLowerCase() !== currentClass.toLowerCase());
+    const orderedClassNames = [currentClass, ...otherClasses];
 
-      if (!toExport || toExport.length === 0 || !toExport.some(c => c && c.studentList && c.studentList.length > 0)) {
-        if (state.activeStudentReport && state.activeStudentReport.studentList && state.activeStudentReport.studentList.length > 0) {
-          toExport.push(state.activeStudentReport);
+    try {
+      // Fetch all classes in parallel
+      const classesData = await Promise.all(orderedClassNames.map(async (cls) => {
+        if (currentRep && currentRep.className && currentRep.className.toLowerCase() === cls.toLowerCase() && currentRep.studentList && currentRep.studentList.length > 0) {
+          return currentRep;
+        }
+        return await fetchStudentReportDataForClass(cls);
+      }));
+
+      // Filter classes with students
+      let toExport = classesData.filter(cd => cd && cd.studentList && cd.studentList.length > 0);
+
+      // If other classes don't have records yet, export the active class report
+      if (toExport.length === 0) {
+        if (currentRep && currentRep.studentList && currentRep.studentList.length > 0) {
+          toExport = [currentRep];
         } else {
           Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
           return;
@@ -2724,8 +2752,8 @@ const App = (() => {
         mgmt: mgmt,
         college: college,
         acadYear: ay,
-        periodLabel: (toExport[0] && toExport[0].periodLabel) || 'All Time (Entire Academic Year)',
-        eligibilityThreshold: (toExport[0] && toExport[0].eligibilityThreshold) || 75
+        periodLabel: (currentRep && currentRep.periodLabel) || (toExport[0] && toExport[0].periodLabel) || 'All Time (Entire Academic Year)',
+        eligibilityThreshold: (currentRep && currentRep.eligibilityThreshold) || (toExport[0] && toExport[0].eligibilityThreshold) || 75
       };
 
       const files = buildStudentAttendanceXlsxXml(toExport, docMeta);
@@ -2734,15 +2762,16 @@ const App = (() => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      const cleanClass = currentClass.replace(/[^a-zA-Z0-9_-]/g, '_');
       const cleanAy = String(docMeta.acadYear || '2024-25').replace(/[^a-zA-Z0-9_-]/g, '_');
-      a.download = `Attendance_Report_All_Classes_${cleanAy}.xlsx`;
+      a.download = `Attendance_Report_${cleanClass}_${cleanAy}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      Toast.show('Downloaded', `Attendance report with ${toExport.length} class tab(s) generated successfully.`, 'success');
+      Toast.show('Downloaded', `Attendance report for ${currentClass} (${toExport.length} sheet tab(s)) generated successfully.`, 'success');
     } catch (err) {
-      console.error('Failed to generate multi-class Excel workbook:', err);
+      console.error('Failed to generate Excel workbook:', err);
       Toast.show('Export Error', 'Failed to generate Excel report: ' + (err.message || err), 'danger');
     }
   }
@@ -4568,8 +4597,8 @@ Generated: ${formatDisplayDate(new Date())}
         const facName = String(f.faculty || '').trim();
         (f.subjects || []).forEach(s => {
           if (!s) return;
-          const liveClass = (s.year || s.className || s.class || '').trim();
-          if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester'))) {
+          const liveClass = resolveSubjectClass(s);
+          if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester')) || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
             if (s.code && !subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
               const enriched = enrichedSubjects.find(es => es.code === s.code);
@@ -4587,7 +4616,7 @@ Generated: ${formatDisplayDate(new Date())}
         const allSubs = (enrichedSubjects.length > 0 ? enrichedSubjects : (state.allData && state.allData.subjects) || []);
         allSubs.forEach(s => {
           if (!s || !s.code) return;
-          const liveClass = (s.year || s.className || s.class || s.program || '').trim();
+          const liveClass = resolveSubjectClass(s);
           if (!liveClass || liveClass.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
             if (!subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
