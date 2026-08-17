@@ -2427,12 +2427,20 @@ const App = (() => {
       cdSize += recArr.length + c.nameBytes.length;
     });
 
-    const end = new Uint8Array([].concat(
-      u32(0x06054b50), u16(0), u16(0), u16(central.length), u16(central.length),
-      u32(cdSize), u32(cdStart), u16(0)
-    ));
     chunks.push(end);
-    return new Blob(chunks, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    return new Blob(chunks, { type: mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+
+  // Convert 0-indexed column number to Excel column letters (0 -> A, 1 -> B, 26 -> AA)
+  function colToLetter(c) {
+    let s = '';
+    c++;
+    while (c > 0) {
+      let m = (c - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      c = Math.floor((c - m) / 26);
+    }
+    return s;
   }
 
   // Escape text for WordprocessingML content.
@@ -2660,8 +2668,8 @@ const App = (() => {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
   }
 
-  // ─── DOWNLOAD STUDENT ATTENDANCE REPORT AS .DOCX ──────────
-  function downloadStudentAttendanceDoc() {
+  // ─── DOWNLOAD STUDENT ATTENDANCE REPORT AS .XLSX ──────────
+  function downloadStudentAttendanceXlsx() {
     const rep = state.activeStudentReport;
     if (!rep || !rep.studentList || rep.studentList.length === 0) {
       Toast.show('No Data Available', 'Please wait for student attendance records to load or select an active class.', 'warning');
@@ -2688,25 +2696,325 @@ const App = (() => {
       subjectColumns: rep.subjectColumns || []
     };
 
-    const documentXml = buildStudentAttendanceDocx(docMeta);
-    const enc = new TextEncoder();
-    const blob = zipStore([
-      { name: '[Content_Types].xml', bytes: enc.encode(DOCX_CONTENT_TYPES) },
-      { name: '_rels/.rels', bytes: enc.encode(DOCX_ROOT_RELS) },
-      { name: 'word/document.xml', bytes: enc.encode(documentXml) }
-    ]);
+    const files = buildStudentAttendanceXlsxXml(docMeta);
+    const blob = zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const cleanClass = (docMeta.className || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
     const cleanAy = String(docMeta.acadYear || '2024-25').replace(/[^a-zA-Z0-9_-]/g, '_');
-    a.download = `Attendance_Report_${cleanClass}_${cleanAy}.docx`;
+    a.download = `Attendance_Report_${cleanClass}_${cleanAy}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    Toast.show('Downloaded', 'Student attendance report .docx generated successfully.', 'success');
+    Toast.show('Downloaded', 'Student attendance report .xlsx generated successfully.', 'success');
+  }
+
+  // Alias for backward compatibility
+  function downloadStudentAttendanceDoc() {
+    downloadStudentAttendanceXlsx();
+  }
+
+  // Build full SpreadsheetML (.xlsx) package with formulas, styles, and color rules
+  function buildStudentAttendanceXlsxXml(m) {
+    const enc = new TextEncoder();
+    const students = m.studentList || [];
+    const subjects = m.subjectColumns || [];
+    const thresh = m.eligibilityThreshold || 75;
+
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+
+    const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+    const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+    const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Attendance Matrix" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`;
+
+    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="2">
+    <numFmt numFmtId="164" formatCode="0&quot;%&quot;"/>
+    <numFmt numFmtId="165" formatCode="0.0&quot;%&quot;"/>
+  </numFmts>
+  <fonts count="8">
+    <font><sz val="11"/><name val="Calibri"/><color rgb="FF0F172A"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font>
+    <font><b/><sz val="14"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><color rgb="FF991B1B"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><color rgb="FF166534"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><color rgb="FF0F172A"/></font>
+    <font><i/><sz val="10"/><name val="Calibri"/><color rgb="FF64748B"/></font>
+    <font><b/><sz val="12"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font>
+  </fonts>
+  <fills count="10">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1E3A8A"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1E293B"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF334155"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFDCFCE7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF8FAFC"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFEF3C7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>
+  </fills>
+  <borders count="4">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFCBD5E1"/></left>
+      <right style="thin"><color rgb="FFCBD5E1"/></right>
+      <top style="thin"><color rgb="FFCBD5E1"/></top>
+      <bottom style="thin"><color rgb="FFCBD5E1"/></bottom>
+    </border>
+    <border>
+      <left style="thin"><color rgb="FF94A3B8"/></left>
+      <right style="thin"><color rgb="FF94A3B8"/></right>
+      <top style="thin"><color rgb="FF94A3B8"/></top>
+      <bottom style="medium"><color rgb="FF0F172A"/></bottom>
+    </border>
+    <border>
+      <left style="thin"><color rgb="FFCBD5E1"/></left>
+      <right style="thin"><color rgb="FFCBD5E1"/></right>
+      <top style="thin"><color rgb="FFCBD5E1"/></top>
+      <bottom style="double"><color rgb="FF0F172A"/></bottom>
+    </border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0"/>
+  </cellStyles>
+  <cellXfs count="17">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="4" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyNumberFormat="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyNumberFormat="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="4" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="5" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyNumberFormat="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="4" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+  </cellXfs>
+</styleSheet>`;
+
+    const totalCols = 3 + subjects.length + 2;
+    const lastColLetter = colToLetter(totalCols - 1);
+    const avgColLetter = colToLetter(totalCols - 2);
+    const statusColLetter = colToLetter(totalCols - 1);
+    const firstSubColLetter = colToLetter(3);
+    const lastSubColLetter = colToLetter(3 + subjects.length - 1);
+
+    let sheetData = [];
+    let merges = [];
+
+    // Row 1: College Header
+    sheetData.push(`<row r="1" ht="26" customHeight="1">
+      <c r="A1" s="1" t="inlineStr"><is><t>${xmlEsc((m.college || 'College Name').toUpperCase())}</t></is></c>
+      ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}1" s="1"/>`).join('')}
+    </row>`);
+    merges.push(`A1:${lastColLetter}1`);
+
+    // Row 2: Management & Title
+    sheetData.push(`<row r="2" ht="20" customHeight="1">
+      <c r="A2" s="2" t="inlineStr"><is><t>${xmlEsc(m.mgmt || 'Management')} — STUDENT ATTENDANCE &amp; ELIGIBILITY REPORT</t></is></c>
+      ${Array.from({length: totalCols - 1}, (_, i) => `<c r="${colToLetter(i + 1)}2" s="2"/>`).join('')}
+    </row>`);
+    merges.push(`A2:${lastColLetter}2`);
+
+    // Row 3: Class & AY Meta
+    sheetData.push(`<row r="3" ht="18" customHeight="1">
+      <c r="A3" s="3" t="inlineStr"><is><t>Class / Program: ${xmlEsc(m.className)}</t></is></c>
+      <c r="C3" s="3" t="inlineStr"><is><t>Academic Year: ${xmlEsc(m.acadYear)}</t></is></c>
+      <c r="${avgColLetter}3" s="3" t="inlineStr"><is><t>Min. Required: ${thresh}%</t></is></c>
+    </row>`);
+
+    // Row 4: Report Period
+    sheetData.push(`<row r="4" ht="18" customHeight="1">
+      <c r="A4" s="3" t="inlineStr"><is><t>Report Period: ${xmlEsc(m.periodLabel || 'All Time')}</t></is></c>
+      <c r="${avgColLetter}4" s="3" t="inlineStr"><is><t>Generated: ${new Date().toLocaleDateString('en-GB')}</t></is></c>
+    </row>`);
+
+    // Row 5: Empty space
+    sheetData.push(`<row r="5" ht="8" customHeight="1"/>`);
+
+    // Row 6: Main Table Header
+    let r6Cells = [
+      `<c r="A6" s="4" t="inlineStr"><is><t>Roll No</t></is></c>`,
+      `<c r="B6" s="4" t="inlineStr"><is><t>Student Full Name</t></is></c>`,
+      `<c r="C6" s="4" t="inlineStr"><is><t>Batch</t></is></c>`
+    ];
+
+    subjects.forEach((sc, idx) => {
+      const colL = colToLetter(3 + idx);
+      const subTitle = (sc.code || 'SUB') + (sc.name ? `\n${sc.name}` : '');
+      r6Cells.push(`<c r="${colL}6" s="4" t="inlineStr"><is><t>${xmlEsc(subTitle)}</t></is></c>`);
+    });
+
+    r6Cells.push(`<c r="${avgColLetter}6" s="4" t="inlineStr"><is><t>Overall Avg. Attendance</t></is></c>`);
+    r6Cells.push(`<c r="${statusColLetter}6" s="4" t="inlineStr"><is><t>Eligibility Status</t></is></c>`);
+
+    sheetData.push(`<row r="6" ht="38" customHeight="1">${r6Cells.join('')}</row>`);
+
+    // Student Data Rows (Start at Row 7)
+    const startRow = 7;
+    students.forEach((st, idx) => {
+      const rowNum = startRow + idx;
+      let rCells = [
+        `<c r="A${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.rollNo)}</t></is></c>`,
+        `<c r="B${rowNum}" s="7" t="inlineStr"><is><t>${xmlEsc(st.name)}</t></is></c>`,
+        `<c r="C${rowNum}" s="6" t="inlineStr"><is><t>${xmlEsc(st.batch || 'Gen')}</t></is></c>`
+      ];
+
+      let sumPct = 0;
+      let subCount = 0;
+
+      subjects.forEach((sc, sIdx) => {
+        const colL = colToLetter(3 + sIdx);
+        const rawCode = sc.code;
+        const cleanScCode = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let subData = st.subjectMap ? (st.subjectMap[rawCode] || st.subjectMap[cleanScCode]) : null;
+        if (!subData && st.subjectMap) {
+          for (const k in st.subjectMap) {
+            const cleanK = String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (cleanK === cleanScCode || (cleanK && cleanScCode && (cleanK.includes(cleanScCode) || cleanScCode.includes(cleanK)))) {
+              subData = st.subjectMap[k];
+              break;
+            }
+          }
+        }
+
+        if (subData && subData.total > 0) {
+          const subPct = Math.round((subData.present / subData.total) * 100);
+          const cellStyle = subPct < thresh ? 9 : 8; // Red if defaulter, Green if eligible
+          rCells.push(`<c r="${colL}${rowNum}" s="${cellStyle}"><v>${subPct}</v></c>`);
+          sumPct += subPct;
+          subCount++;
+        } else {
+          rCells.push(`<c r="${colL}${rowNum}" s="6" t="inlineStr"><is><t>-</t></is></c>`);
+        }
+      });
+
+      const avgVal = subCount > 0 ? Math.round(sumPct / subCount) : (st.pct || 0);
+      const isDef = avgVal < thresh;
+      const avgStyle = isDef ? 9 : 8;
+      const statusStyle = isDef ? 11 : 10;
+
+      if (subjects.length > 0) {
+        rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><f>ROUND(AVERAGE(${firstSubColLetter}${rowNum}:${lastSubColLetter}${rowNum}), 0)</f><v>${avgVal}</v></c>`);
+      } else {
+        rCells.push(`<c r="${avgColLetter}${rowNum}" s="${avgStyle}"><v>${avgVal}</v></c>`);
+      }
+
+      rCells.push(`<c r="${statusColLetter}${rowNum}" s="${statusStyle}"><f>IF(${avgColLetter}${rowNum}&gt;=${thresh}, "Eligible", "Defaulter")</f><v>${isDef ? 'Defaulter' : 'Eligible'}</v></c>`);
+
+      sheetData.push(`<row r="${rowNum}" ht="20" customHeight="1">${rCells.join('')}</row>`);
+    });
+
+    const endDataRow = startRow + students.length - 1;
+
+    // Summary Rows
+    const sumRow1 = endDataRow + 2;
+    const sumRow2 = sumRow1 + 1;
+    const sumRow3 = sumRow2 + 1;
+    const sumRow4 = sumRow3 + 1;
+
+    sheetData.push(`<row r="${sumRow1}" ht="20" customHeight="1">
+      <c r="A${sumRow1}" s="12" t="inlineStr"><is><t>Total Enrolled Students</t></is></c>
+      <c r="C${sumRow1}" s="13"><f>COUNTA(A${startRow}:A${endDataRow})</f><v>${students.length}</v></c>
+    </row>`);
+    merges.push(`A${sumRow1}:B${sumRow1}`);
+
+    sheetData.push(`<row r="${sumRow2}" ht="20" customHeight="1">
+      <c r="A${sumRow2}" s="12" t="inlineStr"><is><t>Eligible Students (≥ ${thresh}%)</t></is></c>
+      <c r="C${sumRow2}" s="15"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, "Eligible")</f><v>${students.filter(s => (s.pct || 0) >= thresh).length}</v></c>
+    </row>`);
+    merges.push(`A${sumRow2}:B${sumRow2}`);
+
+    sheetData.push(`<row r="${sumRow3}" ht="20" customHeight="1">
+      <c r="A${sumRow3}" s="12" t="inlineStr"><is><t>Defaulter Students (&lt; ${thresh}%)</t></is></c>
+      <c r="C${sumRow3}" s="14"><f>COUNTIF(${statusColLetter}${startRow}:${statusColLetter}${endDataRow}, "Defaulter")</f><v>${students.filter(s => (s.pct || 0) < thresh).length}</v></c>
+    </row>`);
+    merges.push(`A${sumRow3}:B${sumRow3}`);
+
+    sheetData.push(`<row r="${sumRow4}" ht="20" customHeight="1">
+      <c r="A${sumRow4}" s="12" t="inlineStr"><is><t>Overall Class Average Attendance</t></is></c>
+      <c r="C${sumRow4}" s="13"><f>ROUND(AVERAGE(${avgColLetter}${startRow}:${avgColLetter}${endDataRow}), 0)</f><v>${Math.round(students.reduce((a, b) => a + (b.pct || 0), 0) / (students.length || 1))}</v></c>
+    </row>`);
+    merges.push(`A${sumRow4}:B${sumRow4}`);
+
+    // Signatures Row
+    const sigRow = sumRow4 + 4;
+    sheetData.push(`<row r="${sigRow}" ht="24" customHeight="1">
+      <c r="B${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nClass Teacher</t></is></c>
+      <c r="${colToLetter(Math.floor(totalCols / 2))}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nAcademic Incharge</t></is></c>
+      <c r="${lastColLetter}${sigRow}" s="16" t="inlineStr"><is><t>_____________________\nPrincipal / Director</t></is></c>
+    </row>`);
+
+    // Column Widths
+    let colTags = [
+      `<col min="1" max="1" width="12" customWidth="1"/>`,
+      `<col min="2" max="2" width="30" customWidth="1"/>`,
+      `<col min="3" max="3" width="10" customWidth="1"/>`
+    ];
+    subjects.forEach((_, idx) => {
+      colTags.push(`<col min="${4 + idx}" max="${4 + idx}" width="16" customWidth="1"/>`);
+    });
+    colTags.push(`<col min="${totalCols - 1}" max="${totalCols - 1}" width="24" customWidth="1"/>`);
+    colTags.push(`<col min="${totalCols}" max="${totalCols}" width="18" customWidth="1"/>`);
+
+    const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews>
+    <sheetView tabSelected="1" workbookViewId="0">
+      <pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/>
+    </sheetView>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="16"/>
+  <cols>${colTags.join('')}</cols>
+  <sheetData>${sheetData.join('')}</sheetData>
+  <mergeCells count="${merges.length}">
+    ${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}
+  </mergeCells>
+</worksheet>`;
+
+    return [
+      { name: '[Content_Types].xml', bytes: enc.encode(contentTypes) },
+      { name: '_rels/.rels', bytes: enc.encode(rootRels) },
+      { name: 'xl/workbook.xml', bytes: enc.encode(workbook) },
+      { name: 'xl/_rels/workbook.xml.rels', bytes: enc.encode(workbookRels) },
+      { name: 'xl/styles.xml', bytes: enc.encode(styles) },
+      { name: 'xl/worksheets/sheet1.xml', bytes: enc.encode(worksheet) }
+    ];
   }
 
   // Build WordprocessingML document.xml body for Student Attendance & Eligibility Report.
@@ -4018,13 +4326,13 @@ Generated: ${formatDisplayDate(new Date())}
             <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">${escHtml(periodLabel)} · Class: <strong>${escHtml(state.activeStudentYear)}</strong></span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-outline" onclick="App.downloadStudentAttendanceDoc()" title="Download full attendance matrix Word (.docx) report with all subjects & signatures" style="
+            <button class="btn btn-outline" onclick="App.downloadStudentAttendanceXlsx()" title="Download full attendance matrix Excel (.xlsx) report with formulas and conditional color rules" style="
               padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
               display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-              background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(66, 133, 244, 0.4); color: #1d4ed8;
-              box-shadow: 0 2px 8px rgba(66, 133, 244, 0.12);
+              background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(22, 163, 74, 0.4); color: #15803d;
+              box-shadow: 0 2px 8px rgba(22, 163, 74, 0.12);
             ">
-              <i class="ph ph-file-doc" style="font-size: 15px; color: #2563eb;"></i> Download Full Report (.docx)
+              <i class="ph ph-file-xls" style="font-size: 16px; color: #16a34a;"></i> Download Full Report (.xlsx)
             </button>
             <button class="btn btn-primary" onclick="App.downloadDefaultersNoticeDoc()" title="Generate and download official Defaulters Notice (.docx) with 4-column defaulters table, subject teachers acknowledgment & 3 signatures" style="
               padding: 8px 18px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
@@ -4596,6 +4904,7 @@ Generated: ${formatDisplayDate(new Date())}
     switchView,
     triggerManualSync,
     downloadTeachingPlanDoc,
+    downloadStudentAttendanceXlsx,
     downloadStudentAttendanceDoc,
     downloadDefaultersNoticeDoc,
     downloadMonthlySyllabusProgressDoc,
