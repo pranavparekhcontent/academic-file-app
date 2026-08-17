@@ -2171,6 +2171,18 @@ const App = (() => {
         const semRaw = String(s.semester || 'I').trim();
         const semLabel = /^sem/i.test(semRaw) ? escHtml(semRaw) : `Sem ${escHtml(semRaw)}`;
 
+        const hasPlan = (s.hasTeachingPlan !== false && s.totalLectures > 0);
+        const totalDisplay = hasPlan ? s.totalLectures : '?';
+        const conductedDisplay = s.totalConducted !== undefined ? (hasPlan ? Math.min(s.totalConducted, s.totalLectures) : s.totalConducted) : 0;
+        const progressPct = hasPlan ? (s.percent || 0) : 0;
+
+        const isSubZero = (progressPct === 0);
+        const pctColor = !hasPlan ? '#b45309' : (isSubZero ? '#dc2626' : '#059669');
+        const pctBg = !hasPlan ? 'rgba(245, 158, 11, 0.12)' : (isSubZero ? 'rgba(239, 68, 68, 0.10)' : 'rgba(16, 185, 129, 0.10)');
+        const pctBorder = !hasPlan ? 'rgba(245, 158, 11, 0.30)' : (isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)');
+        const sBarColor = !hasPlan ? 'rgba(0, 0, 0, 0.08)' : (isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)');
+        const coverageBadgeText = hasPlan ? `${s.percent}% Coverage` : '? No Plan';
+
         return `
           <div class="incharge-subject-item" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;">
             <!-- Row 1: Subject Name & Code -->
@@ -2190,11 +2202,11 @@ const App = (() => {
                 Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: ${pal.icon} !important;"></i>
               </button>
             </div>
-            ${s.hasTeachingPlan === false ? `<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 4px;"><span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:#b45309;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:2px 8px;border-radius:6px;"><i class="ph ph-warning" style="font-size:12px;"></i> No Teaching Plan Found</span></div>` : ''}
+            ${!hasPlan ? `<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 4px;"><span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:#b45309;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:2px 8px;border-radius:6px;"><i class="ph ph-warning" style="font-size:12px;"></i> No Teaching Plan Found</span></div>` : ''}
 
             <!-- Row 3: Sem, Lectures & Live Avg Attendance (SINGLE ROW ABOVE STATUS BAR) -->
             <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${semLabel} • ${s.totalConducted} / ${s.totalLectures} ${unitLabel}</span>
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${semLabel} • ${conductedDisplay} / ${totalDisplay} ${unitLabel}</span>
               <span style="font-size: 11px; color: #334155; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; white-space: nowrap;">
                 <i class="ph ph-users" style="color: #64748b;"></i> Avg. Att: <span style="color: #0f172a; font-weight: 800;">${liveSubAttText}</span>
               </span>
@@ -2202,13 +2214,13 @@ const App = (() => {
 
             <!-- Row 4: Status Bar / Progress Bar -->
             <div style="height: 6px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden; margin-top: 2px;">
-              <div style="width: ${s.percent}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+              <div style="width: ${progressPct}%; height: 100%; background: ${sBarColor}; border-radius: 3px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);"></div>
             </div>
 
             <!-- Row 5: Respective Subject Coverage below status bar -->
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; margin-top: 5px;">
               <span style="color: #64748b; font-weight: 600;">Syllabus Coverage</span>
-              <span style="color: ${pctColor}; font-weight: 800; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 1.5px 8px; border-radius: 9999px; font-size: 10.5px; line-height: 1.2;">${s.percent}% Coverage</span>
+              <span style="color: ${pctColor}; font-weight: 800; background: ${pctBg}; border: 1px solid ${pctBorder}; padding: 1.5px 8px; border-radius: 9999px; font-size: 10.5px; line-height: 1.2;">${coverageBadgeText}</span>
             </div>
           </div>
         `;
@@ -3706,7 +3718,8 @@ Generated: ${formatDisplayDate(new Date())}
           }
 
           const subCode = s.code || s.name;
-          const subKey = `${subCode}_${facultyName}`;
+          const subBatch = s.batch || '';
+          const subKey = `${subCode}_${facultyName}_${subBatch}`;
           if (classMap[className].codeSet[subKey]) return;
           classMap[className].codeSet[subKey] = true;
 
@@ -3834,12 +3847,12 @@ Generated: ${formatDisplayDate(new Date())}
                 border-radius: var(--radius-sm); transition: background 0.2s ease;
               " onmouseover="this.style.background='var(--colorless-glass-hover)'" onmouseout="this.style.background='var(--colorless-glass-base)'">
                 
-                <div style="display: flex; align-items: center; gap: 12px; flex: 1.5; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 10px; flex: 1.8; min-width: 0;">
                   <span style="font-size: 11px; font-weight: 800; color: var(--accent-blue); background: var(--colorless-glass-hover); padding: 3px 10px; border-radius: var(--radius-pill); flex-shrink: 0;">
                     ${escHtml(s.code || 'SUB')}
                   </span>
-                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${escHtml(s.name)} ${isPractical && effectiveBatch ? `<span style="font-size: 10.5px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle;">${escHtml(effectiveBatch)}</span>` : ''}
+                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main); display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                    ${escHtml(s.name)} ${isPractical && effectiveBatch ? `<span style="font-size: 10.5px; font-weight: 800; background: rgba(0, 113, 227, 0.12); color: #0071e3; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; white-space: nowrap;">${escHtml(effectiveBatch)}</span>` : ''}
                   </span>
                 </div>
 
@@ -3851,10 +3864,10 @@ Generated: ${formatDisplayDate(new Date())}
                 <div style="display: flex; align-items: center; gap: 16px; flex: 1.8; flex-shrink: 0; justify-content: flex-end;">
                   <div style="width: 145px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 4px;">
-                      <span style="color: var(--text-muted);">${s.totalConducted || 0}/${s.totalLectures || 0} ${unitLabel} <span style="color: var(--success, #34c759); font-weight: 900;">(${sp}%)</span></span>
+                      <span style="color: var(--text-muted);">${(s.hasTeachingPlan !== false && s.totalLectures > 0) ? (Math.min(s.totalConducted || 0, s.totalLectures) + '/' + s.totalLectures) : ((s.totalConducted || 0) + '/?')} ${unitLabel} <span style="color: ${(s.hasTeachingPlan !== false && s.totalLectures > 0) ? 'var(--success, #34c759)' : '#b45309'}; font-weight: 900;">(${(s.hasTeachingPlan !== false && s.totalLectures > 0) ? sp + '%' : '?%'})</span></span>
                     </div>
                     <div style="position: relative; height: 5px; background: var(--colorless-glass-hover); border-radius: var(--radius-pill); overflow: hidden;">
-                      <div style="height: 100%; width: ${sp}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
+                      <div style="height: 100%; width: ${(s.hasTeachingPlan !== false && s.totalLectures > 0) ? sp : 0}%; background: ${barColor}; border-radius: var(--radius-pill); transition: width 0.6s ease;"></div>
                     </div>
                   </div>
                   <span style="font-size: 11px; font-weight: 800; color: ${attBadgeColor}; background: ${attBadgeBg}; border: 1px solid ${attBadgeBorder}; padding: 4px 10px; border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">

@@ -951,7 +951,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v47_' + sheetId;
+  var cacheKey = 'dash_v48_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1195,6 +1195,10 @@ function getInchargeDashboard(sheetId) {
                 }
 
                 if (isMatch) {
+                  var tpBatch = parsedSheet.batch ? parsedSheet.batch.replace(/\s+/g, '').toUpperCase() : '';
+                  if (tpBatch) {
+                    subjectPlanMap[code + '|' + tpBatch] = statsObj;
+                  }
                   if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
                     subjectPlanMap[code] = statsObj;
                   }
@@ -1329,13 +1333,16 @@ function getInchargeDashboard(sheetId) {
                 }
 
                 if (isMatch) {
-                  attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
-                  if (sheetAvgAtt > 0) {
-                    attendanceAvgMap[dCode] = sheetAvgAtt;
-                    // Also store batch-specific attendance for separate batch cards
-                    if (sheetBatch) {
-                      var batchAttKey = dCode + '|' + sheetBatch.replace(/\s+/g, '').toUpperCase();
+                  if (sheetBatch) {
+                    var batchAttKey = dCode + '|' + sheetBatch.replace(/\s+/g, '').toUpperCase();
+                    attendanceConductedMap[batchAttKey] = conductedLecturesInSheet;
+                    if (sheetAvgAtt > 0) {
                       attendanceAvgMap[batchAttKey] = sheetAvgAtt;
+                    }
+                  } else {
+                    attendanceConductedMap[dCode] = Math.max(attendanceConductedMap[dCode] || 0, conductedLecturesInSheet);
+                    if (sheetAvgAtt > 0) {
+                      attendanceAvgMap[dCode] = sheetAvgAtt;
                     }
                   }
                 }
@@ -1365,21 +1372,37 @@ function getInchargeDashboard(sheetId) {
 
       for (var s = 0; s < subs.length; s++) {
         var sCode = subs[s].code;
-        var info = subjectPlanMap[sCode] || { totalLectures: 0, totalConducted: 0 };
-        var attConducted = attendanceConductedMap[sCode] || 0;
-        // Try batch-specific attendance first, then fall back to code-level
-        var batchAttKey = subs[s].batch ? sCode + '|' + subs[s].batch.replace(/\s+/g, '').toUpperCase() : '';
-        var subAvgAtt = (batchAttKey && attendanceAvgMap[batchAttKey]) || attendanceAvgMap[sCode] || 0;
+        var sBatch = subs[s].batch ? subs[s].batch.replace(/\s+/g, '').toUpperCase() : '';
+        var batchKey = sBatch ? sCode + '|' + sBatch : '';
 
-        var finalConducted = Math.max(info.totalConducted || 0, attConducted);
-        var finalTotal = (info.totalLectures && info.totalLectures > 0) ? info.totalLectures : finalConducted;
-        var finalPct = finalTotal > 0 ? Math.round((finalConducted / finalTotal) * 100) : 0;
+        // 1. Plan lookup: batch-specific plan first, then subject code plan
+        var planInfo = (batchKey && subjectPlanMap[batchKey]) || subjectPlanMap[sCode] || null;
+        var hasPlan = !!(planInfo && planInfo.totalLectures > 0);
+        var plannedTotal = hasPlan ? planInfo.totalLectures : 0;
+        var planConducted = hasPlan ? (planInfo.totalConducted || 0) : 0;
+
+        // 2. Attendance conducted lookup: batch-specific attendance first, then subject code attendance
+        var attConducted = (batchKey && attendanceConductedMap[batchKey] !== undefined)
+          ? attendanceConductedMap[batchKey]
+          : (attendanceConductedMap[sCode] || 0);
+
+        // 3. Final conducted: prefer teaching plan executed count, fallback to attendance conducted count
+        var finalConducted = planConducted > 0 ? planConducted : attConducted;
+
+        // 4. Calculate Total & Percent (Never fabricate planned total from conducted count!)
+        var finalTotal = plannedTotal;
+        var finalPct = 0;
+        if (hasPlan && finalTotal > 0) {
+          finalPct = Math.round((Math.min(finalConducted, finalTotal) / finalTotal) * 100);
+        }
+
+        var subAvgAtt = (batchKey && attendanceAvgMap[batchKey]) || attendanceAvgMap[sCode] || 0;
 
         subs[s].totalLectures = finalTotal;
         subs[s].totalConducted = finalConducted;
         subs[s].percent = finalPct;
         subs[s].avgAttendance = subAvgAtt;
-        subs[s].hasTeachingPlan = !!(subjectPlanMap[sCode] && subjectPlanMap[sCode].totalLectures > 0);
+        subs[s].hasTeachingPlan = hasPlan;
 
         // Apply verified batch from attendance output if available and batch not already assigned
         var cleanCode = _parseSubjectCode(sCode).cleanBaseCode;
@@ -1388,8 +1411,10 @@ function getInchargeDashboard(sheetId) {
           subs[s].batch = verifiedBatch;
         }
 
-        facLectures += finalTotal;
-        facConducted += finalConducted;
+        if (hasPlan) {
+          facLectures += finalTotal;
+          facConducted += Math.min(finalConducted, finalTotal);
+        }
         if (subAvgAtt > 0) {
           facAttSum += subAvgAtt;
           facAttCount++;
