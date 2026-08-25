@@ -121,6 +121,11 @@ function doGet(e) {
         result = getInchargeDashboard(sheetId);
         break;
 
+      // ── Session Cache Bulk Download ──
+      case 'getBulkSessionData':
+        result = getBulkSessionData(sheetId);
+        break;
+
       default: 
         result = { error: 'Unknown GET action: ' + action };
     }
@@ -1464,6 +1469,99 @@ function getInchargeDashboard(sheetId) {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   BULK SESSION DATA — Single endpoint for all session data
+   Replaces multiple API calls (getAllData, getInchargeDashboard,
+   getStudents, getAttendance, getAcademicIncharges) with one.
+   ═══════════════════════════════════════════════════════════════ */
+
+function getBulkSessionData(sheetId) {
+  try {
+    // ── 1. Core data (subjects, teachers, config, attendanceLimit) ──
+    var allData = getAllData(sheetId);
+
+    // ── 2. Incharges ──
+    var inchargesData = getAcademicIncharges(sheetId);
+
+    // ── 3. Dashboard (faculties with syllabus/attendance stats) ──
+    var dashboardData = getInchargeDashboard(sheetId);
+
+    // ── 4. Students per class year ──
+    var studentsMap = {};
+    var classYears = {};
+    var subjects = allData.subjects || [];
+    for (var i = 0; i < subjects.length; i++) {
+      var yr = String(subjects[i].year || '').trim();
+      if (yr && !classYears[yr]) classYears[yr] = true;
+    }
+    // Also scan dashboard faculties for class years
+    if (dashboardData && dashboardData.faculties) {
+      for (var f = 0; f < dashboardData.faculties.length; f++) {
+        var facSubs = dashboardData.faculties[f].subjects || [];
+        for (var s = 0; s < facSubs.length; s++) {
+          var sy = String(facSubs[s].year || '').trim();
+          if (sy && !classYears[sy]) classYears[sy] = true;
+        }
+      }
+    }
+    var classNames = Object.keys(classYears);
+    for (var c = 0; c < classNames.length; c++) {
+      var className = classNames[c];
+      try {
+        var studRes = getStudents(className, '', sheetId);
+        if (studRes && studRes.success && studRes.students) {
+          studentsMap[className] = studRes.students;
+        }
+      } catch (e) {
+        Logger.log('getBulkSessionData: getStudents(' + className + ') error: ' + e.message);
+      }
+    }
+
+    // ── 5. ALL attendance records from output spreadsheet ──
+    var attendanceData = { success: false, records: [] };
+    try {
+      attendanceData = _getAttendanceUncached('', '', '', '', sheetId);
+    } catch (e) {
+      Logger.log('getBulkSessionData: attendance fetch error: ' + e.message);
+    }
+
+    // ── 6. Subjects with outputSheetId (enriched) ──
+    var enrichedSubjects = [];
+    try {
+      var subjRes = getSubjects('', sheetId);
+      if (subjRes && subjRes.success && subjRes.subjects) {
+        enrichedSubjects = subjRes.subjects;
+      }
+    } catch (e) {
+      Logger.log('getBulkSessionData: getSubjects error: ' + e.message);
+    }
+
+    // ── Assemble final response ──
+    return {
+      success: true,
+      _bulkSession: true,
+      // Core data
+      teachers: allData.teachers || [],
+      subjects: allData.subjects || [],
+      enrichedSubjects: enrichedSubjects,
+      attendanceLimit: allData.attendanceLimit || 75,
+      config: allData.config || {},
+      // Incharges
+      incharges: (inchargesData && inchargesData.incharges) || [],
+      // Dashboard
+      dashboard: dashboardData || { success: false },
+      // Students keyed by class year
+      students: studentsMap,
+      // All attendance records
+      attendance: {
+        success: !!(attendanceData && attendanceData.success),
+        records: (attendanceData && attendanceData.records) || []
+      }
+    };
+  } catch (err) {
+    return { success: false, error: 'getBulkSessionData failed: ' + err.message };
+  }
+}
 
 
 function dbToDisplay(db) {

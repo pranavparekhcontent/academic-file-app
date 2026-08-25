@@ -260,19 +260,37 @@ const App = (() => {
     window.addEventListener('beforeunload', clearSession);
     window.addEventListener('pagehide', clearSession);
 
-    // 1. Receive data from the engine's background fetch
+    // 1. Initialize Session Cache — single bulk download of ALL data
     let rawData = null;
-    if (context.fetchedData) {
-      rawData = context.fetchedData.allData || context.fetchedData.data || context.fetchedData;
-      if (typeof rawData === 'string' && rawData.trim().startsWith('{')) {
-        try { rawData = JSON.parse(rawData); } catch(e) {}
+    try {
+      const bulkData = await API.initSessionCache();
+      if (bulkData && bulkData.success) {
+        // Session cache loaded — construct rawData from it
+        rawData = {
+          success: true,
+          teachers: bulkData.teachers || [],
+          subjects: bulkData.subjects || [],
+          attendanceLimit: bulkData.attendanceLimit || 75,
+          config: bulkData.config || {}
+        };
+        console.log('[App] Session cache initialized successfully');
       }
+    } catch (e) {
+      console.warn('[App] Session cache init failed, falling back:', e.message);
     }
 
-    // 2. Validate and fallback if missing
-    if (!rawData || (!rawData.success && !rawData.teachers)) {
-      console.log("AppStart data missing or invalid, fetching directly...");
-      rawData = await API.getAllData();
+    // 2. Fallback: try engine's pre-fetched data or direct API call
+    if (!rawData || !rawData.success) {
+      if (context.fetchedData) {
+        rawData = context.fetchedData.allData || context.fetchedData.data || context.fetchedData;
+        if (typeof rawData === 'string' && rawData.trim().startsWith('{')) {
+          try { rawData = JSON.parse(rawData); } catch(e) {}
+        }
+      }
+      if (!rawData || (!rawData.success && !rawData.teachers)) {
+        console.log("Fallback: fetching getAllData directly...");
+        rawData = await API.getAllData();
+      }
     }
 
     if (rawData) {
@@ -488,6 +506,12 @@ const App = (() => {
     if (menu) menu.innerHTML = '<div style="padding: 12px; font-size: 12px; color: var(--text-secondary); text-align: center;">Loading faculty list...</div>';
 
     loadAcademicIncharges().catch(err => console.warn("Failed loading incharges:", err));
+
+    // Use already-cached data from initFromEngine; only fetch if missing
+    if (state.allData && (state.allData.success || state.allData.teachers)) {
+      buildFacultySelector();
+      return;
+    }
 
     try {
       const data = await API.getAllData();
@@ -4039,6 +4063,7 @@ Generated: ${formatDisplayDate(new Date())}
     // Highlight active card with animated glass state
     const classCard = document.getElementById('card-report-class');
     const studentCard = document.getElementById('card-report-student');
+    const daywiseCard = document.getElementById('card-report-daywise');
     if (classCard) {
       if (activeReportType === 'class') {
         classCard.classList.add('is-selected-class');
@@ -4051,6 +4076,13 @@ Generated: ${formatDisplayDate(new Date())}
         studentCard.classList.add('is-selected-student');
       } else {
         studentCard.classList.remove('is-selected-student');
+      }
+    }
+    if (daywiseCard) {
+      if (activeReportType === 'daywise') {
+        daywiseCard.classList.add('is-selected-daywise');
+      } else {
+        daywiseCard.classList.remove('is-selected-daywise');
       }
     }
 
@@ -4449,6 +4481,9 @@ Generated: ${formatDisplayDate(new Date())}
       setTimeout(() => {
         loadStudentReportData(targetYear);
       }, 0);
+    } else if (type === 'daywise') {
+      // ── DAYWISE ATTENDANCE REPORT ──
+      renderDaywiseReport(outputEl, faculties);
     } else if (type === 'subject') {
       let subjectRows = '';
       faculties.forEach(f => {
@@ -4573,6 +4608,506 @@ Generated: ${formatDisplayDate(new Date())}
     state.activeStudentYear = className;
     generateReportType('student');
   }
+
+  // ═══════════════════════════════════════════════════════
+  //  DAYWISE ATTENDANCE REPORT
+  // ═══════════════════════════════════════════════════════
+
+  function selectDaywiseYear(className) {
+    state.activeDaywiseYear = className;
+    generateReportType('daywise');
+  }
+
+  function renderDaywiseReport(outputEl, faculties) {
+    // Build class names from dashboard faculties
+    function extractLiveClassName(item) {
+      if (!item) return '';
+      const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
+      return String(name).trim();
+    }
+
+    function resolveSubjectClass(s) {
+      const liveName = extractLiveClassName(s);
+      if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
+        return liveName;
+      }
+      if (s.semester && String(s.semester).trim()) {
+        return `Semester ${String(s.semester).trim()}`;
+      }
+      return 'General Academic Class';
+    }
+
+    const classNamesSet = {};
+    faculties.forEach(f => {
+      (f.subjects || []).forEach(s => {
+        if (!s) return;
+        const cName = resolveSubjectClass(s);
+        if (cName) classNamesSet[cName] = true;
+      });
+    });
+
+    const activeClassNames = Object.keys(classNamesSet);
+    if (activeClassNames.length === 0) {
+      activeClassNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
+    }
+
+    if (!state.activeDaywiseYear || activeClassNames.indexOf(state.activeDaywiseYear) === -1) {
+      state.activeDaywiseYear = activeClassNames[0];
+    }
+
+    // Today's date as default
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    if (!state.activeDaywiseDate) {
+      state.activeDaywiseDate = todayStr;
+    }
+
+    let yearCardsHtml = '';
+    activeClassNames.forEach(clsName => {
+      const isSelected = clsName === state.activeDaywiseYear;
+      yearCardsHtml += `
+        <button type="button" onclick="App.selectDaywiseYear('${escHtml(clsName)}')" style="
+          padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+          cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;
+          border: ${isSelected ? '2px solid #d97706' : '1px solid var(--colorless-glass-hover)'};
+          background: ${isSelected ? 'rgba(245, 158, 11, 0.15)' : 'var(--colorless-glass-base)'};
+          color: ${isSelected ? '#d97706' : 'var(--text-main)'};
+          box-shadow: ${isSelected ? '0 4px 12px rgba(245, 158, 11, 0.2)' : 'none'};
+        ">
+          <i class="ph ph-calendar-check" style="font-size: 15px; color: ${isSelected ? '#d97706' : 'var(--accent-blue)'};"></i>
+          ${escHtml(clsName)}
+        </button>
+      `;
+    });
+
+    outputEl.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Class: <strong>${escHtml(state.activeDaywiseYear)}</strong></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <input type="date" id="daywise-date-picker" value="${escHtml(state.activeDaywiseDate)}" onchange="App.onDaywiseDateChange(this.value)" style="
+            padding: 8px 14px; font-size: 12px; font-weight: 700; border-radius: var(--radius-pill);
+            border: 1.5px solid rgba(245, 158, 11, 0.4); background: rgba(255, 255, 255, 0.85);
+            color: #92400e; cursor: pointer; outline: none;
+          ">
+          <button class="btn btn-outline" onclick="App.downloadDaywiseReportDoc()" title="Download daywise attendance report as .docx" style="
+            padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
+            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+            background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(245, 158, 11, 0.4); color: #92400e;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.12);
+          ">
+            <i class="ph ph-file-doc" style="font-size: 16px; color: #d97706;"></i> Download .docx
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Select Class / Year:</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          ${yearCardsHtml}
+        </div>
+      </div>
+      <div id="daywise-report-table-container">
+        <div style="text-align: center; padding: 30px; color: var(--text-secondary);">
+          <i class="ph ph-spinner" style="font-size: 28px; animation: spin 1s linear infinite;"></i>
+          <p style="margin: 8px 0 0; font-size: 13px; font-weight: 700;">Loading attendance data...</p>
+        </div>
+      </div>
+    `;
+
+    // Load the daywise data
+    setTimeout(() => {
+      loadDaywiseReportData(state.activeDaywiseYear, state.activeDaywiseDate);
+    }, 0);
+  }
+
+  function onDaywiseDateChange(dateStr) {
+    state.activeDaywiseDate = dateStr;
+    generateReportType('daywise');
+  }
+
+  async function loadDaywiseReportData(className, dateStr) {
+    const container = document.getElementById('daywise-report-table-container');
+    if (!container) return;
+
+    try {
+      // Get attendance records from session cache
+      const attResult = await API.getAttendance('', '', '', '');
+      const allRecords = (attResult && attResult.success && attResult.records) || [];
+
+      // Get students for this class
+      const studResult = await API.getStudents(className, '');
+      const students = (studResult && studResult.success && studResult.students) || [];
+
+      // Get subjects for this class from dashboard faculties
+      const data = state.inchargeDashboard || {};
+      const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+
+      function extractLiveClassName(item) {
+        if (!item) return '';
+        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
+        return String(name).trim();
+      }
+
+      function resolveSubjectClass(s) {
+        const liveName = extractLiveClassName(s);
+        if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) return liveName;
+        if (s.semester && String(s.semester).trim()) return `Semester ${String(s.semester).trim()}`;
+        return 'General Academic Class';
+      }
+
+      // Get all subject codes for this class
+      const classSubjectCodes = {};
+      faculties.forEach(f => {
+        (f.subjects || []).forEach(s => {
+          if (!s || !s.code) return;
+          const cName = resolveSubjectClass(s);
+          if (cName.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(cName.toLowerCase()) || cName.toLowerCase().includes(className.toLowerCase())) {
+            classSubjectCodes[s.code] = s;
+          }
+        });
+      });
+
+      // Filter attendance records for the selected date
+      const dateRecords = allRecords.filter(r => {
+        if (!r.date) return false;
+        return String(r.date).indexOf(dateStr) !== -1;
+      });
+
+      // Identify which subjects actually had P/A entries on this date
+      const activeDateSubjects = {};
+      dateRecords.forEach(r => {
+        const codeRaw = String(r.code || '').trim();
+        if (!codeRaw) return;
+        // Match against class subjects
+        const codeClean = codeRaw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let matched = false;
+        for (const sc of Object.keys(classSubjectCodes)) {
+          const scClean = sc.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (codeClean === scClean || codeClean.indexOf(scClean) !== -1 || scClean.indexOf(codeClean) !== -1) {
+            if (!activeDateSubjects[sc]) {
+              activeDateSubjects[sc] = classSubjectCodes[sc];
+            }
+            matched = true;
+          }
+        }
+        // If not matched but has records, add as standalone
+        if (!matched && (r.status === 'P' || r.status === 'A')) {
+          if (!activeDateSubjects[codeRaw]) {
+            activeDateSubjects[codeRaw] = { code: codeRaw, name: codeRaw };
+          }
+        }
+      });
+
+      const subjectKeys = Object.keys(activeDateSubjects);
+
+      // Format date for display
+      const dtParts = dateStr.split('-');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const displayDate = dtParts.length === 3 ? `${dtParts[2]}-${months[parseInt(dtParts[1])-1]}-${dtParts[0]}` : dateStr;
+
+      if (subjectKeys.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+            <i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.6; margin-bottom: 12px;"></i>
+            <h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--text-main);">No Lectures Found on ${escHtml(displayDate)}</h4>
+            <p style="margin: 0; font-size: 13px; font-weight: 600;">No attendance records (P/A entries) were found for class <strong>${escHtml(className)}</strong> on this date. Try selecting a different date.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Build student attendance map: { rollNo: { subjectCode: 'P'|'A' } }
+      const studentAttMap = {};
+      dateRecords.forEach(r => {
+        if (!r.rollNo || (r.status !== 'P' && r.status !== 'A')) return;
+        const rollKey = String(r.rollNo).trim();
+        if (!studentAttMap[rollKey]) studentAttMap[rollKey] = {};
+        // Match to subject keys
+        const codeClean = String(r.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        for (const sk of subjectKeys) {
+          const skClean = sk.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (codeClean === skClean || codeClean.indexOf(skClean) !== -1 || skClean.indexOf(codeClean) !== -1) {
+            studentAttMap[rollKey][sk] = r.status;
+          }
+        }
+      });
+
+      // Build student list: merge from class students and attendance records
+      const studentList = [];
+      const seenRolls = {};
+
+      // Add from class student roster
+      students.forEach(s => {
+        const roll = String(s.rollNo || s.roll || '').trim();
+        if (!roll || seenRolls[roll]) return;
+        seenRolls[roll] = true;
+        studentList.push({
+          rollNo: roll,
+          name: String(s.name || s.studentName || '').trim(),
+          att: studentAttMap[roll] || {}
+        });
+      });
+
+      // Add any students from attendance records not in the roster
+      Object.keys(studentAttMap).forEach(roll => {
+        if (seenRolls[roll]) return;
+        seenRolls[roll] = true;
+        // Try to find name from records
+        const rec = dateRecords.find(r => String(r.rollNo).trim() === roll);
+        studentList.push({
+          rollNo: roll,
+          name: rec ? String(rec.name || '').trim() : '',
+          att: studentAttMap[roll] || {}
+        });
+      });
+
+      // Sort by roll number (numeric sort)
+      studentList.sort((a, b) => {
+        const numA = parseInt(a.rollNo), numB = parseInt(b.rollNo);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return String(a.rollNo).localeCompare(String(b.rollNo));
+      });
+
+      // Build subject headers
+      let subjectHeaders = '';
+      subjectKeys.forEach(sk => {
+        const subj = activeDateSubjects[sk];
+        const fmt = formatCompactSubjectHeader(subj);
+        subjectHeaders += `<th style="padding: 8px 6px; font-size: 10px; font-weight: 800; text-align: center; min-width: 55px; max-width: 80px; word-break: break-word; line-height: 1.3; white-space: normal;">${escHtml(fmt.shortName || fmt.code)}</th>`;
+      });
+
+      // Build table rows
+      let tableRows = '';
+      studentList.forEach((stu, idx) => {
+        let presentCount = 0, absentCount = 0;
+        let cellsHtml = '';
+
+        subjectKeys.forEach(sk => {
+          const status = stu.att[sk] || '-';
+          if (status === 'P') { presentCount++; }
+          if (status === 'A') { absentCount++; }
+
+          const cellBg = status === 'P' ? 'rgba(16, 185, 129, 0.15)' : status === 'A' ? 'rgba(239, 68, 68, 0.12)' : 'transparent';
+          const cellColor = status === 'P' ? '#059669' : status === 'A' ? '#dc2626' : '#94a3b8';
+          cellsHtml += `<td style="padding: 6px 4px; text-align: center; font-weight: 900; font-size: 13px; background: ${cellBg}; color: ${cellColor};">${status}</td>`;
+        });
+
+        const bgColor = idx % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'transparent';
+        tableRows += `
+          <tr style="border-bottom: 1px solid rgba(0,0,0,0.04); background: ${bgColor};">
+            <td style="padding: 8px 10px; font-weight: 700; font-size: 12px; color: #334155; white-space: nowrap;">${escHtml(stu.rollNo)}</td>
+            <td style="padding: 8px 10px; font-weight: 700; font-size: 12px; color: #0f172a; white-space: nowrap;">${escHtml(stu.name)}</td>
+            <td style="padding: 8px 6px; font-weight: 600; font-size: 11px; color: #64748b; white-space: nowrap;">${escHtml(className)}</td>
+            ${cellsHtml}
+            <td style="padding: 8px 6px; text-align: center; font-weight: 900; font-size: 13px; color: #059669;">${presentCount}</td>
+            <td style="padding: 8px 6px; text-align: center; font-weight: 900; font-size: 13px; color: #dc2626;">${absentCount}</td>
+          </tr>
+        `;
+      });
+
+      container.innerHTML = `
+        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-size: 12px; font-weight: 800; color: var(--text-secondary);">
+            📅 ${escHtml(displayDate)} · ${studentList.length} students · ${subjectKeys.length} subjects with lectures
+          </span>
+        </div>
+        <div class="smart-matrix-container">
+          <div class="smart-matrix-scroll-wrapper" id="daywise-report-scroll-wrapper">
+            <table class="smart-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+              <thead>
+                <tr style="text-align: center; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(0,0,0,0.03);">
+                  <th style="padding: 10px 10px; text-align: left; font-weight: 900; min-width: 60px;">Roll No</th>
+                  <th style="padding: 10px 10px; text-align: left; font-weight: 900; min-width: 120px;">Student Name</th>
+                  <th style="padding: 10px 6px; text-align: left; font-weight: 900; min-width: 80px;">Class</th>
+                  ${subjectHeaders}
+                  <th style="padding: 10px 6px; font-weight: 900; min-width: 45px; color: #059669;">Present</th>
+                  <th style="padding: 10px 6px; font-weight: 900; min-width: 45px; color: #dc2626;">Absent</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows || '<tr><td colspan="' + (subjectKeys.length + 5) + '" style="padding: 20px; text-align: center; color: #64748b;">No student data available.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      // Enable horizontal scroll for table
+      const scrollWrapper = document.getElementById('daywise-report-scroll-wrapper');
+      if (scrollWrapper) enableHorizontalWheelScroll(scrollWrapper);
+
+      // Store model for DOCX download
+      state.daywiseReportModel = {
+        className,
+        date: dateStr,
+        displayDate,
+        subjects: subjectKeys.map(sk => ({ code: sk, ...(activeDateSubjects[sk] || {}) })),
+        students: studentList,
+        collegeName: (data.collegeName || state.metadata?.collegeName || ''),
+        managementName: (data.managementName || state.metadata?.managementName || '')
+      };
+
+    } catch (err) {
+      console.error('Daywise report error:', err);
+      container.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: #dc2626;">
+          <i class="ph ph-warning-circle" style="font-size: 36px; margin-bottom: 8px;"></i>
+          <p style="font-size: 13px; font-weight: 700;">Error loading daywise report: ${escHtml(err.message)}</p>
+        </div>
+      `;
+    }
+  }
+
+  async function downloadDaywiseReportDoc() {
+    const model = state.daywiseReportModel;
+    if (!model || !model.students || model.students.length === 0) {
+      Toast.show('No Data', 'Generate a daywise report first before downloading.', 'warning');
+      return;
+    }
+
+    Toast.show('Generating', 'Building daywise attendance .docx report...', 'success');
+
+    try {
+      const subjectKeys = model.subjects.map(s => s.code);
+      const totalCols = 5 + subjectKeys.length; // Roll, Name, Class, subjects..., Present, Absent
+
+      // Calculate column widths
+      const pageWidth = 10200; // ~17cm usable
+      const rollW = 900, nameW = 2000, classW = 1200, presW = 700, absW = 700;
+      const fixedW = rollW + nameW + classW + presW + absW;
+      const perSubW = subjectKeys.length > 0 ? Math.max(600, Math.floor((pageWidth - fixedW) / subjectKeys.length)) : 800;
+
+      let colDefs = `<w:gridCol w:w="${rollW}"/><w:gridCol w:w="${nameW}"/><w:gridCol w:w="${classW}"/>`;
+      subjectKeys.forEach(() => { colDefs += `<w:gridCol w:w="${perSubW}"/>`; });
+      colDefs += `<w:gridCol w:w="${presW}"/><w:gridCol w:w="${absW}"/>`;
+
+      // Subject header cells
+      let subjectHeaderCells = '';
+      subjectKeys.forEach(sk => {
+        const subj = model.subjects.find(s => s.code === sk) || {};
+        const label = formatCompactSubjectHeader(subj);
+        subjectHeaderCells += `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FFF3CD"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">${xmlEsc(label.shortName || label.code)}</w:t></w:r></w:p></w:tc>`;
+      });
+
+      // Data rows
+      let dataRows = '';
+      model.students.forEach(stu => {
+        let presCount = 0, absCount = 0;
+        let subjectCells = '';
+        subjectKeys.forEach(sk => {
+          const s = stu.att[sk] || '-';
+          if (s === 'P') presCount++;
+          if (s === 'A') absCount++;
+          const fill = s === 'P' ? 'D1FAE5' : s === 'A' ? 'FEE2E2' : 'FFFFFF';
+          subjectCells += `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t>${s}</w:t></w:r></w:p></w:tc>`;
+        });
+
+        dataRows += `<w:tr>
+          <w:tc><w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${xmlEsc(stu.rollNo)}</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${xmlEsc(stu.name)}</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>${xmlEsc(model.className)}</w:t></w:r></w:p></w:tc>
+          ${subjectCells}
+          <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="D1FAE5"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t>${presCount}</w:t></w:r></w:p></w:tc>
+          <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FEE2E2"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t>${absCount}</w:t></w:r></w:p></w:tc>
+        </w:tr>`;
+      });
+
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+  xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+  xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+  xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+  mc:Ignorable="w14 wp14">
+<w:body>
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t xml:space="preserve">${xmlEsc(model.managementName || 'Academic Management')}</w:t></w:r>
+  </w:p>
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${xmlEsc(model.collegeName || 'College')}</w:t></w:r>
+  </w:p>
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:u w:val="single"/></w:rPr><w:t>Daywise Student Attendance Report</w:t></w:r>
+  </w:p>
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">Date: ${xmlEsc(model.displayDate)} | Class: ${xmlEsc(model.className)} | Total Students: ${model.students.length}</w:t></w:r>
+  </w:p>
+  <w:p/>
+  <w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        <w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+      </w:tblBorders>
+      <w:tblLayout w:type="fixed"/>
+    </w:tblPr>
+    <w:tblGrid>${colDefs}</w:tblGrid>
+    <w:tr>
+      <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>Roll No</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>Student Name</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>Class</w:t></w:r></w:p></w:tc>
+      ${subjectHeaderCells}
+      <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="D1FAE5"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>Present</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FEE2E2"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>Absent</w:t></w:r></w:p></w:tc>
+    </w:tr>
+    ${dataRows}
+  </w:tbl>
+  <w:p/>
+  <w:p>
+    <w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">Signature: ________________________          Academic Incharge: ________________________          Date: ${xmlEsc(model.displayDate)}</w:t></w:r>
+  </w:p>
+  <w:sectPr>
+    <w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>
+    <w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="720" w:footer="720" w:gutter="0"/>
+  </w:sectPr>
+</w:body>
+</w:document>`;
+
+      // Build .docx zip using JSZip
+      if (typeof JSZip === 'undefined') {
+        Toast.show('Missing Library', 'JSZip is required for DOCX generation.', 'danger');
+        return;
+      }
+
+      const zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+      zip.file('word/document.xml', xml);
+
+      const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Daywise_Attendance_${model.className.replace(/\s+/g, '_')}_${model.date}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      Toast.show('Downloaded', 'Daywise attendance report saved.', 'success');
+    } catch (err) {
+      console.error('DOCX generation failed:', err);
+      Toast.show('Error', 'Failed to generate .docx: ' + err.message, 'danger');
+    }
+  }
+
 
   async function fetchStudentReportDataForClass(className) {
     try {
@@ -5078,6 +5613,9 @@ Generated: ${formatDisplayDate(new Date())}
     renderReportsPage,
     generateReportType,
     selectStudentYearCard,
+    selectDaywiseYear,
+    onDaywiseDateChange,
+    downloadDaywiseReportDoc,
     toggleClassMindmap,
     printReport
   };
