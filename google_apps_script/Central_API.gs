@@ -314,6 +314,10 @@ function isDateOrNumberVal(val) {
   return false;
 }
 
+function _normBatch(b) {
+  return String(b || '').toUpperCase().replace(/BATCH/g, '').replace(/[^A-Z0-9]/g, '');
+}
+
 function _findSheetByCode(ss, inputCode, nameHint, batchHint) {
   if (!ss || !inputCode) return null;
   var effectiveInput = inputCode;
@@ -346,19 +350,28 @@ function _findSheetByCode(ss, inputCode, nameHint, batchHint) {
         if (parsedInput.batch === parsedSheet.batch) {
           score = 98; // Exact base code & exact batch
         } else {
-          score = 60; // Sibling batch fallback for syllabus topics
+          score = 0; // Strictly NEVER match a different batch
         }
       } else if (parsedInput.batch && !parsedSheet.batch) {
-        score = 85; // Exact base code matches! Master teaching plan sheet for subject
+        score = 85; // Master unbatched teaching plan sheet for subject
       } else if (!parsedInput.batch && parsedSheet.batch) {
-        score = 80;
+        var isPractical = parsedInput.cleanBaseCode && parsedInput.cleanBaseCode.endsWith('P');
+        score = isPractical ? 0 : 80;
       } else {
         score = 88;
       }
     } else if (cleanHint && cleanSheetName.indexOf(cleanHint) !== -1) {
-      score = 75;
+      if (parsedInput.batch && parsedSheet.batch && parsedInput.batch !== parsedSheet.batch) {
+        score = 0;
+      } else {
+        score = 75;
+      }
     } else if (parsedInput.cleanBaseCode && (parsedSheet.cleanBaseCode.indexOf(parsedInput.cleanBaseCode) !== -1 || parsedInput.cleanBaseCode.indexOf(parsedSheet.cleanBaseCode) !== -1)) {
-      score = 65;
+      if (parsedInput.batch && parsedSheet.batch && parsedInput.batch !== parsedSheet.batch) {
+        score = 0;
+      } else {
+        score = 65;
+      }
     }
 
     if (score > maxScore) {
@@ -369,24 +382,6 @@ function _findSheetByCode(ss, inputCode, nameHint, batchHint) {
 
   if (bestSheet && maxScore >= 50) {
     return bestSheet;
-  }
-
-  for (var i = 0; i < sheets.length; i++) {
-    var nameLower = sheets[i].getName().trim().toLowerCase();
-    if (looksLikeSubjectCode(nameLower) && _parseSubjectCode(nameLower).cleanBaseCode !== parsedInput.cleanBaseCode) {
-      continue;
-    }
-    if (nameLower.indexOf("syllabus") !== -1 || nameLower.indexOf("teaching plan") !== -1 || nameLower.indexOf("plan") !== -1) {
-      return sheets[i];
-    }
-  }
-
-  if (sheets[0]) {
-    var firstName = sheets[0].getName().trim();
-    if (looksLikeSubjectCode(firstName) && _parseSubjectCode(firstName).cleanBaseCode !== parsedInput.cleanBaseCode) {
-      return null;
-    }
-    return sheets[0];
   }
 
   return null;
@@ -1083,7 +1078,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v51_' + sheetId;
+  var cacheKey = 'dash_v53_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1348,14 +1343,17 @@ function getInchargeDashboard(sheetId) {
                 }
 
                 if (isMatch) {
-                  var tpBatch = parsedSheet.batch ? parsedSheet.batch.replace(/\s+/g, '').toUpperCase() : '';
+                  var tpBatch = _normBatch(parsedSheet.batch);
                   if (tpBatch) {
                     subjectPlanMap[code + '|' + tpBatch] = statsObj;
                   }
                   for (var bk in batchConductedCounts) {
-                    subjectPlanMap[code + '|' + bk] = { totalLectures: finalPlannedTopics, totalConducted: batchConductedCounts[bk] };
+                    var nbk = _normBatch(bk);
+                    if (nbk) {
+                      subjectPlanMap[code + '|' + nbk] = { totalLectures: finalPlannedTopics, totalConducted: batchConductedCounts[bk] };
+                    }
                   }
-                  if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
+                  if (!tpBatch && (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures)) {
                     subjectPlanMap[code] = statsObj;
                   }
                 }
@@ -1489,8 +1487,9 @@ function getInchargeDashboard(sheetId) {
                 }
 
                 if (isMatch) {
-                  if (sheetBatch) {
-                    var batchAttKey = dCode + '|' + sheetBatch.replace(/\s+/g, '').toUpperCase();
+                  var nSheetBatch = _normBatch(sheetBatch);
+                  if (nSheetBatch) {
+                    var batchAttKey = dCode + '|' + nSheetBatch;
                     attendanceConductedMap[batchAttKey] = conductedLecturesInSheet;
                     if (sheetAvgAtt > 0) {
                       attendanceAvgMap[batchAttKey] = sheetAvgAtt;
@@ -1528,12 +1527,13 @@ function getInchargeDashboard(sheetId) {
 
       for (var s = 0; s < subs.length; s++) {
         var sCode = subs[s].code;
-        var sBatch = subs[s].batch ? subs[s].batch.replace(/\s+/g, '').toUpperCase() : '';
+        var sBatch = _normBatch(subs[s].batch);
         var batchKey = sBatch ? sCode + '|' + sBatch : '';
 
-        // 1. Plan lookup: batch-specific plan first, then fallback to base subject code for planned total
+        // 1. Plan lookup: batch-specific plan first (practicals NEVER inherit base plan)
+        var isPractical = (sCode && sCode.toUpperCase().endsWith('P')) || !!sBatch;
         var batchPlan = batchKey ? subjectPlanMap[batchKey] : null;
-        var basePlan = subjectPlanMap[sCode] || null;
+        var basePlan = isPractical ? null : (subjectPlanMap[sCode] || null);
         var planInfo = batchPlan || basePlan || null;
         var hasPlan = !!(planInfo && planInfo.totalLectures > 0);
         var plannedTotal = hasPlan ? planInfo.totalLectures : 0;
