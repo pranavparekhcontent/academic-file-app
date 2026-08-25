@@ -127,6 +127,9 @@ function doGet(e) {
       case 'getBulkSessionData':
         result = getBulkSessionData(sheetId);
         break;
+      case 'debugAttendance':
+        result = debugAttendanceData(sheetId);
+        break;
 
       default: 
         result = { error: 'Unknown GET action: ' + action };
@@ -421,11 +424,14 @@ function getSubjects(teacher, sheetId) {
   var defaultOutId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
 
   var teachingPlanIdx = -1;
+  var outputSheetIdx = -1;
   for (var c = 0; c < headers.length; c++) {
     var h = headers[c];
     if (h.indexOf('teaching plan') !== -1 || h.indexOf('syllabus') !== -1) {
       teachingPlanIdx = c;
-      break;
+    }
+    if (h.indexOf('output excel') !== -1 || h.indexOf('output sheet') !== -1 || h.indexOf('output link') !== -1) {
+      outputSheetIdx = c;
     }
   }
 
@@ -463,7 +469,14 @@ function getSubjects(teacher, sheetId) {
         batch: explicitBatch || ''
       };
       subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
-      subObj.outputSheetId = defaultOutId;
+      
+      var rowOutId = (outputSheetIdx !== -1) ? String(data[i][outputSheetIdx]).trim() : '';
+      if (rowOutId) {
+        var extracted = extractSpreadsheetId(rowOutId);
+        if (extracted) rowOutId = extracted;
+      }
+      subObj.outputSheetId = rowOutId || defaultOutId;
+      
       res.push(subObj);
     }
   }
@@ -1530,24 +1543,45 @@ function getBulkSessionData(sheetId) {
       }
     }
 
-    // ── 5. ALL attendance records from output spreadsheet ──
-    var attendanceData = { success: false, records: [] };
-    try {
-      attendanceData = _getAttendanceUncached('', '', '', '', sheetId);
-    } catch (e) {
-      Logger.log('getBulkSessionData: attendance fetch error: ' + e.message);
-    }
-
-    // ── 6. Subjects with outputSheetId (enriched) ──
+    // ── 5. Subjects with outputSheetId (enriched) ──
     var enrichedSubjects = [];
+    var uniqueOutIds = {};
     try {
       var subjRes = getSubjects('', sheetId);
       if (subjRes && subjRes.success && subjRes.subjects) {
         enrichedSubjects = subjRes.subjects;
+        for (var s = 0; s < enrichedSubjects.length; s++) {
+          if (enrichedSubjects[s].outputSheetId) {
+            uniqueOutIds[enrichedSubjects[s].outputSheetId] = true;
+          }
+        }
       }
     } catch (e) {
       Logger.log('getBulkSessionData: getSubjects error: ' + e.message);
     }
+    
+    // Fallback if no subjects found
+    if (Object.keys(uniqueOutIds).length === 0) {
+      var defId = getOutputSheetId(sheetId);
+      if (defId) uniqueOutIds[defId] = true;
+    }
+
+    // ── 6. ALL attendance records from all output spreadsheets ──
+    var attendanceData = { success: false, records: [] };
+    var allRecords = [];
+    var attSuccess = false;
+    for (var outId in uniqueOutIds) {
+      try {
+        var attRes = _getAttendanceUncached('', '', '', outId, sheetId);
+        if (attRes && attRes.success && attRes.records) {
+          allRecords = allRecords.concat(attRes.records);
+          attSuccess = true;
+        }
+      } catch (e) {
+        Logger.log('getBulkSessionData: attendance fetch error for ' + outId + ': ' + e.message);
+      }
+    }
+    attendanceData = { success: attSuccess, records: allRecords };
 
     // ── Assemble final response ──
     return {
@@ -1664,11 +1698,17 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
     if (attData.length <= hdrRowIdx + 2) continue;
 
     var rawHeaders = attData[hdrRowIdx] || [];
-    var hdrs = rawHeaders.map(function(cell) {
-      if (cell instanceof Date) {
-        try { return Utilities.formatDate(cell, outSs.getSpreadsheetTimeZone(), 'yyyy-MM-dd'); } catch(e) {}
+    var nextHeaders = attData[hdrRowIdx + 1] || [];
+    
+    var hdrs = rawHeaders.map(function(cell, idx) {
+      var val = cell;
+      if (!val && nextHeaders[idx]) {
+        val = nextHeaders[idx]; // Fallback to next row if current is empty (e.g. dates in row 6)
       }
-      return String(cell || '').trim();
+      if (val instanceof Date) {
+        try { return Utilities.formatDate(val, outSs.getSpreadsheetTimeZone(), 'yyyy-MM-dd'); } catch(e) {}
+      }
+      return String(val || '').trim();
     });
     
     var rollColIdx = -1;
@@ -1739,6 +1779,142 @@ function _getAttendanceUncached(code, year, date, outputSheetId, sheetId) {
     }
   }
   return { success: true, records: res };
+}
+
+function debugAttendanceData(sheetId) {
+  try {
+    var collegeIds = _getCollegeSheetIds(sheetId);
+    var outputSheetId = collegeIds.outputSheetId || getOutputSheetId(sheetId);
+    var cleanOutId = extractSpreadsheetId(outputSheetId);
+    
+    // Also try subjects sheet enriched IDs
+    var enrichedOutIds = [];
+    try {
+      var subjRes = getSubjects('', sheetId);
+      if (subjRes && subjRes.success && subjRes.subjects) {
+        var seen = {};
+        subjRes.subjects.forEach(function(s) {
+          if (s.outputSheetId && !seen[s.outputSheetId]) {
+            seen[s.outputSheetId] = true;
+            enrichedOutIds.push(s.outputSheetId);
+          }
+        });
+      }
+    } catch(e) {}
+    
+    if (!cleanOutId && enrichedOutIds.length > 0) {
+      cleanOutId = extractSpreadsheetId(enrichedOutIds[0]);
+    }
+    
+    if (!cleanOutId) return { 
+      error: 'No output sheet ID found', 
+      collegeIds: collegeIds,
+      getOutputSheetIdResult: getOutputSheetId(sheetId),
+      enrichedOutIds: enrichedOutIds,
+      sheetId: sheetId
+    };
+
+    var outSs;
+    try { outSs = SpreadsheetApp.openById(cleanOutId); } catch(e) { return { error: 'Cannot open: ' + e.message, id: cleanOutId }; }
+
+    var sheets = outSs.getSheets();
+    var debugInfo = {
+      outputSheetId: cleanOutId,
+      sheetCount: sheets.length,
+      sheets: []
+    };
+
+    for (var i = 0; i < Math.min(sheets.length, 5); i++) {
+      var s = sheets[i], name = s.getName();
+      var lr = s.getLastRow(), lc = s.getLastColumn();
+      var sheetDebug = { name: name, lastRow: lr, lastCol: lc };
+
+      if (lr < 3 || lc < 3) { sheetDebug.skip = 'too small'; debugInfo.sheets.push(sheetDebug); continue; }
+
+      var data = s.getRange(1, 1, Math.min(lr, 15), lc).getValues();
+
+      // Find header row
+      var hdrRowIdx = -1;
+      for (var r = 0; r < Math.min(data.length, 15); r++) {
+        var rowStr = data[r].map(function(c) { return String(c || '').toLowerCase().trim(); }).join('|');
+        if (rowStr.indexOf('roll no') !== -1 && rowStr.indexOf('name') !== -1 && (rowStr.indexOf('total p') !== -1 || rowStr.indexOf('% att') !== -1)) {
+          hdrRowIdx = r;
+          break;
+        }
+      }
+      sheetDebug.hdrRowIdx = hdrRowIdx;
+      if (hdrRowIdx === -1) hdrRowIdx = 5;
+
+      // Show raw header row content (first 10 cells)
+      var hdrRow = data[hdrRowIdx] || [];
+      sheetDebug.hdrRowRaw = hdrRow.slice(0, 10).map(function(c) {
+        if (c instanceof Date) return 'DATE:' + c.toISOString();
+        return String(c === null || c === undefined ? 'NULL' : c);
+      });
+
+      // Show next row content (first 10 cells)
+      if (hdrRowIdx + 1 < data.length) {
+        var nextRow = data[hdrRowIdx + 1] || [];
+        sheetDebug.nextRowRaw = nextRow.slice(0, 10).map(function(c) {
+          if (c instanceof Date) return 'DATE:' + c.toISOString();
+          return String(c === null || c === undefined ? 'NULL' : c);
+        });
+      }
+
+      // Show first student row (first 10 cells)
+      if (hdrRowIdx + 2 < data.length) {
+        var stuRow = data[hdrRowIdx + 2] || [];
+        sheetDebug.firstStudentRow = stuRow.slice(0, 10).map(function(c) {
+          return String(c === null || c === undefined ? 'NULL' : c);
+        });
+      }
+
+      // Count dates and P/A values
+      var rawH = data[hdrRowIdx] || [];
+      var nextH = data[hdrRowIdx + 1] || [];
+      var dateCount = 0;
+      var paCount = 0;
+      for (var c = 2; c < rawH.length; c++) {
+        var v = rawH[c];
+        var nv = nextH[c];
+        if (v instanceof Date || (nv instanceof Date)) dateCount++;
+        var vStr = String(v || '').trim();
+        var nvStr = String(nv || '').trim();
+        if (/^\d{1,2}[-\/]/.test(vStr) || /^\d{4}-\d{2}/.test(vStr)) dateCount++;
+        if (/^\d{1,2}[-\/]/.test(nvStr) || /^\d{4}-\d{2}/.test(nvStr)) dateCount++;
+      }
+      // Check P/A in data rows
+      for (var r = hdrRowIdx + 2; r < Math.min(data.length, hdrRowIdx + 5); r++) {
+        for (var c = 2; c < data[r].length; c++) {
+          var st = String(data[r][c] || '').trim();
+          if (st === 'P' || st === 'A') paCount++;
+        }
+      }
+      sheetDebug.dateColumnsFound = dateCount;
+      sheetDebug.paCellsInFirst3Rows = paCount;
+
+      debugInfo.sheets.push(sheetDebug);
+    }
+
+    // Also run the actual function and report record count
+    try {
+      var attResult = _getAttendanceUncached('', '', '', cleanOutId, sheetId);
+      debugInfo.attendanceResult = {
+        success: attResult && attResult.success,
+        recordCount: (attResult && attResult.records) ? attResult.records.length : 0,
+        error: attResult && attResult.error
+      };
+      if (attResult && attResult.records && attResult.records.length > 0) {
+        debugInfo.attendanceResult.sampleRecord = attResult.records[0];
+      }
+    } catch(e) {
+      debugInfo.attendanceResult = { error: e.message };
+    }
+
+    return debugInfo;
+  } catch(e) {
+    return { error: 'debugAttendanceData failed: ' + e.message };
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
