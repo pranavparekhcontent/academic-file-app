@@ -1083,7 +1083,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v48_' + sheetId;
+  var cacheKey = 'dash_v50_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1241,16 +1241,26 @@ function getInchargeDashboard(sheetId) {
               var colIdxSyllabus = -1;
               var colIdxPlanned = -1;
               var colIdxExecuted = -1;
+              var batchExecutedCols = {};
               var headerRow = sheetData[headerRowIdx] || [];
               for (var c = 0; c < headerRow.length; c++) {
                 var h = String(headerRow[c] || '').toLowerCase().trim();
-                if (h.indexOf('syllabus') !== -1 || h.indexOf('topic') !== -1 || h.indexOf('details') !== -1 || h.indexOf('content') !== -1) {
+                if (h.indexOf('syllabus') !== -1 || h.indexOf('topic') !== -1 || h.indexOf('details') !== -1 || h.indexOf('content') !== -1 || h.indexOf('experiment') !== -1) {
                   if (colIdxSyllabus === -1) colIdxSyllabus = c;
                 }
                 if (h.indexOf('planned') !== -1 || h.indexOf('proposed') !== -1 || h.indexOf('tentative') !== -1) {
                   if (colIdxPlanned === -1) colIdxPlanned = c;
                 }
-                if (h.indexOf('executed') !== -1 || h.indexOf('actual') !== -1 || h.indexOf('conducted') !== -1 || h.indexOf('completed') !== -1 || h.indexOf('date of completion') !== -1) {
+
+                var batchMatch = h.match(/(?:executed|actual|conducted|completed|date of execution|date)?\s*(?:\(?\s*batch\s*([a-z0-9]+)\s*\)?)/i);
+                if (batchMatch && batchMatch[1]) {
+                  var bName = 'BATCH' + batchMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  batchExecutedCols[bName] = c;
+                } else if (/^batch\s*([a-z0-9]+)$/i.test(h)) {
+                  var bMatch2 = h.match(/^batch\s*([a-z0-9]+)$/i);
+                  var bName2 = 'BATCH' + bMatch2[1].toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  batchExecutedCols[bName2] = c;
+                } else if (h.indexOf('executed') !== -1 || h.indexOf('actual') !== -1 || h.indexOf('conducted') !== -1 || h.indexOf('completed') !== -1 || h.indexOf('date of completion') !== -1) {
                   if (colIdxExecuted === -1) colIdxExecuted = c;
                 }
               }
@@ -1280,6 +1290,10 @@ function getInchargeDashboard(sheetId) {
 
               var topicsCount = 0;
               var conductedCount = 0;
+              var batchConductedCounts = {};
+              for (var bk in batchExecutedCols) {
+                batchConductedCounts[bk] = 0;
+              }
 
               for (var r = headerRowIdx + 1; r < sheetData.length; r++) {
                 var row = sheetData[r];
@@ -1302,6 +1316,13 @@ function getInchargeDashboard(sheetId) {
                   var executedVal = row[colIdxExecuted];
                   if (executedVal !== undefined && executedVal !== null && String(executedVal).trim() !== '' && String(executedVal).trim() !== '-') {
                     conductedCount++;
+                  }
+                  for (var bk in batchExecutedCols) {
+                    var bColIdx = batchExecutedCols[bk];
+                    var bVal = row[bColIdx];
+                    if (bVal !== undefined && bVal !== null && String(bVal).trim() !== '' && String(bVal).trim() !== '-') {
+                      batchConductedCounts[bk]++;
+                    }
                   }
                 }
               }
@@ -1330,6 +1351,9 @@ function getInchargeDashboard(sheetId) {
                   var tpBatch = parsedSheet.batch ? parsedSheet.batch.replace(/\s+/g, '').toUpperCase() : '';
                   if (tpBatch) {
                     subjectPlanMap[code + '|' + tpBatch] = statsObj;
+                  }
+                  for (var bk in batchConductedCounts) {
+                    subjectPlanMap[code + '|' + bk] = { totalLectures: finalPlannedTopics, totalConducted: batchConductedCounts[bk] };
                   }
                   if (!subjectPlanMap[code] || subjectPlanMap[code].totalLectures < statsObj.totalLectures) {
                     subjectPlanMap[code] = statsObj;
@@ -1507,28 +1531,60 @@ function getInchargeDashboard(sheetId) {
         var sBatch = subs[s].batch ? subs[s].batch.replace(/\s+/g, '').toUpperCase() : '';
         var batchKey = sBatch ? sCode + '|' + sBatch : '';
 
-        // 1. Plan lookup: batch-specific plan first, then subject code plan
-        var planInfo = (batchKey && subjectPlanMap[batchKey]) || subjectPlanMap[sCode] || null;
+        // 1. Plan lookup: batch-specific plan first, then fallback to base subject code for planned total
+        var batchPlan = batchKey ? subjectPlanMap[batchKey] : null;
+        var basePlan = subjectPlanMap[sCode] || null;
+        var planInfo = batchPlan || basePlan || null;
         var hasPlan = !!(planInfo && planInfo.totalLectures > 0);
         var plannedTotal = hasPlan ? planInfo.totalLectures : 0;
-        var planConducted = hasPlan ? (planInfo.totalConducted || 0) : 0;
 
-        // 2. Attendance conducted lookup: batch-specific attendance first, then subject code attendance
-        var attConducted = (batchKey && attendanceConductedMap[batchKey] !== undefined)
-          ? attendanceConductedMap[batchKey]
-          : (attendanceConductedMap[sCode] || 0);
+        // Plan conducted: for a specific batch, ONLY use batch-specific plan count (never leak unbatched count)
+        var planConducted = 0;
+        if (batchPlan) {
+          planConducted = batchPlan.totalConducted || 0;
+        } else if (!sBatch && basePlan) {
+          planConducted = basePlan.totalConducted || 0;
+        }
 
-        // 3. Final conducted: prefer teaching plan executed count, fallback to attendance conducted count
-        var finalConducted = planConducted > 0 ? planConducted : attConducted;
+        // 2. Attendance conducted lookup: batch-specific attendance first, then base subject code attendance
+        var attConducted = 0;
+        var hasAttRecord = false;
+        if (batchKey && attendanceConductedMap[batchKey] !== undefined) {
+          attConducted = attendanceConductedMap[batchKey];
+          hasAttRecord = true;
+        } else if (!sBatch && attendanceConductedMap[sCode] !== undefined) {
+          attConducted = attendanceConductedMap[sCode];
+          hasAttRecord = true;
+        }
 
-        // 4. Calculate Total & Percent (Never fabricate planned total from conducted count!)
+        // 3. Final conducted count:
+        // If batch-specific plan exists or unbatched subject, take max of plan and attendance.
+        // If it's a specific batch without batch-specific plan, attendance output is the strict source of truth!
+        var finalConducted = 0;
+        if (batchPlan || !sBatch) {
+          finalConducted = Math.max(planConducted, attConducted);
+        } else if (hasAttRecord) {
+          finalConducted = attConducted;
+        } else {
+          finalConducted = 0;
+        }
+
+        // 4. Calculate Percentage Coverage (Never fabricate planned total from conducted count!)
         var finalTotal = plannedTotal;
         var finalPct = 0;
         if (hasPlan && finalTotal > 0) {
           finalPct = Math.round((Math.min(finalConducted, finalTotal) / finalTotal) * 100);
         }
 
-        var subAvgAtt = (batchKey && attendanceAvgMap[batchKey]) || attendanceAvgMap[sCode] || 0;
+        // 5. Average Attendance % (Strictly batch-specific, never leak across batches if 0 conducted)
+        var subAvgAtt = 0;
+        if (finalConducted > 0) {
+          if (batchKey && attendanceAvgMap[batchKey] !== undefined) {
+            subAvgAtt = attendanceAvgMap[batchKey];
+          } else if (!sBatch && attendanceAvgMap[sCode] !== undefined) {
+            subAvgAtt = attendanceAvgMap[sCode];
+          }
+        }
 
         subs[s].totalLectures = finalTotal;
         subs[s].totalConducted = finalConducted;

@@ -2012,15 +2012,23 @@ const App = (() => {
   async function fetchLiveAttendanceStats() {
     if (!state.liveAttendanceMap) state.liveAttendanceMap = {};
 
-    // 1. Seed from inchargeDashboard subject averages if available
+    // 1. Seed from inchargeDashboard subject averages if available (only if conducted > 0)
     if (state.inchargeDashboard && Array.isArray(state.inchargeDashboard.faculties)) {
       state.inchargeDashboard.faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
           if (s && (s.code || s.name)) {
             const rawCode = String(s.code || s.name).trim().toUpperCase();
             const cleanCode = rawCode.replace(/[^A-Z0-9]/g, '');
+            const rawBatch = s.batch ? String(s.batch).trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
             const avgVal = Number(s.avgAttendance || s.attendancePercent || s.attendancePct || s.avgAtt);
-            if (cleanCode && !isNaN(avgVal) && avgVal > 0) {
+            const condCount = (s.totalConducted !== undefined) ? Number(s.totalConducted) : 0;
+            if (cleanCode && !isNaN(avgVal) && avgVal > 0 && condCount > 0) {
+              if (rawBatch) {
+                const batchKey = cleanCode + '_' + rawBatch;
+                if (!state.liveAttendanceMap[batchKey]) {
+                  state.liveAttendanceMap[batchKey] = { present: avgVal, total: 100 };
+                }
+              }
               if (!state.liveAttendanceMap[cleanCode]) {
                 state.liveAttendanceMap[cleanCode] = { present: avgVal, total: 100 };
               }
@@ -2037,14 +2045,23 @@ const App = (() => {
           const rawCode = String(r.code || '').trim().toUpperCase();
           const cleanCode = rawCode.replace(/[^A-Z0-9]/g, '');
           if (!cleanCode) return;
-          if (!state.liveAttendanceMap[cleanCode] || state.liveAttendanceMap[cleanCode].total === 100) {
-            state.liveAttendanceMap[cleanCode] = { present: 0, total: 0 };
+          const rawBatch = r.batch ? String(r.batch).trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+
+          const keys = [cleanCode];
+          if (rawBatch) {
+            keys.unshift(cleanCode + '_' + rawBatch);
           }
-          state.liveAttendanceMap[cleanCode].total++;
-          const stUpper = String(r.status || '').toUpperCase().trim();
-          if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
-            state.liveAttendanceMap[cleanCode].present++;
-          }
+
+          keys.forEach(k => {
+            if (!state.liveAttendanceMap[k] || state.liveAttendanceMap[k].total === 100) {
+              state.liveAttendanceMap[k] = { present: 0, total: 0 };
+            }
+            state.liveAttendanceMap[k].total++;
+            const stUpper = String(r.status || '').toUpperCase().trim();
+            if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
+              state.liveAttendanceMap[k].present++;
+            }
+          });
         });
       }
     } catch (e) {
@@ -2053,13 +2070,30 @@ const App = (() => {
     return state.liveAttendanceMap;
   }
 
-  function getLiveSubjectAttendancePct(subCode) {
+  function getLiveSubjectAttendancePct(subCode, batchHint) {
     if (!state.liveAttendanceMap || !subCode) return null;
     const cleanCode = String(subCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!cleanCode) return null;
-    
-    let stat = state.liveAttendanceMap[cleanCode];
-    if (!stat) {
+
+    let cleanBatch = '';
+    if (batchHint) {
+      cleanBatch = String(batchHint).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    } else {
+      const bMatch = String(subCode).match(/\((?:batch\s*)?([a-zA-Z0-9]+)\)/i) || String(subCode).match(/\[(?:batch\s*)?([a-zA-Z0-9]+)\]/i);
+      if (bMatch && bMatch[1]) {
+        cleanBatch = ('BATCH' + bMatch[1]).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      }
+    }
+
+    let stat = null;
+    if (cleanBatch) {
+      const batchKey = cleanCode + '_' + cleanBatch;
+      stat = state.liveAttendanceMap[batchKey];
+    }
+    if (!stat && !cleanBatch) {
+      stat = state.liveAttendanceMap[cleanCode];
+    }
+    if (!stat && !cleanBatch) {
       for (const k in state.liveAttendanceMap) {
         if (k === cleanCode || k.includes(cleanCode) || cleanCode.includes(k)) {
           stat = state.liveAttendanceMap[k];
@@ -2405,23 +2439,23 @@ const App = (() => {
         const unitLabel = isPractical ? 'practicals' : 'lectures';
         const effectiveBatch = resolveSubjectBatch(s, f.faculty);
 
-        const liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name);
-        const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 ? `${s.avgAttendance}%` : '--%');
+        const conductedDisplay = s.totalConducted !== undefined ? (hasPlan ? Math.min(s.totalConducted, s.totalLectures) : s.totalConducted) : 0;
+        const liveSubAtt = (conductedDisplay === 0) ? null : ((s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name, effectiveBatch || s.batch));
+        const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0 && conductedDisplay > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 && conductedDisplay > 0 ? `${s.avgAttendance}%` : '--%');
 
         const semRaw = String(s.semester || 'I').trim();
         const semLabel = /^sem/i.test(semRaw) ? escHtml(semRaw) : `Sem ${escHtml(semRaw)}`;
 
         const hasPlan = (s.hasTeachingPlan !== false && s.totalLectures > 0);
         const totalDisplay = hasPlan ? s.totalLectures : '?';
-        const conductedDisplay = s.totalConducted !== undefined ? (hasPlan ? Math.min(s.totalConducted, s.totalLectures) : s.totalConducted) : 0;
-        const progressPct = hasPlan ? (s.percent || 0) : 0;
+        const progressPct = hasPlan ? (conductedDisplay === 0 ? 0 : (s.percent || 0)) : 0;
 
         const isSubZero = (progressPct === 0);
         const pctColor = !hasPlan ? '#b45309' : (isSubZero ? '#dc2626' : '#059669');
         const pctBg = !hasPlan ? 'rgba(245, 158, 11, 0.12)' : (isSubZero ? 'rgba(239, 68, 68, 0.10)' : 'rgba(16, 185, 129, 0.10)');
         const pctBorder = !hasPlan ? 'rgba(245, 158, 11, 0.30)' : (isSubZero ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)');
         const sBarColor = !hasPlan ? 'rgba(0, 0, 0, 0.08)' : (isSubZero ? 'linear-gradient(90deg, #ef4444, #dc2626)' : 'linear-gradient(90deg, #10b981, #059669)');
-        const coverageBadgeText = hasPlan ? `${s.percent}% Coverage` : '? No Plan';
+        const coverageBadgeText = hasPlan ? `${progressPct}% Coverage` : '? No Plan';
 
         return `
           <div class="incharge-subject-item" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border-top: 1.5px solid #ffffff; border-left: 1.5px solid #ffffff; border-bottom: 1.5px solid ${pal.subBorder}; border-right: 1.5px solid ${pal.subBorder}; box-shadow: inset 0 1px 1.5px #ffffff, 0 4px 12px rgba(0,0,0,0.05); border-radius: 14px; padding: 12px 14px;">
@@ -4395,18 +4429,19 @@ Generated: ${formatDisplayDate(new Date())}
             };
           }
 
-          let liveSubAtt = (s.avgAttendance !== undefined && s.avgAttendance !== null && Number(s.avgAttendance) > 0)
+          const sConducted = (s.totalConducted !== undefined) ? Number(s.totalConducted) : 0;
+          let liveSubAtt = (sConducted === 0) ? null : ((s.avgAttendance !== undefined && s.avgAttendance !== null && Number(s.avgAttendance) > 0)
             ? Number(s.avgAttendance)
-            : getLiveSubjectAttendancePct(s.code || s.name);
-          if (liveSubAtt === null && (s.attendancePercent || s.attendancePct || s.avgAtt)) {
+            : getLiveSubjectAttendancePct(s.code || s.name, s.batch));
+          if (liveSubAtt === null && sConducted > 0 && (s.attendancePercent || s.attendancePct || s.avgAtt)) {
             const fallback = Number(s.attendancePercent || s.attendancePct || s.avgAtt);
             if (!isNaN(fallback) && fallback > 0) liveSubAtt = fallback;
           }
 
           classMap[className].subjectsCount++;
           classMap[className].totalLectures += (s.totalLectures || 0);
-          classMap[className].totalConducted += (s.totalConducted || 0);
-          if (liveSubAtt !== null && !isNaN(liveSubAtt) && liveSubAtt > 0) {
+          classMap[className].totalConducted += sConducted;
+          if (liveSubAtt !== null && !isNaN(liveSubAtt) && liveSubAtt > 0 && sConducted > 0) {
             classMap[className].totalAttPctSum += liveSubAtt;
             classMap[className].validAttCount = (classMap[className].validAttCount || 0) + 1;
           }
@@ -4463,12 +4498,13 @@ Generated: ${formatDisplayDate(new Date())}
           sortedSubjectsList.forEach(s => {
             const sp = s.percent || 0;
             const barColor = 'var(--success, #34c759)';
-            const attVal = (s.attendancePct !== undefined && s.attendancePct !== null)
-              ? s.attendancePct
+            const condCount = (s.totalConducted !== undefined) ? Number(s.totalConducted) : 0;
+            const attVal = (condCount === 0) ? null : ((s.attendancePct !== undefined && s.attendancePct !== null && Number(s.attendancePct) > 0)
+              ? Number(s.attendancePct)
               : ((s.avgAttendance !== undefined && s.avgAttendance !== null && Number(s.avgAttendance) > 0)
                 ? Number(s.avgAttendance)
-                : getLiveSubjectAttendancePct(s.code || s.name));
-            const attText = (attVal !== null && attVal !== undefined && !isNaN(attVal)) ? `${attVal}%` : '--%';
+                : getLiveSubjectAttendancePct(s.code || s.name, s.batch)));
+            const attText = (attVal !== null && attVal !== undefined && !isNaN(attVal) && condCount > 0) ? `${attVal}%` : '--%';
             const attBadgeBg = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.14)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.14)' : 'rgba(255, 59, 48, 0.14)';
             const attBadgeBorder = (attVal !== null && attVal >= 80) ? 'rgba(52, 199, 89, 0.3)' : (attVal !== null && attVal >= 70) ? 'rgba(0, 113, 227, 0.3)' : 'rgba(255, 59, 48, 0.3)';
             const attBadgeColor = (attVal !== null && attVal >= 80) ? 'var(--success, #34c759)' : (attVal !== null && attVal >= 70) ? 'var(--accent-blue, #0071e3)' : 'var(--danger, #ff3b30)';
