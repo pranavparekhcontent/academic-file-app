@@ -1448,8 +1448,14 @@ const App = (() => {
 
     try {
       // Trigger auto-sync matching algorithm with Smart Attendance (passing batch)
-      const syncRes = await API.syncTeachingPlan(state.activeCode, state.facultyName, state.activeBatch);
-      if (syncRes.success && syncRes.topics && syncRes.topics.length > 0) {
+      let syncRes = await API.syncTeachingPlan(state.activeCode, state.facultyName, state.activeBatch);
+      if (!syncRes || !syncRes.success || !syncRes.topics || syncRes.topics.length === 0) {
+        const planRes = await API.getTeachingPlan(state.activeCode, state.facultyName, state.activeBatch);
+        if (planRes && planRes.success && planRes.topics && planRes.topics.length > 0) {
+          syncRes = planRes;
+        }
+      }
+      if (syncRes && syncRes.success && syncRes.topics && syncRes.topics.length > 0) {
         const cleanTopics = _deduplicateTopics(syncRes.topics);
         state.metadata = { ...state.metadata, ...(syncRes.metadata || {}) };
         state.teachingPlan.all = cleanTopics;
@@ -1466,7 +1472,7 @@ const App = (() => {
           percent: 0,
           totalTopics: 0
         };
-        const errMsg = syncRes.error || `No sheet found for subject code ${state.activeCode}.`;
+        const errMsg = (syncRes && syncRes.error) || `No teaching plan sheet found for ${state.activeCode}.`;
         Toast.show('Sheet Not Found', errMsg, 'warning');
       }
 

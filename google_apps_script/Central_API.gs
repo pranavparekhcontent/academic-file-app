@@ -2385,32 +2385,31 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
   if (!code) return { success: false, error: 'Missing subject code' };
 
   try {
+    var planResult = getTeachingPlan(code, teacher, sheetId, batchHint);
+    if (!planResult || !planResult.success || !planResult.topics || planResult.topics.length === 0) {
+      return planResult || { success: false, error: 'No teaching plan topics available for subject code: ' + code };
+    }
+
     var targetIds = getTargetSheetIds(code, sheetId);
     if (!targetIds.teachingPlanId || !targetIds.outputSheetId) {
-      return { success: false, error: 'Spreadsheet IDs not resolved for sync' };
+      return planResult;
     }
 
     var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
     var tpWs = _findSheetByCode(tpSs, code, '', batchHint);
     if (!tpWs) {
-      return { success: false, error: 'Teaching plan sheet not found for subject code: ' + code };
+      return planResult;
     }
 
-    var planResult = getTeachingPlan(code, teacher, sheetId, batchHint);
-    if (!planResult.success || !planResult.topics || planResult.topics.length === 0) {
-      return { success: false, error: 'No teaching plan topics available to sync: ' + (planResult.error || '') };
-    }
+    var outSs = null;
+    try { outSs = _getSpreadsheet(targetIds.outputSheetId); } catch(e) {}
+    if (!outSs) return planResult;
 
-    var outSs = _getSpreadsheet(targetIds.outputSheetId);
     var outWs = _findSheetByCode(outSs, code, '', batchHint);
-    if (!outWs) {
-      return { success: false, error: 'Attendance matrix sheet not found for subject code: ' + code };
-    }
+    if (!outWs) return planResult;
 
     var outData = outWs.getDataRange().getValues();
-    if (!outData || outData.length < 3) {
-      return { success: false, error: 'Attendance matrix sheet contains insufficient rows' };
-    }
+    if (!outData || outData.length < 3) return planResult;
 
     var hdrIdx = -1;
     for (var r = 0; r < Math.min(outData.length, 25); r++) {
