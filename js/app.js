@@ -296,7 +296,10 @@ const App = (() => {
 
     if (rawData) {
       state.allData = rawData;
-      state.teachers = rawData.teachers || [];
+      state.teachers = (rawData.teachers || []).filter(t => {
+        const n = typeof t === 'string' ? t : (t.name || t.facultyName || '');
+        return n && !/^(academic\s*incharge|incharge|unassigned|assigned|admin)$/i.test(n.trim());
+      });
       state.subjects = rawData.subjects || [];
     }
 
@@ -523,7 +526,10 @@ const App = (() => {
       }
 
       state.allData = data;
-      state.teachers = data.teachers || [];
+      state.teachers = (data.teachers || []).filter(t => {
+        const n = typeof t === 'string' ? t : (t.name || t.facultyName || '');
+        return n && !/^(academic\s*incharge|incharge|unassigned|assigned|admin)$/i.test(n.trim());
+      });
       state.subjects = data.subjects || [];
       buildFacultySelector();
     } catch (e) {
@@ -947,6 +953,7 @@ const App = (() => {
     state.teachers.forEach(t => {
       const name = (typeof t === 'string') ? t : (t.name || t.facultyName || String(t));
       if (!name) return;
+      if (/^(academic\s*incharge|incharge|unassigned|assigned|admin)$/i.test(name.trim())) return;
 
       if (select) {
         const opt = document.createElement('option');
@@ -971,11 +978,12 @@ const App = (() => {
       }
     });
 
-    if (state.facultyName) {
+    if (state.facultyName && !/^(academic\s*incharge|incharge|unassigned|assigned|admin)$/i.test(state.facultyName.trim())) {
       if (select) select.value = state.facultyName;
       if (labelEl) labelEl.innerText = state.facultyName;
     } else if (labelEl) {
       labelEl.innerText = 'Select Faculty';
+      if (select) select.value = '';
     }
   }
 
