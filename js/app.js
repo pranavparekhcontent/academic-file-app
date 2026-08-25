@@ -5137,21 +5137,9 @@ Generated: ${formatDisplayDate(new Date())}
     }).join('');
 
     outputEl.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
-          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Select Class, Student & Date to inspect instant daywise records</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-outline" onclick="App.downloadDaywiseReportDoc()" title="Download daywise attendance report as .docx" style="
-            padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
-            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-            background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(245, 158, 11, 0.4); color: #92400e;
-            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.12);
-          ">
-            <i class="ph ph-file-doc" style="font-size: 16px; color: #d97706;"></i> Download .docx
-          </button>
-        </div>
+      <div style="margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
+        <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
+        <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Select Class, Student & Date to inspect instant daywise records</span>
       </div>
 
       <!-- 3 THEMED GLASS DROPDOWNS (EXPANDING DOWNSIDE) -->
