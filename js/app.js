@@ -4618,6 +4618,88 @@ Generated: ${formatDisplayDate(new Date())}
     }, { passive: false });
   }
 
+  // ─── CLASS & SEMESTER MATCHING HELPERS ─────────────────
+  function getClassSemesterRange(className) {
+    const c = String(className || '').toLowerCase().trim();
+    if (!c) return [];
+    if (/first|1st|\bf\.?y\.?\b|semester\s*1\b|semester\s*2\b|sem\s*1\b|sem\s*2\b/i.test(c)) return [1, 2];
+    if (/second|2nd|\bs\.?y\.?\b|semester\s*3\b|semester\s*4\b|sem\s*3\b|sem\s*4\b/i.test(c)) return [3, 4];
+    if (/third|3rd|\bt\.?y\.?\b|semester\s*5\b|semester\s*6\b|sem\s*5\b|sem\s*6\b/i.test(c)) return [5, 6];
+    if (/final|fourth|4th|\bfinal\s*year\b|semester\s*7\b|semester\s*8\b|sem\s*7\b|sem\s*8\b/i.test(c)) return [7, 8];
+    const m = c.match(/sem(?:ester)?\s*(\d+)/i);
+    if (m) {
+      const sNum = parseInt(m[1], 10);
+      if (!isNaN(sNum)) return [sNum];
+    }
+    return [];
+  }
+
+  function getSubjectCodeSemester(codeOrSubject) {
+    if (!codeOrSubject) return null;
+    let code = typeof codeOrSubject === 'string' ? codeOrSubject : (codeOrSubject.code || codeOrSubject.name || '');
+    code = String(code).trim().toUpperCase();
+    
+    // Explicit semester on object
+    if (typeof codeOrSubject === 'object' && codeOrSubject.semester) {
+      const s = parseInt(codeOrSubject.semester, 10);
+      if (!isNaN(s) && s >= 1 && s <= 8) return s;
+    }
+
+    // Standard PCI Pharmacy Code: BP101T -> 1, BP301T -> 3, BP503T -> 5, BP704T -> 7
+    const mBp = code.match(/^BP(\d)\d{2}[PTpt]?/i);
+    if (mBp) return parseInt(mBp[1], 10);
+
+    // Standard 3-digit subject code: 101 -> 1, 301 -> 3, 501 -> 5, 704 -> 7
+    const mNum = code.match(/^([1-8])\d{2}[PTpt]?/);
+    if (mNum) return parseInt(mNum[1], 10);
+
+    // General prefix code like PH301, CS501
+    const mGen = code.match(/^[A-Z]{2,4}([1-8])\d{2}/i);
+    if (mGen) return parseInt(mGen[1], 10);
+
+    return null;
+  }
+
+  function isSubjectMatchingClass(subjectOrCode, className, classSubjects = []) {
+    if (!className) return true;
+    const cNameLower = String(className).trim().toLowerCase();
+    
+    const code = typeof subjectOrCode === 'string' ? subjectOrCode : (subjectOrCode.code || subjectOrCode.name || '');
+    const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    // 1. Direct match in classSubjects list (if provided and populated)
+    if (Array.isArray(classSubjects) && classSubjects.length > 0) {
+      const matchInList = classSubjects.some(cs => {
+        if (!cs || !cs.code) return false;
+        const csClean = String(cs.code).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return csClean === cleanCode || (csClean && cleanCode && (csClean.startsWith(cleanCode) || cleanCode.startsWith(csClean)));
+      });
+      if (matchInList) return true;
+    }
+
+    // 2. Strict Semester range validation (CRITICAL: prevents BP704T NDDS in Second Year)
+    const allowedSems = getClassSemesterRange(className);
+    const subSem = getSubjectCodeSemester(subjectOrCode);
+
+    if (allowedSems.length > 0 && subSem !== null) {
+      return allowedSems.includes(subSem);
+    }
+
+    // 3. Object-level class/year name check if available
+    if (typeof subjectOrCode === 'object' && subjectOrCode) {
+      const itemClass = String(subjectOrCode.year || subjectOrCode.className || subjectOrCode.class || '').trim().toLowerCase();
+      if (itemClass) {
+        const itemSems = getClassSemesterRange(itemClass);
+        if (allowedSems.length > 0 && itemSems.length > 0) {
+          return itemSems.some(s => allowedSems.includes(s));
+        }
+        return itemClass === cNameLower || itemClass.includes(cNameLower) || cNameLower.includes(itemClass);
+      }
+    }
+
+    return true;
+  }
+
   // ─── BATCH MATCHING HELPER ─────────────────
   function cleanBatchStr(b) {
     return String(b || '').trim().toUpperCase().replace(/BATCH\s*[:\-]?\s*/gi, '').trim();
@@ -5276,28 +5358,42 @@ Generated: ${formatDisplayDate(new Date())}
         return String(name).trim();
       }
 
-      function resolveSubjectClass(s) {
-        const liveName = extractLiveClassName(s);
-        if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) return liveName;
-        if (s.semester && String(s.semester).trim()) return `Semester ${String(s.semester).trim()}`;
-        return 'General Academic Class';
-      }
+      // 2. Class subjects
+      const data = state.inchargeDashboard || {};
+      const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
       const classSubjects = [];
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
           if (!s || !s.code) return;
-          const cName = resolveSubjectClass(s);
-          if (cName.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(cName.toLowerCase()) || cName.toLowerCase().includes(className.toLowerCase())) {
-            // Push ALL entries — do NOT deduplicate by code so every batch+faculty combo is preserved
+          if (isSubjectMatchingClass(s, className)) {
             classSubjects.push({ ...s, faculty: f.faculty, facultyName: f.faculty });
           }
         });
       });
 
-      // 3. Filter attendance records for the selected date
+      if (classSubjects.length === 0) {
+        const allSubs = [
+          ...((state.allData && state.allData.enrichedSubjects) || []),
+          ...((state.allData && state.allData.subjects) || [])
+        ];
+        allSubs.forEach(s => {
+          if (!s || !s.code) return;
+          if (isSubjectMatchingClass(s, className)) {
+            classSubjects.push(s);
+          }
+        });
+      }
+
+      // 3. Filter attendance records for the selected date and class
       const dateRecords = allRecords.filter(r => {
-        if (!r.date) return false;
+        if (!r.date || !r.code) return false;
+        
+        // STRICT CHECK: Subject MUST belong to the selected class/semester
+        if (!isSubjectMatchingClass(r.code, className, classSubjects)) {
+          return false;
+        }
+
         const rd = String(r.date).trim().toLowerCase();
         if (rd.includes(dateStr.toLowerCase())) return true;
         const parts = dateStr.split('-');
@@ -5333,9 +5429,12 @@ Generated: ${formatDisplayDate(new Date())}
       // Match date attendance records
       const activeSubjectsMap = {};
       dateRecords.forEach(r => {
+        if (!r || !r.code) return;
+        if (!isSubjectMatchingClass(r.code, className, classSubjects)) return;
+
         const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
         const rNoNum = parseInt(rNo, 10);
-        const rName = String(r.name || '').trim().toLowerCase();
+        const rName = String(r.name || '').toLowerCase().replace(/\s+/g, '');
 
         let matchedKey = null;
         if (rNo && studentMap[rNo]) {
@@ -5347,7 +5446,7 @@ Generated: ${formatDisplayDate(new Date())}
             const s = studentMap[k];
             if ((rNo && String(s.rollNo).trim() === rNo) ||
                 (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
-                (rName && s.name.toLowerCase().trim() === rName)) {
+                (rName && s.name.toLowerCase().replace(/\s+/g, '') === rName)) {
               matchedKey = k;
               break;
             }
@@ -5377,27 +5476,39 @@ Generated: ${formatDisplayDate(new Date())}
         const curStudentBatch = studentMap[matchedKey].batch || '';
         const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curStudentBatch);
         const sKey = cleanInfo.code;
-        if (!activeSubjectsMap[sKey]) activeSubjectsMap[sKey] = cleanInfo;
+        
+        // MULTIPLE LECTURE FIX: If this student already has this subject recorded today, suffix it
+        let suffixNum = 2;
+        let finalSKey = sKey;
+        while (studentMap[matchedKey].att[finalSKey] !== undefined) {
+           finalSKey = sKey + ' (L' + suffixNum + ')';
+           suffixNum++;
+        }
+
+        if (!activeSubjectsMap[finalSKey]) {
+           // Clone to prevent mutating original cleanInfo if suffixed
+           activeSubjectsMap[finalSKey] = { ...cleanInfo, code: finalSKey };
+        }
 
         const st = String(r.status || '').toUpperCase().trim();
         if (st === 'P' || st === 'PRESENT' || st === '1') {
-          studentMap[matchedKey].att[sKey] = 'P';
+          studentMap[matchedKey].att[finalSKey] = 'P';
         } else if (st === 'A' || st === 'ABSENT' || st === '0') {
-          studentMap[matchedKey].att[sKey] = 'A';
+          studentMap[matchedKey].att[finalSKey] = 'A';
         }
 
-        if (r.topic && !studentMap[matchedKey].topics[sKey]) {
-          studentMap[matchedKey].topics[sKey] = r.topic;
+        if (r.topic && !studentMap[matchedKey].topics[finalSKey]) {
+          studentMap[matchedKey].topics[finalSKey] = r.topic;
         }
-        if (r.topic && !cleanInfo.topic) {
-          cleanInfo.topic = r.topic;
+        if (r.topic && !activeSubjectsMap[finalSKey].topic) {
+          activeSubjectsMap[finalSKey].topic = r.topic;
         }
         // Store per-student faculty from attendance record ONLY if it is a real teacher name (not 'Assigned')
         if (r.faculty && !/^(assigned|unassigned)$/i.test(r.faculty.trim())) {
-          studentMap[matchedKey].faculties[sKey] = r.faculty;
+          studentMap[matchedKey].faculties[finalSKey] = r.faculty;
         }
-        if (r.faculty && !/^(assigned|unassigned)$/i.test(r.faculty.trim()) && !cleanInfo.faculty) {
-          cleanInfo.faculty = r.faculty;
+        if (r.faculty && !/^(assigned|unassigned)$/i.test(r.faculty.trim()) && !activeSubjectsMap[finalSKey].faculty) {
+          activeSubjectsMap[finalSKey].faculty = r.faculty;
         }
       });
 
@@ -5420,7 +5531,7 @@ Generated: ${formatDisplayDate(new Date())}
       const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const displayDate = dtParts.length === 3 ? `${dtParts[2]}-${months[parseInt(dtParts[1])-1]}-${dtParts[0]}` : dateStr;
 
-      const activeSubjectKeys = Object.keys(activeSubjectsMap);
+      const activeSubjectKeys = Object.keys(activeSubjectsMap).filter(sk => isSubjectMatchingClass(sk, className, classSubjects));
 
       if (activeSubjectKeys.length === 0) {
         container.innerHTML = `
@@ -5896,8 +6007,7 @@ Generated: ${formatDisplayDate(new Date())}
         const facName = String(f.faculty || '').trim();
         (f.subjects || []).forEach(s => {
           if (!s) return;
-          const liveClass = resolveSubjectClass(s);
-          if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester')) || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
+          if (isSubjectMatchingClass(s, className)) {
             if (s.code) {
               // Deduplicate only by code+batch combo, NOT just code, so all batch-faculty pairs are preserved
               const dedupKey = s.code + '|' + cleanBatchStr(s.batch || s.batchGroup || '');
@@ -5920,8 +6030,7 @@ Generated: ${formatDisplayDate(new Date())}
         const allSubs = (enrichedSubjects.length > 0 ? enrichedSubjects : (state.allData && state.allData.subjects) || []);
         allSubs.forEach(s => {
           if (!s || !s.code) return;
-          const liveClass = resolveSubjectClass(s);
-          if (!liveClass || liveClass.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
+          if (isSubjectMatchingClass(s, className)) {
             if (!subCodeSet[s.code]) {
               subCodeSet[s.code] = true;
               s.teacherName = s.teacherName || s.faculty || s.facultyName || '';
@@ -5967,6 +6076,12 @@ Generated: ${formatDisplayDate(new Date())}
       }
 
       allRecords.forEach(r => {
+        if (!r || !r.code) return;
+        // Strictly ignore subjects that do not belong to this class/semester
+        if (!isSubjectMatchingClass(r.code, className, classSubjects)) {
+          return;
+        }
+
         const rCodeRaw = String(r.code || '').trim();
         if (!rCodeRaw) return;
         const rCodeClean = rCodeRaw.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -5988,7 +6103,7 @@ Generated: ${formatDisplayDate(new Date())}
 
         const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
         const rNoNum = parseInt(rNo, 10);
-        const rName = String(r.name || '').trim().toLowerCase();
+        const rName = String(r.name || '').toLowerCase().replace(/\s+/g, '');
 
         let matchedKey = null;
         if (rNo && studentMap[rNo]) {
@@ -6000,7 +6115,7 @@ Generated: ${formatDisplayDate(new Date())}
             const s = studentMap[k];
             if ((rNo && String(s.rollNo).trim() === rNo) ||
                 (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
-                (rName && s.name.toLowerCase().trim() === rName)) {
+                (rName && s.name.toLowerCase().replace(/\s+/g, '') === rName)) {
               matchedKey = k;
               break;
             }
