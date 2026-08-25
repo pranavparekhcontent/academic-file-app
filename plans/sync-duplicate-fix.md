@@ -1,1 +1,0 @@
-problem is with app i think because even after manually deleting duplicate dates... it was not reflected in sync... that means its not updating display... even after after logout it happened..so this means data is saved locally and not being dynamically updated.. verify this possibility.
