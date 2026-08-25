@@ -4690,12 +4690,29 @@ Generated: ${formatDisplayDate(new Date())}
     if (bestMatch) {
       const sCode = String(bestMatch.code || '').trim();
       const isPractical = sCode.toUpperCase().endsWith('P') || /practical|lab/i.test(bestMatch.type || '') || /practical|lab/i.test(bestMatch.name || '');
+      let resolvedFac = bestMatch.faculty || bestMatch.facultyName || bestMatch.teacherName || '';
+      if (/^(assigned|unassigned)$/i.test(resolvedFac.trim())) {
+        resolvedFac = '';
+      }
+      if (!resolvedFac) {
+        for (const sub of masterList) {
+          if (!sub) continue;
+          const subCodeClean = String(sub.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (subCodeClean === rawClean || (sCode && subCodeClean === sCode.toUpperCase().replace(/[^A-Z0-9]/g, ''))) {
+            const f = sub.faculty || sub.facultyName || sub.teacherName || '';
+            if (f && !/^(assigned|unassigned)$/i.test(f.trim())) {
+              resolvedFac = f;
+              break;
+            }
+          }
+        }
+      }
       return {
         code: sCode,
         name: bestMatch.name || bestMatch.subject || sCode,
         type: bestMatch.type || (isPractical ? 'Practical' : 'Theory'),
         isPractical: isPractical,
-        faculty: bestMatch.faculty || bestMatch.facultyName || bestMatch.teacherName || ''
+        faculty: resolvedFac
       };
     }
 
@@ -5387,11 +5404,11 @@ Generated: ${formatDisplayDate(new Date())}
         if (r.topic && !cleanInfo.topic) {
           cleanInfo.topic = r.topic;
         }
-        // Store per-student faculty from attendance record
-        if (r.faculty) {
+        // Store per-student faculty from attendance record ONLY if it is a real teacher name (not 'Assigned')
+        if (r.faculty && !/^(assigned|unassigned)$/i.test(r.faculty.trim())) {
           studentMap[matchedKey].faculties[sKey] = r.faculty;
         }
-        if (r.faculty && !cleanInfo.faculty) {
+        if (r.faculty && !/^(assigned|unassigned)$/i.test(r.faculty.trim()) && !cleanInfo.faculty) {
           cleanInfo.faculty = r.faculty;
         }
       });
@@ -5454,8 +5471,20 @@ Generated: ${formatDisplayDate(new Date())}
           totalClasses++;
 
           const topicText = curStudent.topics[sk] || subInfo.topic || '';
-          // Priority: per-student faculty from attendance record > batch-resolved faculty > fallback
-          const facultyText = (curStudent.faculties && curStudent.faculties[sk]) || subInfo.faculty || 'Assigned Faculty';
+          // Priority: per-student faculty from attendance record > batch-resolved faculty > class faculty lookup
+          let facultyText = (curStudent.faculties && curStudent.faculties[sk]) || '';
+          if (!facultyText || /^(assigned|unassigned)$/i.test(facultyText.trim())) {
+            facultyText = subInfo.faculty || '';
+          }
+          if (!facultyText || /^(assigned|unassigned)$/i.test(facultyText.trim())) {
+            const match = classSubjects.find(cs => cs && cs.code && cs.code.toUpperCase().replace(/[^A-Z0-9]/g, '') === sk.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+            if (match && match.faculty && !/^(assigned|unassigned)$/i.test(match.faculty.trim())) {
+              facultyText = match.faculty;
+            }
+          }
+          if (!facultyText || /^(assigned|unassigned)$/i.test(facultyText.trim())) {
+            facultyText = 'Subject Faculty';
+          }
 
           const statusBadge = st === 'P' ? `
             <span style="
