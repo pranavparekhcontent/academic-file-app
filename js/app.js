@@ -405,9 +405,17 @@ const App = (() => {
         try {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.data && (parsed.data.success || parsed.data.teachers)) {
-            rawData = parsed.data;
+            // Verify cached subjects have batches data; if stale, discard
+            const subs = parsed.data.subjects || [];
+            if (subs.some(s => isPracticalSubject(s) && (s.batches || s.batch))) {
+              rawData = parsed.data;
+            } else {
+              localStorage.removeItem('acad_cache_allData');
+            }
           }
-        } catch(e) {}
+        } catch(e) {
+          localStorage.removeItem('acad_cache_allData');
+        }
       }
     }
 
@@ -450,6 +458,13 @@ const App = (() => {
         buildFacultySelector();
         if (state.facultyName) {
           buildSubjectSelector();
+          const facultySubs = getFacultyWorkload(state.facultyName);
+          const toastList = document.querySelector('.toast-subject-list');
+          if (toastList && facultySubs.length > 0) {
+            Toast.showSubjectPicker(facultySubs, (code, label, batch) => {
+              selectCustomSubjectOption(code, label, batch);
+            });
+          }
         }
       }
     }).catch(e => console.warn('[App] Background session cache init:', e.message));

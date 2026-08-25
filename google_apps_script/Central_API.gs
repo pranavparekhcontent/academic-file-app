@@ -525,7 +525,7 @@ function getAttendanceLimit(sheetId) {
 
 function getAllData(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'allData_' + (sheetId || '');
+  var cacheKey = 'allData_v5_' + (sheetId || '');
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
