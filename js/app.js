@@ -5119,12 +5119,15 @@ Generated: ${formatDisplayDate(new Date())}
         let subjectRowsHtml = '';
 
         activeSubjectKeys.forEach(sk => {
+          const st = curStudent.att[sk] || '-';
+          // Only show subjects where student was actually marked P or A
+          if (st !== 'P' && st !== 'A') return;
+
           // Resolve subject info specific to THIS student's batch
           const subInfo = resolveCleanSubjectInfo(sk, classSubjects, curStudent.batch);
-          const st = curStudent.att[sk] || '-';
           if (st === 'P') presCount++;
           if (st === 'A') absCount++;
-          if (st === 'P' || st === 'A') totalClasses++;
+          totalClasses++;
 
           const topicText = curStudent.topics[sk] || subInfo.topic || '';
           // Priority: per-student faculty from attendance record > batch-resolved faculty > fallback
