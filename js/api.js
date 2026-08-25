@@ -200,7 +200,17 @@ const API = (() => {
 
   async function getStudents(sheetName, batchGroup) {
     if (SessionCache.loaded && SessionCache.data.students) {
-      const cached = SessionCache.data.students[sheetName];
+      let cached = SessionCache.data.students[sheetName];
+      if (!cached && sheetName) {
+        const targetClean = String(sheetName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const k of Object.keys(SessionCache.data.students)) {
+          const kClean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (kClean === targetClean || (targetClean && (kClean.includes(targetClean) || targetClean.includes(kClean)))) {
+            cached = SessionCache.data.students[k];
+            break;
+          }
+        }
+      }
       if (cached) {
         let students = cached;
         if (batchGroup) {
@@ -208,6 +218,7 @@ const API = (() => {
         }
         return { success: true, students: students, sheet: sheetName };
       }
+      return { success: true, students: [], sheet: sheetName };
     }
 
     if (navigator.onLine) {
@@ -221,8 +232,8 @@ const API = (() => {
   }
 
   async function getAttendance(code, year, date, outputSheetId) {
-    if (SessionCache.loaded && SessionCache.data.attendance && SessionCache.data.attendance.records) {
-      const allRecords = SessionCache.data.attendance.records;
+    if (SessionCache.loaded && SessionCache.data.attendance) {
+      const allRecords = SessionCache.data.attendance.records || [];
       const filtered = allRecords.filter(r => {
         if (code && code !== '*' && code !== 'all') {
           const recCode = String(r.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');

@@ -4096,6 +4096,18 @@ Generated: ${formatDisplayDate(new Date())}
     generateReportType('class');
   }
 
+  function sortAcademicClassNames(classList) {
+    const getWeight = (name) => {
+      const s = String(name || '').toLowerCase();
+      if (s.includes('first') || s.includes('1st') || s.includes('f.y') || s.includes('fy') || s.includes('sem 1') || s.includes('sem 2') || s.includes('semester 1') || s.includes('semester 2')) return 1;
+      if (s.includes('second') || s.includes('2nd') || s.includes('s.y') || s.includes('sy') || s.includes('sem 3') || s.includes('sem 4') || s.includes('semester 3') || s.includes('semester 4')) return 2;
+      if (s.includes('third') || s.includes('3rd') || s.includes('t.y') || s.includes('ty') || s.includes('sem 5') || s.includes('sem 6') || s.includes('semester 5') || s.includes('semester 6')) return 3;
+      if (s.includes('final') || s.includes('fourth') || s.includes('4th') || s.includes('last') || s.includes('sem 7') || s.includes('sem 8') || s.includes('semester 7') || s.includes('semester 8')) return 4;
+      return 10;
+    };
+    return (classList || []).slice().sort((a, b) => getWeight(a) - getWeight(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
   function generateReportType(type) {
     activeReportType = type || 'class';
 
@@ -4221,9 +4233,7 @@ Generated: ${formatDisplayDate(new Date())}
         });
       });
 
-      const classKeys = Object.keys(classMap).sort((a, b) => {
-        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-      });
+      const classKeys = sortAcademicClassNames(Object.keys(classMap));
 
       const totalSubs = classKeys.reduce((a, k) => a + classMap[k].subjectsCount, 0);
 
@@ -4456,10 +4466,11 @@ Generated: ${formatDisplayDate(new Date())}
         });
       });
 
-      const activeClassNames = Object.keys(classNamesSet);
+      let activeClassNames = Object.keys(classNamesSet);
       if (activeClassNames.length === 0) {
         activeClassNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
       }
+      activeClassNames = sortAcademicClassNames(activeClassNames);
 
       if (!state.activeStudentYear || activeClassNames.indexOf(state.activeStudentYear) === -1) {
         state.activeStudentYear = activeClassNames[0];
@@ -4685,10 +4696,11 @@ Generated: ${formatDisplayDate(new Date())}
       });
     });
 
-    const activeClassNames = Object.keys(classNamesSet);
+    let activeClassNames = Object.keys(classNamesSet);
     if (activeClassNames.length === 0) {
       activeClassNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
     }
+    activeClassNames = sortAcademicClassNames(activeClassNames);
 
     if (!state.activeDaywiseYear || activeClassNames.indexOf(state.activeDaywiseYear) === -1) {
       state.activeDaywiseYear = activeClassNames[0];
@@ -4811,7 +4823,18 @@ Generated: ${formatDisplayDate(new Date())}
       // Filter attendance records for the selected date
       const dateRecords = allRecords.filter(r => {
         if (!r.date) return false;
-        return String(r.date).indexOf(dateStr) !== -1;
+        const rd = String(r.date).trim().toLowerCase();
+        if (rd.includes(dateStr.toLowerCase())) return true;
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          const [y, m, d] = parts;
+          const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+          const mName = months[parseInt(m, 10) - 1] || '';
+          const dNum = parseInt(d, 10);
+          if (mName && (rd.includes(`${dNum}-${mName}`) || rd.includes(`${d}-${mName}`))) return true;
+          if (rd.includes(`${d}-${m}-${y}`) || rd.includes(`${d}/${m}/${y}`) || rd.includes(`${dNum}/${parseInt(m,10)}/${y}`)) return true;
+        }
+        return false;
       });
 
       // Identify which subjects actually had P/A entries on this date
@@ -5201,35 +5224,20 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      const classSheetIds = Array.from(new Set(classSubjects.map(s => s.outputSheetId).filter(Boolean)));
-      const fetchPromises = [
-        API.getStudents(className).catch(() => ({ success: false }))
-      ];
+      const [studentsRes, attResult] = await Promise.all([
+        API.getStudents(className).catch(() => ({ success: false })),
+        API.getAttendance('', '', '', '').catch(() => ({ success: false }))
+      ]);
 
-      if (classSheetIds.length > 0) {
-        classSheetIds.forEach(shId => {
-          fetchPromises.push(API.getAttendance('', className, '', shId).catch(() => ({ success: false })));
-        });
-      }
+      const allRecords = (attResult && attResult.success && Array.isArray(attResult.records)) ? attResult.records : [];
 
-      classSubjects.forEach(sub => {
-        if (sub.code && sub.outputSheetId) {
-          fetchPromises.push(API.getAttendance(sub.code, className, '', sub.outputSheetId).then(res => {
-            if (res && res.success && Array.isArray(res.records)) {
-              res.records.forEach(r => { if (!r.code) r.code = sub.code; });
-            }
-            return res;
-          }).catch(() => ({ success: false })));
+      const classCodeMap = {};
+      classSubjects.forEach(cs => {
+        if (cs.code) {
+          const clean = String(cs.code).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (clean) classCodeMap[clean] = cs;
         }
       });
-
-      const results = await Promise.all(fetchPromises);
-      const studentsRes = results[0];
-      const allAttRes = results.slice(1);
-
-      const validClassCodes = new Set(
-        classSubjects.map(s => String(s.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean)
-      );
 
       let studentMap = {};
 
@@ -5251,71 +5259,77 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      allAttRes.forEach(attRes => {
-        if (attRes && attRes.success && Array.isArray(attRes.records)) {
-          attRes.records.forEach(r => {
-            const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
-            const rNoNum = parseInt(rNo, 10);
-            const rName = String(r.name || '').trim().toLowerCase();
+      allRecords.forEach(r => {
+        const rCodeRaw = String(r.code || '').trim();
+        if (!rCodeRaw) return;
+        const rCodeClean = rCodeRaw.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-            let matchedKey = null;
-            if (rNo && studentMap[rNo]) {
-              matchedKey = rNo;
-            } else if (!isNaN(rNoNum) && studentMap[String(rNoNum)]) {
-              matchedKey = String(rNoNum);
-            } else {
-              for (const k in studentMap) {
-                const s = studentMap[k];
-                if ((rNo && String(s.rollNo).trim() === rNo) ||
-                    (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
-                    (rName && s.name.toLowerCase().trim() === rName)) {
-                  matchedKey = k;
-                  break;
-                }
-              }
+        let matchedSubject = null;
+        if (classCodeMap[rCodeClean]) {
+          matchedSubject = classCodeMap[rCodeClean];
+        } else {
+          for (const cClean in classCodeMap) {
+            if (rCodeClean.startsWith(cClean) || cClean.startsWith(rCodeClean) || rCodeClean.includes(cClean) || cClean.includes(rCodeClean)) {
+              matchedSubject = classCodeMap[cClean];
+              break;
             }
+          }
+        }
+        if (!matchedSubject && Object.keys(classCodeMap).length > 0) {
+          return;
+        }
 
-            if (!matchedKey) {
-              matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
-              studentMap[matchedKey] = {
-                rollNo: rNo || 'N/A',
-                name: r.name || matchedKey,
-                batch: r.batch || 'General',
-                presentCount: 0,
-                totalCount: 0,
-                subjectMap: {}
-              };
-            }
+        const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
+        const rNoNum = parseInt(rNo, 10);
+        const rName = String(r.name || '').trim().toLowerCase();
 
-            if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
-              studentMap[matchedKey].name = r.name;
+        let matchedKey = null;
+        if (rNo && studentMap[rNo]) {
+          matchedKey = rNo;
+        } else if (!isNaN(rNoNum) && studentMap[String(rNoNum)]) {
+          matchedKey = String(rNoNum);
+        } else {
+          for (const k in studentMap) {
+            const s = studentMap[k];
+            if ((rNo && String(s.rollNo).trim() === rNo) ||
+                (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
+                (rName && s.name.toLowerCase().trim() === rName)) {
+              matchedKey = k;
+              break;
             }
-            if (r.batch && r.batch !== 'General') {
-              studentMap[matchedKey].batch = r.batch;
-            }
+          }
+        }
 
-            const sCode = String(r.code || 'SUB').trim();
-            const cleanSCode = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!matchedKey) {
+          matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
+          studentMap[matchedKey] = {
+            rollNo: rNo || 'N/A',
+            name: r.name || matchedKey,
+            batch: r.batch || 'General',
+            presentCount: 0,
+            totalCount: 0,
+            subjectMap: {}
+          };
+        }
 
-            if (validClassCodes.size > 0 && !validClassCodes.has(cleanSCode)) {
-              return;
-            }
+        if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
+          studentMap[matchedKey].name = r.name;
+        }
+        if (r.batch && r.batch !== 'General') {
+          studentMap[matchedKey].batch = r.batch;
+        }
 
-            if (!studentMap[matchedKey].subjectMap[sCode]) {
-              studentMap[matchedKey].subjectMap[sCode] = { present: 0, total: 0 };
-            }
-            if (cleanSCode && !studentMap[matchedKey].subjectMap[cleanSCode]) {
-              studentMap[matchedKey].subjectMap[cleanSCode] = studentMap[matchedKey].subjectMap[sCode];
-            }
+        const subKey = matchedSubject ? matchedSubject.code : rCodeRaw;
+        if (!studentMap[matchedKey].subjectMap[subKey]) {
+          studentMap[matchedKey].subjectMap[subKey] = { present: 0, total: 0 };
+        }
 
-            studentMap[matchedKey].totalCount++;
-            studentMap[matchedKey].subjectMap[sCode].total++;
-            const stUpper = String(r.status || '').toUpperCase().trim();
-            if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
-              studentMap[matchedKey].presentCount++;
-              studentMap[matchedKey].subjectMap[sCode].present++;
-            }
-          });
+        studentMap[matchedKey].totalCount++;
+        studentMap[matchedKey].subjectMap[subKey].total++;
+        const stUpper = String(r.status || '').toUpperCase().trim();
+        if (stUpper === 'P' || stUpper === 'PRESENT' || stUpper === '1') {
+          studentMap[matchedKey].presentCount++;
+          studentMap[matchedKey].subjectMap[subKey].present++;
         }
       });
 
