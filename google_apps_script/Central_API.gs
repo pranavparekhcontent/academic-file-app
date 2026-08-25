@@ -558,6 +558,7 @@ function getAllData(sheetId) {
         if (parsedCode.isPractical && (!sType || sType.toLowerCase() === 'theory' || sType === '')) {
           sType = 'Practical';
         }
+        var rawBatches = (cols.batches !== -1 && data[i][cols.batches] !== undefined) ? String(data[i][cols.batches]).trim() : '';
         var subObj = {
           code: sCode,
           name: sName,
@@ -565,7 +566,9 @@ function getAllData(sheetId) {
           program: String(data[i][cols.program]).trim(),
           semester: String(data[i][cols.semester]).trim(),
           type: sType,
-          faculty: String(data[i][cols.faculty]).trim()
+          faculty: String(data[i][cols.faculty]).trim(),
+          batches: rawBatches,
+          batch: _parseFacultyBatches(rawBatches, String(data[i][cols.faculty]).trim())
         };
         subObj.teachingPlanLink = (teachingPlanIdx !== -1) ? String(data[i][teachingPlanIdx]).trim() : '';
         subs.push(subObj);
@@ -620,7 +623,21 @@ function getAllData(sheetId) {
       }
     }
   }
-  var result = { success: !!ws, teachers: teachers, subjects: subs, attendanceLimit: limit, config: config };
+
+  var dashData = null;
+  try {
+    dashData = getInchargeDashboard(sheetId);
+  } catch(e) {}
+
+  var result = { 
+    success: !!ws, 
+    teachers: teachers, 
+    subjects: subs, 
+    attendanceLimit: limit, 
+    config: config,
+    dashboard: dashData || { success: false },
+    faculties: (dashData && dashData.faculties) || []
+  };
   if (ws && (teachers.length > 0 || subs.length > 0)) {
     try { cache.put(cacheKey, JSON.stringify(result), 3600); } catch(ce) {}
   }

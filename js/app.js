@@ -122,8 +122,33 @@ const App = (() => {
   }
 
   function getFacultyWorkload(facultyName) {
-    if (!facultyName || !Array.isArray(state.subjects)) return [];
+    if (!facultyName) return [];
     const targetFac = String(facultyName).trim().toLowerCase();
+
+    // 1. Top Priority: Live faculty assignments from Incharge Dashboard / Session Cache (Exact Google Sheets Ground Truth)
+    const dashboard = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (state.allData && state.allData.inchargeDashboard) || {};
+    const faculties = dashboard.faculties || (state.allData && state.allData.faculties) || [];
+    
+    if (Array.isArray(faculties) && faculties.length > 0) {
+      const matchedFac = faculties.find(f => {
+        const fn = String(f.faculty || '').trim().toLowerCase();
+        return fn === targetFac || targetFac.includes(fn) || fn.includes(targetFac);
+      });
+
+      if (matchedFac && Array.isArray(matchedFac.subjects) && matchedFac.subjects.length > 0) {
+        return matchedFac.subjects.map(s => {
+          const sBatch = String(s.batch || '').trim();
+          return {
+            ...s,
+            batch: sBatch,
+            isPractical: isPracticalSubject(s)
+          };
+        });
+      }
+    }
+
+    // 2. Fallback: Parse from raw state.subjects if dashboard is not yet available
+    if (!Array.isArray(state.subjects)) return [];
     const result = [];
 
     state.subjects.forEach(s => {
@@ -150,19 +175,13 @@ const App = (() => {
         return;
       }
 
-      // Practical Subject -> Parse batch information
+      // Practical Subject -> Parse explicit batch string for this faculty
       let explicitBatch = parseFacultyBatches(rawBatches, facultyName);
       if (!explicitBatch && s.code) {
         const bracketMatch = s.code.match(/\((?:batch\s*)?([a-zA-Z0-9]+)\)/i);
         if (bracketMatch && bracketMatch[1]) {
           explicitBatch = bracketMatch[1].trim();
         }
-      }
-
-      if (!explicitBatch && facList.length > 1 && facIndex !== -1) {
-        explicitBatch = 'Batch ' + String.fromCharCode(65 + facIndex);
-      } else if (explicitBatch && !/^batch/i.test(explicitBatch)) {
-        explicitBatch = 'Batch ' + explicitBatch;
       }
 
       let batchList = [];
@@ -172,9 +191,8 @@ const App = (() => {
         if (bParts.length > 0) {
           batchList = bParts.map(b => /^Batch\s*/i.test(b) ? b : 'Batch ' + b);
         }
-      }
-      if (batchList.length === 0 && explicitBatch) {
-        batchList = [explicitBatch];
+      } else if (explicitBatch) {
+        batchList = [explicitBatch.startsWith('Batch ') ? explicitBatch : 'Batch ' + explicitBatch];
       }
 
       if (batchList.length > 0) {
@@ -397,6 +415,11 @@ const App = (() => {
       state.allData = rawData;
       state.teachers = rawData.teachers || [];
       state.subjects = rawData.subjects || [];
+      if (rawData.dashboard && rawData.dashboard.faculties) {
+        state.inchargeDashboard = rawData.dashboard;
+      } else if (rawData.faculties) {
+        state.inchargeDashboard = { faculties: rawData.faculties };
+      }
     }
 
     // 3. Immediately display login screen with preloaded faculty selector
@@ -412,8 +435,12 @@ const App = (() => {
           teachers: bulkData.teachers || state.teachers || [],
           subjects: bulkData.subjects || state.subjects || [],
           attendanceLimit: bulkData.attendanceLimit || 75,
-          config: bulkData.config || {}
+          config: bulkData.config || {},
+          dashboard: bulkData.dashboard || state.inchargeDashboard || {}
         };
+        if (bulkData.dashboard && bulkData.dashboard.faculties) {
+          state.inchargeDashboard = bulkData.dashboard;
+        }
         if (Array.isArray(bulkData.teachers) && bulkData.teachers.length > 0) {
           state.teachers = bulkData.teachers;
         }
@@ -421,6 +448,9 @@ const App = (() => {
           state.subjects = bulkData.subjects;
         }
         buildFacultySelector();
+        if (state.facultyName) {
+          buildSubjectSelector();
+        }
       }
     }).catch(e => console.warn('[App] Background session cache init:', e.message));
 
