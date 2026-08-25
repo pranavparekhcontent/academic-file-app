@@ -4618,14 +4618,27 @@ Generated: ${formatDisplayDate(new Date())}
     }, { passive: false });
   }
 
-  // ─── SMART SUBJECT RESOLVER & FORMATTER ─────────────────
-  function resolveCleanSubjectInfo(rawCodeOrName, classSubjects = []) {
+  // ─── BATCH MATCHING HELPER ─────────────────
+  function cleanBatchStr(b) {
+    return String(b || '').trim().toUpperCase().replace(/BATCH\s*[:\-]?\s*/gi, '').trim();
+  }
+  function doesBatchMatch(subjectBatch, targetBatch) {
+    const sb = cleanBatchStr(subjectBatch);
+    const tb = cleanBatchStr(targetBatch);
+    if (!sb || sb === 'ALL' || !tb) return true; // blank or ALL matches everything
+    // subjectBatch can be "A, B" or "A/B" — split and check
+    const parts = sb.split(/[,\/\s]+/).map(p => p.trim()).filter(Boolean);
+    return parts.includes(tb) || parts.some(p => tb.includes(p) || p.includes(tb));
+  }
+
+  // ─── SMART SUBJECT RESOLVER & FORMATTER (BATCH-AWARE) ─────────────────
+  function resolveCleanSubjectInfo(rawCodeOrName, classSubjects = [], targetBatch = '') {
     const rawStr = String(rawCodeOrName || '').trim();
     if (!rawStr) return { code: 'SUB', name: 'Unknown Subject', type: 'Theory', isPractical: false, faculty: '' };
 
     const rawClean = rawStr.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-    // Search across classSubjects, state.allData.subjects, state.inchargeDashboard
+    // Build master list: classSubjects first (has batch info), then fallbacks
     const masterList = [
       ...(classSubjects || []),
       ...((state.allData && state.allData.enrichedSubjects) || []),
@@ -4638,23 +4651,55 @@ Generated: ${formatDisplayDate(new Date())}
       });
     }
 
+    // Score-based matching: prioritize code+batch match over code-only match
+    let bestMatch = null;
+    let bestScore = -1;
+
     for (const sub of masterList) {
       if (!sub) continue;
       const sCode = String(sub.code || '').trim();
       const sCodeClean = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (sCodeClean && (rawClean === sCodeClean || rawClean.startsWith(sCodeClean) || sCodeClean.startsWith(rawClean) || rawClean.includes(sCodeClean))) {
-        const isPractical = sCode.toUpperCase().endsWith('P') || /practical|lab/i.test(sub.type || '') || /practical|lab/i.test(sub.name || '');
-        return {
-          code: sCode,
-          name: sub.name || sub.subject || sCode,
-          type: sub.type || (isPractical ? 'Practical' : 'Theory'),
-          isPractical: isPractical,
-          faculty: sub.faculty || sub.facultyName || sub.teacherName || ''
-        };
+      if (!sCodeClean) continue;
+
+      // Code matching
+      let codeScore = 0;
+      if (rawClean === sCodeClean) codeScore = 4;          // exact
+      else if (rawClean.startsWith(sCodeClean)) codeScore = 3;
+      else if (sCodeClean.startsWith(rawClean)) codeScore = 2;
+      else if (rawClean.includes(sCodeClean) || sCodeClean.includes(rawClean)) codeScore = 1;
+      if (codeScore === 0) continue;
+
+      // Batch matching (only relevant when targetBatch is given)
+      let batchScore = 0;
+      const subBatch = sub.batch || sub.batchGroup || '';
+      if (targetBatch) {
+        if (subBatch && doesBatchMatch(subBatch, targetBatch)) batchScore = 2; // exact batch match
+        else if (!subBatch) batchScore = 1; // no batch info = neutral
+        // else batchScore stays 0 = wrong batch
+      } else {
+        batchScore = 1; // no target batch requested
+      }
+
+      const totalScore = codeScore * 10 + batchScore;
+      if (totalScore > bestScore) {
+        bestScore = totalScore;
+        bestMatch = sub;
       }
     }
 
-    // Fallback regex for codes like "BP306P - Physical Pharmaceutics I" or "BP306PPhysical..."
+    if (bestMatch) {
+      const sCode = String(bestMatch.code || '').trim();
+      const isPractical = sCode.toUpperCase().endsWith('P') || /practical|lab/i.test(bestMatch.type || '') || /practical|lab/i.test(bestMatch.name || '');
+      return {
+        code: sCode,
+        name: bestMatch.name || bestMatch.subject || sCode,
+        type: bestMatch.type || (isPractical ? 'Practical' : 'Theory'),
+        isPractical: isPractical,
+        faculty: bestMatch.faculty || bestMatch.facultyName || bestMatch.teacherName || ''
+      };
+    }
+
+    // Fallback regex for codes like "BP306P - Physical Pharmaceutics I"
     const m = rawStr.match(/^([A-Z]{2,4}\s*\d{3,4}[PTpt]?)(.*)$/i);
     if (m) {
       const extractedCode = m[1].replace(/\s+/g, '').toUpperCase();
@@ -4900,16 +4945,13 @@ Generated: ${formatDisplayDate(new Date())}
       }
 
       const classSubjects = [];
-      const classSubCodes = {};
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
           if (!s || !s.code) return;
           const cName = resolveSubjectClass(s);
           if (cName.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(cName.toLowerCase()) || cName.toLowerCase().includes(className.toLowerCase())) {
-            if (!classSubCodes[s.code]) {
-              classSubCodes[s.code] = true;
-              classSubjects.push({ ...s, facultyName: f.faculty });
-            }
+            // Push ALL entries — do NOT deduplicate by code so every batch+faculty combo is preserved
+            classSubjects.push({ ...s, faculty: f.faculty, facultyName: f.faculty });
           }
         });
       });
@@ -4943,7 +4985,8 @@ Generated: ${formatDisplayDate(new Date())}
             name: name || key,
             batch: st.batch || st.batchGroup || 'General',
             att: {},
-            topics: {}
+            topics: {},
+            faculties: {}
           };
         }
       });
@@ -4979,7 +5022,8 @@ Generated: ${formatDisplayDate(new Date())}
             name: r.name || matchedKey,
             batch: r.batch || 'General',
             att: {},
-            topics: {}
+            topics: {},
+            faculties: {}
           };
         }
 
@@ -4991,9 +5035,10 @@ Generated: ${formatDisplayDate(new Date())}
         }
 
         // Resolve clean subject info (clean code & name, unfused!)
-        const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects);
+        const curStudentBatch = studentMap[matchedKey].batch || '';
+        const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curStudentBatch);
         const sKey = cleanInfo.code;
-        activeSubjectsMap[sKey] = cleanInfo;
+        if (!activeSubjectsMap[sKey]) activeSubjectsMap[sKey] = cleanInfo;
 
         const st = String(r.status || '').toUpperCase().trim();
         if (st === 'P' || st === 'PRESENT' || st === '1') {
@@ -5007,6 +5052,10 @@ Generated: ${formatDisplayDate(new Date())}
         }
         if (r.topic && !cleanInfo.topic) {
           cleanInfo.topic = r.topic;
+        }
+        // Store per-student faculty from attendance record
+        if (r.faculty) {
+          studentMap[matchedKey].faculties[sKey] = r.faculty;
         }
         if (r.faculty && !cleanInfo.faculty) {
           cleanInfo.faculty = r.faculty;
@@ -5070,14 +5119,16 @@ Generated: ${formatDisplayDate(new Date())}
         let subjectRowsHtml = '';
 
         activeSubjectKeys.forEach(sk => {
-          const subInfo = activeSubjectsMap[sk];
+          // Resolve subject info specific to THIS student's batch
+          const subInfo = resolveCleanSubjectInfo(sk, classSubjects, curStudent.batch);
           const st = curStudent.att[sk] || '-';
           if (st === 'P') presCount++;
           if (st === 'A') absCount++;
           if (st === 'P' || st === 'A') totalClasses++;
 
           const topicText = curStudent.topics[sk] || subInfo.topic || '';
-          const facultyText = subInfo.faculty || 'Assigned Faculty';
+          // Priority: per-student faculty from attendance record > batch-resolved faculty > fallback
+          const facultyText = (curStudent.faculties && curStudent.faculties[sk]) || subInfo.faculty || 'Assigned Faculty';
 
           const statusBadge = st === 'P' ? `
             <span style="
@@ -5503,14 +5554,19 @@ Generated: ${formatDisplayDate(new Date())}
           if (!s) return;
           const liveClass = resolveSubjectClass(s);
           if (liveClass.toLowerCase() === className.toLowerCase() || (!liveClass && className.includes('Semester')) || className.toLowerCase().includes(liveClass.toLowerCase()) || liveClass.toLowerCase().includes(className.toLowerCase())) {
-            if (s.code && !subCodeSet[s.code]) {
-              subCodeSet[s.code] = true;
-              const enriched = enrichedSubjects.find(es => es.code === s.code);
-              if (enriched && enriched.outputSheetId) {
-                s.outputSheetId = enriched.outputSheetId;
+            if (s.code) {
+              // Deduplicate only by code+batch combo, NOT just code, so all batch-faculty pairs are preserved
+              const dedupKey = s.code + '|' + cleanBatchStr(s.batch || s.batchGroup || '');
+              if (!subCodeSet[dedupKey]) {
+                subCodeSet[dedupKey] = true;
+                const enriched = enrichedSubjects.find(es => es.code === s.code);
+                if (enriched && enriched.outputSheetId) {
+                  s.outputSheetId = enriched.outputSheetId;
+                }
+                s.teacherName = facName;
+                s.faculty = facName;
+                classSubjects.push(s);
               }
-              s.teacherName = facName;
-              classSubjects.push(s);
             }
           }
         });
