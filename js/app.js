@@ -127,7 +127,7 @@ const App = (() => {
 
     // 1. Top Priority: Live faculty assignments from Incharge Dashboard / Session Cache (Exact Google Sheets Ground Truth)
     const dashboard = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (state.allData && state.allData.inchargeDashboard) || {};
-    const faculties = dashboard.faculties || (state.allData && state.allData.faculties) || [];
+    const faculties = state.faculties || (state.allData && state.allData.faculties) || dashboard.faculties || [];
     
     if (Array.isArray(faculties) && faculties.length > 0) {
       const matchedFac = faculties.find(f => {
@@ -423,6 +423,9 @@ const App = (() => {
       state.allData = rawData;
       state.teachers = rawData.teachers || [];
       state.subjects = rawData.subjects || [];
+      if (rawData.faculties) {
+        state.faculties = rawData.faculties;
+      }
       if (rawData.dashboard && rawData.dashboard.faculties) {
         state.inchargeDashboard = rawData.dashboard;
       } else if (rawData.faculties) {
@@ -444,10 +447,16 @@ const App = (() => {
           subjects: bulkData.subjects || state.subjects || [],
           attendanceLimit: bulkData.attendanceLimit || 75,
           config: bulkData.config || {},
-          dashboard: bulkData.dashboard || state.inchargeDashboard || {}
+          dashboard: bulkData.dashboard || state.inchargeDashboard || {},
+          faculties: bulkData.faculties || state.faculties || []
         };
+        if (bulkData.faculties) {
+          state.faculties = bulkData.faculties;
+        }
         if (bulkData.dashboard && bulkData.dashboard.faculties) {
           state.inchargeDashboard = bulkData.dashboard;
+        } else if (bulkData.faculties) {
+          state.inchargeDashboard = { faculties: bulkData.faculties };
         }
         if (Array.isArray(bulkData.teachers) && bulkData.teachers.length > 0) {
           state.teachers = bulkData.teachers;
@@ -460,7 +469,7 @@ const App = (() => {
           buildSubjectSelector();
           const facultySubs = getFacultyWorkload(state.facultyName);
           const toastList = document.querySelector('.toast-subject-list');
-          if (toastList && facultySubs.length > 0) {
+          if (toastList && facultySubs.length > 0 && !state.activeCode) {
             Toast.showSubjectPicker(facultySubs, (code, label, batch) => {
               selectCustomSubjectOption(code, label, batch);
             });

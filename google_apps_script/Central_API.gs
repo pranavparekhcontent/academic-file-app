@@ -523,9 +523,98 @@ function getAttendanceLimit(sheetId) {
   return { success: true, limit: limit };
 }
 
+function _buildFacultiesFromSubjects(subs) {
+  if (!subs || !subs.length) return [];
+  var facultyMap = {};
+  for (var i = 0; i < subs.length; i++) {
+    var sub = subs[i];
+    var rawFaculty = String(sub.faculty || '').trim();
+    if (!rawFaculty || rawFaculty === 'undefined') continue;
+    var facList = rawFaculty.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+    var isPrac = _parseSubjectCode(sub.code, sub.type, sub.name).isPractical;
+    var rawBatches = String(sub.batches || '').trim();
+
+    for (var f = 0; f < facList.length; f++) {
+      var facName = facList[f];
+      if (!facName) continue;
+      if (!facultyMap[facName]) facultyMap[facName] = [];
+
+      if (!isPrac) {
+        var exists = facultyMap[facName].some(function(x) { return x.code === sub.code; });
+        if (!exists) {
+          facultyMap[facName].push({
+            code: sub.code,
+            name: sub.name,
+            year: sub.year,
+            semester: sub.semester,
+            type: sub.type || 'THEORY',
+            faculty: facName,
+            batch: '',
+            batches: '',
+            teachingPlanLink: sub.teachingPlanLink || ''
+          });
+        }
+      } else {
+        var explicitBatch = _parseFacultyBatches(rawBatches, facName);
+        var batchList = [];
+        if (explicitBatch && /^Batch\s+/i.test(explicitBatch)) {
+          var afterBatch = explicitBatch.replace(/^Batch\s+/i, '');
+          var bParts = afterBatch.split(',').map(function(x) { return x.trim().replace(/^Batch\s*/i, ''); }).filter(Boolean);
+          if (bParts.length > 0) {
+            batchList = bParts.map(function(b) { return /^Batch\s*/i.test(b) ? b : 'Batch ' + b; });
+          }
+        } else if (explicitBatch) {
+          batchList = [explicitBatch.startsWith('Batch ') ? explicitBatch : 'Batch ' + explicitBatch];
+        }
+
+        if (batchList.length > 0) {
+          for (var b = 0; b < batchList.length; b++) {
+            var bName = batchList[b];
+            var exists = facultyMap[facName].some(function(x) { return x.code === sub.code && x.batch === bName; });
+            if (!exists) {
+              facultyMap[facName].push({
+                code: sub.code,
+                name: sub.name,
+                year: sub.year,
+                semester: sub.semester,
+                type: 'PRACTICAL',
+                faculty: facName,
+                batch: bName,
+                batches: bName,
+                teachingPlanLink: sub.teachingPlanLink || ''
+              });
+            }
+          }
+        } else {
+          facultyMap[facName].push({
+            code: sub.code,
+            name: sub.name,
+            year: sub.year,
+            semester: sub.semester,
+            type: 'PRACTICAL',
+            faculty: facName,
+            batch: '',
+            batches: rawBatches,
+            teachingPlanLink: sub.teachingPlanLink || ''
+          });
+        }
+      }
+    }
+  }
+
+  var faculties = [];
+  for (var k in facultyMap) {
+    faculties.push({
+      faculty: k,
+      subjects: facultyMap[k]
+    });
+  }
+  return faculties;
+}
+
 function getAllData(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'allData_v5_' + (sheetId || '');
+  var cacheKey = 'allData_v6_' + (sheetId || '');
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -622,12 +711,8 @@ function getAllData(sheetId) {
         }
       }
     }
+    var faculties = _buildFacultiesFromSubjects(subs);
   }
-
-  var dashData = null;
-  try {
-    dashData = getInchargeDashboard(sheetId);
-  } catch(e) {}
 
   var result = { 
     success: !!ws, 
@@ -635,8 +720,7 @@ function getAllData(sheetId) {
     subjects: subs, 
     attendanceLimit: limit, 
     config: config,
-    dashboard: dashData || { success: false },
-    faculties: (dashData && dashData.faculties) || []
+    faculties: faculties || []
   };
   if (ws && (teachers.length > 0 || subs.length > 0)) {
     try { cache.put(cacheKey, JSON.stringify(result), 3600); } catch(ce) {}
