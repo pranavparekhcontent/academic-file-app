@@ -84,6 +84,119 @@ const App = (() => {
     return '';
   }
 
+  function parseFacultyBatches(batchesStr, facultyName) {
+    const str = String(batchesStr || '').trim();
+    if (!str || str === 'undefined') return '';
+    const targetFac = String(facultyName || '').trim().toLowerCase();
+
+    // If contains '/', faculties are separated by '/' (e.g. ppp=A,B,C / sg=D)
+    if (str.includes('/') || str.includes('=')) {
+      const parts = str.split('/');
+      for (let p = 0; p < parts.length; p++) {
+        const item = parts[p].trim();
+        if (!item) continue;
+        if (item.includes('=')) {
+          const kv = item.split('=');
+          const fKey = kv[0].trim().toLowerCase();
+          const bVal = kv[1] ? kv[1].trim() : '';
+          if (targetFac && (fKey === targetFac || fKey.includes(targetFac) || targetFac.includes(fKey))) {
+            return formatBatchString(bVal);
+          }
+        }
+      }
+    }
+
+    // Fallback: if single faculty string or direct batch notation
+    return formatBatchString(str);
+  }
+
+  function formatBatchString(bStr) {
+    const raw = String(bStr || '').trim();
+    if (!raw) return '';
+    if (/^batch/i.test(raw)) return raw;
+    const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
+    if (parts.length > 0) {
+      return 'Batch ' + parts.join(', ');
+    }
+    return raw;
+  }
+
+  function getFacultyWorkload(facultyName) {
+    if (!facultyName || !Array.isArray(state.subjects)) return [];
+    const targetFac = String(facultyName).trim().toLowerCase();
+    const result = [];
+
+    state.subjects.forEach(s => {
+      if (!s) return;
+      const rawFaculty = String(s.faculty || '').trim();
+      const facList = rawFaculty ? rawFaculty.split(',').map(x => x.trim()).filter(Boolean) : [];
+      
+      const facIndex = facList.findIndex(f => {
+        const fn = f.toLowerCase();
+        return fn === targetFac || targetFac.includes(fn) || fn.includes(targetFac);
+      });
+
+      if (facIndex === -1 && targetFac !== 'all') return;
+
+      const isPrac = isPracticalSubject(s);
+      const rawBatches = String(s.batches || s.batch || '').trim();
+
+      if (!isPrac) {
+        result.push({
+          ...s,
+          batch: '',
+          isPractical: false
+        });
+        return;
+      }
+
+      // Practical Subject -> Parse batch information
+      let explicitBatch = parseFacultyBatches(rawBatches, facultyName);
+      if (!explicitBatch && s.code) {
+        const bracketMatch = s.code.match(/\((?:batch\s*)?([a-zA-Z0-9]+)\)/i);
+        if (bracketMatch && bracketMatch[1]) {
+          explicitBatch = bracketMatch[1].trim();
+        }
+      }
+
+      if (!explicitBatch && facList.length > 1 && facIndex !== -1) {
+        explicitBatch = 'Batch ' + String.fromCharCode(65 + facIndex);
+      } else if (explicitBatch && !/^batch/i.test(explicitBatch)) {
+        explicitBatch = 'Batch ' + explicitBatch;
+      }
+
+      let batchList = [];
+      if (explicitBatch && /^Batch\s+/i.test(explicitBatch)) {
+        const afterBatch = explicitBatch.replace(/^Batch\s+/i, '');
+        const bParts = afterBatch.split(',').map(x => x.trim().replace(/^Batch\s*/i, '')).filter(Boolean);
+        if (bParts.length > 0) {
+          batchList = bParts.map(b => /^Batch\s*/i.test(b) ? b : 'Batch ' + b);
+        }
+      }
+      if (batchList.length === 0 && explicitBatch) {
+        batchList = [explicitBatch];
+      }
+
+      if (batchList.length > 0) {
+        batchList.forEach(b => {
+          result.push({
+            ...s,
+            batch: b,
+            isPractical: true
+          });
+        });
+      } else {
+        result.push({
+          ...s,
+          batch: '',
+          isPractical: true
+        });
+      }
+    });
+
+    return result;
+  }
+
   // ─── TOAST NOTIFICATIONS ────────────────────────────────
   const Toast = {
     dismissAll() {
@@ -153,12 +266,15 @@ const App = (() => {
       toast.className = 'toast warning toast-subject-picker';
 
       const itemsHtml = facultySubs.map(s => {
-        const optionLabel = `${s.name} (${s.code}) - SEM ${s.semester}`;
+        const sBatch = s.batch ? String(s.batch).trim() : '';
+        const optionLabel = sBatch 
+          ? `${s.name} (${s.code}) [${sBatch}] - SEM ${s.semester}` 
+          : `${s.name} (${s.code}) - SEM ${s.semester}`;
         return `
-          <div class="toast-glass-subject-item" data-code="${escHtml(s.code)}" data-label="${escHtml(optionLabel)}">
+          <div class="toast-glass-subject-item" data-code="${escHtml(s.code)}" data-label="${escHtml(optionLabel)}" data-batch="${escHtml(sBatch)}">
             <div class="toast-subject-icon"><i class="ph ph-book-bookmark"></i></div>
             <div class="toast-subject-details">
-              <div class="toast-subject-name">${escHtml(s.name)}</div>
+              <div class="toast-subject-name">${escHtml(s.name)} ${sBatch ? `<span style="display:inline-block; padding: 2px 7px; background: rgba(99,102,241,0.15); color: var(--accent-blue, #6366f1); border: 1px solid rgba(99,102,241,0.3); border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 4px;">${escHtml(sBatch)}</span>` : ''}</div>
               <div class="toast-subject-meta">${escHtml(s.code)} • SEM ${escHtml(s.semester)}</div>
             </div>
             <i class="ph ph-caret-right toast-subject-arrow"></i>
@@ -189,6 +305,7 @@ const App = (() => {
           e.stopPropagation();
           const code = item.dataset.code;
           const label = item.dataset.label;
+          const batch = item.dataset.batch || '';
           if (code) {
             toast.classList.remove('active');
             setTimeout(() => {
@@ -197,7 +314,7 @@ const App = (() => {
                 stack.classList.remove('has-toasts');
               }
             }, 350);
-            if (onSelect) onSelect(code, label);
+            if (onSelect) onSelect(code, label, batch);
           }
         };
       });
@@ -375,13 +492,10 @@ const App = (() => {
 
   function switchView(viewId) {
     if (viewId === 'teaching-plan' && !state.activeCode) {
-      const facultySubs = state.subjects.filter(s => {
-        const teachers = s.faculty.split(',').map(name => name.trim().toLowerCase());
-        return teachers.includes(state.facultyName.toLowerCase());
-      });
+      const facultySubs = getFacultyWorkload(state.facultyName);
       if (facultySubs.length > 0) {
-        Toast.showSubjectPicker(facultySubs, (code, label) => {
-          selectCustomSubjectOption(code, label);
+        Toast.showSubjectPicker(facultySubs, (code, label, batch) => {
+          selectCustomSubjectOption(code, label, batch);
         });
       } else {
         Toast.show('Select Subject Required', 'Please select your workload subject from the header dropdown first.', 'warning');
@@ -785,13 +899,10 @@ const App = (() => {
 
     // Trigger persistent subject picker toast right inside the toast itself
     setTimeout(() => {
-      const facultySubs = state.subjects.filter(s => {
-        const teachers = s.faculty.split(',').map(n => n.trim().toLowerCase());
-        return teachers.includes(state.facultyName.toLowerCase());
-      });
+      const facultySubs = getFacultyWorkload(state.facultyName);
       if (facultySubs.length > 0 && !state.activeCode) {
-        Toast.showSubjectPicker(facultySubs, (code, label) => {
-          selectCustomSubjectOption(code, label);
+        Toast.showSubjectPicker(facultySubs, (code, label, batch) => {
+          selectCustomSubjectOption(code, label, batch);
         });
       }
     }, 350);
@@ -1151,11 +1262,8 @@ const App = (() => {
     if (menu) menu.innerHTML = '';
     if (labelEl) labelEl.innerText = 'Select a subject...';
 
-    // Filter subjects for the logged faculty
-    const facultySubs = state.subjects.filter(s => {
-      const teachers = s.faculty.split(',').map(name => name.trim().toLowerCase());
-      return teachers.includes(state.facultyName.toLowerCase());
-    });
+    // Get batch-expanded workload subjects for the logged faculty
+    const facultySubs = getFacultyWorkload(state.facultyName);
 
     if (facultySubs.length === 0) {
       Toast.show('No Workload', 'No active workload matches your identity.', 'warning');
@@ -1174,7 +1282,7 @@ const App = (() => {
     }
 
     facultySubs.forEach((s) => {
-      const sBatch = s.batch ? s.batch.trim() : '';
+      const sBatch = s.batch ? String(s.batch).trim() : '';
       const optionLabel = sBatch 
         ? `${s.name} (${s.code}) [${sBatch}] - SEM ${s.semester}` 
         : `${s.name} (${s.code}) - SEM ${s.semester}`;
@@ -1182,6 +1290,7 @@ const App = (() => {
       if (selector) {
         const opt = document.createElement('option');
         opt.value = s.code;
+        opt.dataset.batch = sBatch;
         opt.textContent = optionLabel;
         selector.appendChild(opt);
       }
@@ -1192,8 +1301,10 @@ const App = (() => {
         item.dataset.code = s.code;
         if (sBatch) item.dataset.batch = sBatch;
         item.innerHTML = `
-          <span>${escHtml(optionLabel)}</span>
-          <i class="ph ph-check item-check" style="display:none;"></i>
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <span>${escHtml(s.name)} (${escHtml(s.code)}) ${sBatch ? `<span style="display:inline-block; padding: 2px 7px; background: rgba(99,102,241,0.15); color: var(--accent-blue, #6366f1); border: 1px solid rgba(99,102,241,0.3); border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 4px;">${escHtml(sBatch)}</span>` : ''} - SEM ${escHtml(s.semester)}</span>
+            <i class="ph ph-check item-check" style="display:none; font-weight: 800; font-size: 14px;"></i>
+          </div>
         `;
         item.onclick = (e) => {
           e.stopPropagation();
@@ -1217,10 +1328,11 @@ const App = (() => {
     state.activeBatch = batch || '';
 
     // Match subject by code and batch if present
-    state.activeSubject = state.subjects.find(s => {
+    const workload = getFacultyWorkload(state.facultyName);
+    state.activeSubject = workload.find(s => {
       if (s.code !== code) return false;
-      if (batch && s.batch) {
-        return s.batch.replace(/\s+/g, '').toUpperCase() === batch.replace(/\s+/g, '').toUpperCase();
+      if (batch) {
+        return (s.batch || '').replace(/\s+/g, '').toUpperCase() === batch.replace(/\s+/g, '').toUpperCase();
       }
       return true;
     }) || state.subjects.find(s => s.code === code) || { code: code, name: code, batch: batch };
