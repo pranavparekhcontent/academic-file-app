@@ -938,20 +938,13 @@ const App = (() => {
     if (select) select.innerHTML = '<option value="">Select Faculty</option>';
     if (menu) menu.innerHTML = '';
 
-    const validTeachers = (state.teachers || []).filter(t => {
-      const name = (typeof t === 'string') ? t : (t.name || t.facultyName || String(t));
-      if (!name) return false;
-      const clean = name.trim().toLowerCase();
-      return clean !== 'academic incharge' && !clean.includes('academic incharge') && clean !== 'unassigned' && clean !== 'assigned';
-    });
-
-    if (validTeachers.length === 0) {
+    if (!state.teachers || state.teachers.length === 0) {
       if (labelEl) labelEl.innerText = 'Select Faculty';
       if (menu) menu.innerHTML = '<div style="padding: 14px; font-size: 13px; font-weight: 600; color: #475569; text-align: center;">No faculty entries found</div>';
       return;
     }
 
-    validTeachers.forEach(t => {
+    state.teachers.forEach(t => {
       const name = (typeof t === 'string') ? t : (t.name || t.facultyName || String(t));
       if (!name) return;
 
@@ -978,13 +971,11 @@ const App = (() => {
       }
     });
 
-    if (state.facultyName && state.facultyName.toLowerCase() !== 'academic incharge' && !state.facultyName.toLowerCase().includes('academic incharge')) {
+    if (state.facultyName) {
       if (select) select.value = state.facultyName;
       if (labelEl) labelEl.innerText = state.facultyName;
-    } else {
-      state.facultyName = '';
-      if (select) select.value = '';
-      if (labelEl) labelEl.innerText = 'Select Faculty';
+    } else if (labelEl) {
+      labelEl.innerText = 'Select Faculty';
     }
   }
 
