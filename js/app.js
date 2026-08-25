@@ -4618,12 +4618,73 @@ Generated: ${formatDisplayDate(new Date())}
     }, { passive: false });
   }
 
-  function formatCompactSubjectHeader(sc) {
-    const cleanCode = String(sc.code || '').trim().toUpperCase();
-    let name = String(sc.name || '').trim();
-    if (name.toUpperCase() === cleanCode) name = '';
+  // ─── SMART SUBJECT RESOLVER & FORMATTER ─────────────────
+  function resolveCleanSubjectInfo(rawCodeOrName, classSubjects = []) {
+    const rawStr = String(rawCodeOrName || '').trim();
+    if (!rawStr) return { code: 'SUB', name: 'Unknown Subject', type: 'Theory', isPractical: false, faculty: '' };
 
-    const isPractical = cleanCode.endsWith('P') || cleanCode.endsWith('PR') || /practical|lab/i.test(name) || /practical|lab/i.test(sc.type || '');
+    const rawClean = rawStr.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    // Search across classSubjects, state.allData.subjects, state.inchargeDashboard
+    const masterList = [
+      ...(classSubjects || []),
+      ...((state.allData && state.allData.enrichedSubjects) || []),
+      ...((state.allData && state.allData.subjects) || [])
+    ];
+
+    if (state.inchargeDashboard && state.inchargeDashboard.faculties) {
+      state.inchargeDashboard.faculties.forEach(f => {
+        (f.subjects || []).forEach(s => { if (s) masterList.push({ ...s, faculty: f.faculty }); });
+      });
+    }
+
+    for (const sub of masterList) {
+      if (!sub) continue;
+      const sCode = String(sub.code || '').trim();
+      const sCodeClean = sCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (sCodeClean && (rawClean === sCodeClean || rawClean.startsWith(sCodeClean) || sCodeClean.startsWith(rawClean) || rawClean.includes(sCodeClean))) {
+        const isPractical = sCode.toUpperCase().endsWith('P') || /practical|lab/i.test(sub.type || '') || /practical|lab/i.test(sub.name || '');
+        return {
+          code: sCode,
+          name: sub.name || sub.subject || sCode,
+          type: sub.type || (isPractical ? 'Practical' : 'Theory'),
+          isPractical: isPractical,
+          faculty: sub.faculty || sub.facultyName || sub.teacherName || ''
+        };
+      }
+    }
+
+    // Fallback regex for codes like "BP306P - Physical Pharmaceutics I" or "BP306PPhysical..."
+    const m = rawStr.match(/^([A-Z]{2,4}\s*\d{3,4}[PTpt]?)(.*)$/i);
+    if (m) {
+      const extractedCode = m[1].replace(/\s+/g, '').toUpperCase();
+      let restName = m[2].trim().replace(/^[-–—:\s]+/, '');
+      const isPractical = extractedCode.endsWith('P');
+      return {
+        code: extractedCode,
+        name: restName || extractedCode,
+        type: isPractical ? 'Practical' : 'Theory',
+        isPractical: isPractical,
+        faculty: ''
+      };
+    }
+
+    return {
+      code: rawStr,
+      name: rawStr,
+      type: 'Theory',
+      isPractical: false,
+      faculty: ''
+    };
+  }
+
+  function formatCompactSubjectHeader(sc) {
+    const info = resolveCleanSubjectInfo(sc.code || sc.name);
+    const cleanCode = info.code;
+    let name = info.name;
+    if (name.toUpperCase() === cleanCode.toUpperCase()) name = '';
+
+    const isPractical = info.isPractical;
 
     let shortName = name;
     if (shortName) {
@@ -4648,8 +4709,8 @@ Generated: ${formatDisplayDate(new Date())}
 
     return {
       code: cleanCode,
-      shortName: shortName,
-      fullName: name || cleanCode,
+      shortName: shortName || cleanCode,
+      fullName: info.name || cleanCode,
       isPractical: isPractical
     };
   }
@@ -4660,16 +4721,30 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   // ═══════════════════════════════════════════════════════
-  //  DAYWISE ATTENDANCE REPORT
+  //  DAYWISE ATTENDANCE REPORT (3 Dropdowns & Clean View)
   // ═══════════════════════════════════════════════════════
 
-  function selectDaywiseYear(className) {
+  function onDaywiseClassChange(className) {
     state.activeDaywiseYear = className;
+    state.activeDaywiseStudent = '';
     generateReportType('daywise');
   }
 
+  function onDaywiseStudentChange(studentRoll) {
+    state.activeDaywiseStudent = studentRoll;
+    loadDaywiseReportData(state.activeDaywiseYear, state.activeDaywiseDate);
+  }
+
+  function onDaywiseDateChange(dateStr) {
+    state.activeDaywiseDate = dateStr;
+    loadDaywiseReportData(state.activeDaywiseYear, state.activeDaywiseDate);
+  }
+
+  function selectDaywiseYear(className) {
+    onDaywiseClassChange(className);
+  }
+
   function renderDaywiseReport(outputEl, faculties) {
-    // Build class names from dashboard faculties
     function extractLiveClassName(item) {
       if (!item) return '';
       const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
@@ -4678,12 +4753,8 @@ Generated: ${formatDisplayDate(new Date())}
 
     function resolveSubjectClass(s) {
       const liveName = extractLiveClassName(s);
-      if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) {
-        return liveName;
-      }
-      if (s.semester && String(s.semester).trim()) {
-        return `Semester ${String(s.semester).trim()}`;
-      }
+      if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) return liveName;
+      if (s.semester && String(s.semester).trim()) return `Semester ${String(s.semester).trim()}`;
       return 'General Academic Class';
     }
 
@@ -4706,43 +4777,25 @@ Generated: ${formatDisplayDate(new Date())}
       state.activeDaywiseYear = activeClassNames[0];
     }
 
-    // Today's date as default
+    // Default to today's date
     const today = new Date();
     const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
     if (!state.activeDaywiseDate) {
       state.activeDaywiseDate = todayStr;
     }
 
-    let yearCardsHtml = '';
-    activeClassNames.forEach(clsName => {
-      const isSelected = clsName === state.activeDaywiseYear;
-      yearCardsHtml += `
-        <button type="button" onclick="App.selectDaywiseYear('${escHtml(clsName)}')" style="
-          padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
-          cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px;
-          border: ${isSelected ? '2px solid #d97706' : '1px solid var(--colorless-glass-hover)'};
-          background: ${isSelected ? 'rgba(245, 158, 11, 0.15)' : 'var(--colorless-glass-base)'};
-          color: ${isSelected ? '#d97706' : 'var(--text-main)'};
-          box-shadow: ${isSelected ? '0 4px 12px rgba(245, 158, 11, 0.2)' : 'none'};
-        ">
-          <i class="ph ph-calendar-check" style="font-size: 15px; color: ${isSelected ? '#d97706' : 'var(--accent-blue)'};"></i>
-          ${escHtml(clsName)}
-        </button>
-      `;
-    });
+    const classOptionsHtml = activeClassNames.map(clsName => {
+      const isSelected = clsName === state.activeDaywiseYear ? 'selected' : '';
+      return `<option value="${escHtml(clsName)}" ${isSelected}>🎓 ${escHtml(clsName)}</option>`;
+    }).join('');
 
     outputEl.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; flex-wrap: wrap; gap: 12px;">
         <div>
           <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
-          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Class: <strong>${escHtml(state.activeDaywiseYear)}</strong></span>
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Select Class, Student & Date to inspect instant daywise records</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <input type="date" id="daywise-date-picker" value="${escHtml(state.activeDaywiseDate)}" onchange="App.onDaywiseDateChange(this.value)" style="
-            padding: 8px 14px; font-size: 12px; font-weight: 700; border-radius: var(--radius-pill);
-            border: 1.5px solid rgba(245, 158, 11, 0.4); background: rgba(255, 255, 255, 0.85);
-            color: #92400e; cursor: pointer; outline: none;
-          ">
           <button class="btn btn-outline" onclick="App.downloadDaywiseReportDoc()" title="Download daywise attendance report as .docx" style="
             padding: 8px 16px; font-size: 12px; font-weight: 800; border-radius: var(--radius-pill);
             display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
@@ -4753,29 +4806,66 @@ Generated: ${formatDisplayDate(new Date())}
           </button>
         </div>
       </div>
-      <div style="margin-bottom: 20px;">
-        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Select Class / Year:</div>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-          ${yearCardsHtml}
+
+      <!-- 3 DROPDOWNS BAR -->
+      <div style="
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;
+        background: var(--colorless-glass-base, rgba(255,255,255,0.7)); backdrop-filter: blur(16px);
+        border: 1px solid var(--colorless-glass-hover, rgba(0,0,0,0.08)); border-radius: 16px;
+        padding: 16px 18px; margin-bottom: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+      ">
+        <!-- Dropdown 1: Class -->
+        <div>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
+            <i class="ph ph-graduation-cap" style="color: #8b5cf6; font-size: 14px;"></i> 1. Select Class / Year
+          </label>
+          <select id="daywise-class-select" onchange="App.onDaywiseClassChange(this.value)" style="
+            width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
+            border: 1.5px solid rgba(139, 92, 246, 0.35); background: #ffffff; color: var(--text-main);
+            outline: none; cursor: pointer; transition: all 0.2s ease;
+          ">
+            ${classOptionsHtml}
+          </select>
+        </div>
+
+        <!-- Dropdown 2: Student -->
+        <div>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
+            <i class="ph ph-user" style="color: #0284c7; font-size: 14px;"></i> 2. Select Student
+          </label>
+          <select id="daywise-student-select" onchange="App.onDaywiseStudentChange(this.value)" style="
+            width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
+            border: 1.5px solid rgba(2, 132, 199, 0.35); background: #ffffff; color: var(--text-main);
+            outline: none; cursor: pointer; transition: all 0.2s ease;
+          ">
+            <option value="">Loading student roster...</option>
+          </select>
+        </div>
+
+        <!-- Dropdown 3: Date -->
+        <div>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
+            <i class="ph ph-calendar" style="color: #d97706; font-size: 14px;"></i> 3. Attendance Date
+          </label>
+          <input type="date" id="daywise-date-picker" value="${escHtml(state.activeDaywiseDate)}" onchange="App.onDaywiseDateChange(this.value)" style="
+            width: 100%; padding: 9px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
+            border: 1.5px solid rgba(245, 158, 11, 0.4); background: #ffffff; color: #92400e;
+            outline: none; cursor: pointer; transition: all 0.2s ease;
+          ">
         </div>
       </div>
+
       <div id="daywise-report-table-container">
         <div style="text-align: center; padding: 30px; color: var(--text-secondary);">
           <i class="ph ph-spinner" style="font-size: 28px; animation: spin 1s linear infinite;"></i>
-          <p style="margin: 8px 0 0; font-size: 13px; font-weight: 700;">Loading attendance data...</p>
+          <p style="margin: 8px 0 0; font-size: 13px; font-weight: 700;">Loading attendance...</p>
         </div>
       </div>
     `;
 
-    // Load the daywise data
     setTimeout(() => {
       loadDaywiseReportData(state.activeDaywiseYear, state.activeDaywiseDate);
     }, 0);
-  }
-
-  function onDaywiseDateChange(dateStr) {
-    state.activeDaywiseDate = dateStr;
-    generateReportType('daywise');
   }
 
   async function loadDaywiseReportData(className, dateStr) {
@@ -4783,15 +4873,16 @@ Generated: ${formatDisplayDate(new Date())}
     if (!container) return;
 
     try {
-      // Get attendance records from session cache
-      const attResult = await API.getAttendance('', '', '', '');
-      const allRecords = (attResult && attResult.success && attResult.records) || [];
+      // 1. Get attendance records & student list from local session cache
+      const [attResult, studResult] = await Promise.all([
+        API.getAttendance('', '', '', '').catch(() => ({ success: false })),
+        API.getStudents(className, '').catch(() => ({ success: false }))
+      ]);
 
-      // Get students for this class
-      const studResult = await API.getStudents(className, '');
-      const students = (studResult && studResult.success && studResult.students) || [];
+      const allRecords = (attResult && attResult.success && Array.isArray(attResult.records)) ? attResult.records : [];
+      const rawStudents = (studResult && studResult.success && Array.isArray(studResult.students)) ? studResult.students : [];
 
-      // Get subjects for this class from dashboard faculties
+      // 2. Class subjects
       const data = state.inchargeDashboard || {};
       const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
@@ -4808,19 +4899,22 @@ Generated: ${formatDisplayDate(new Date())}
         return 'General Academic Class';
       }
 
-      // Get all subject codes for this class
-      const classSubjectCodes = {};
+      const classSubjects = [];
+      const classSubCodes = {};
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
           if (!s || !s.code) return;
           const cName = resolveSubjectClass(s);
           if (cName.toLowerCase() === className.toLowerCase() || className.toLowerCase().includes(cName.toLowerCase()) || cName.toLowerCase().includes(className.toLowerCase())) {
-            classSubjectCodes[s.code] = s;
+            if (!classSubCodes[s.code]) {
+              classSubCodes[s.code] = true;
+              classSubjects.push({ ...s, facultyName: f.faculty });
+            }
           }
         });
       });
 
-      // Filter attendance records for the selected date
+      // 3. Filter attendance records for the selected date
       const dateRecords = allRecords.filter(r => {
         if (!r.date) return false;
         const rd = String(r.date).trim().toLowerCase();
@@ -4837,178 +4931,386 @@ Generated: ${formatDisplayDate(new Date())}
         return false;
       });
 
-      // Identify which subjects actually had P/A entries on this date
-      const activeDateSubjects = {};
+      // 4. Build student list: merge roster & date records
+      const studentMap = {};
+      rawStudents.forEach(st => {
+        const roll = String(st.rollNo !== undefined && st.rollNo !== null ? st.rollNo : (st.roll || '')).trim();
+        const name = String(st.name || st.studentName || '').trim();
+        if (roll || name) {
+          const key = roll || name;
+          studentMap[key] = {
+            rollNo: roll || 'N/A',
+            name: name || key,
+            batch: st.batch || st.batchGroup || 'General',
+            att: {},
+            topics: {}
+          };
+        }
+      });
+
+      // Match date attendance records
+      const activeSubjectsMap = {};
       dateRecords.forEach(r => {
-        const codeRaw = String(r.code || '').trim();
-        if (!codeRaw) return;
-        // Match against class subjects
-        const codeClean = codeRaw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        let matched = false;
-        for (const sc of Object.keys(classSubjectCodes)) {
-          const scClean = sc.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (codeClean === scClean || codeClean.indexOf(scClean) !== -1 || scClean.indexOf(codeClean) !== -1) {
-            if (!activeDateSubjects[sc]) {
-              activeDateSubjects[sc] = classSubjectCodes[sc];
+        const rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
+        const rNoNum = parseInt(rNo, 10);
+        const rName = String(r.name || '').trim().toLowerCase();
+
+        let matchedKey = null;
+        if (rNo && studentMap[rNo]) {
+          matchedKey = rNo;
+        } else if (!isNaN(rNoNum) && studentMap[String(rNoNum)]) {
+          matchedKey = String(rNoNum);
+        } else {
+          for (const k in studentMap) {
+            const s = studentMap[k];
+            if ((rNo && String(s.rollNo).trim() === rNo) ||
+                (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
+                (rName && s.name.toLowerCase().trim() === rName)) {
+              matchedKey = k;
+              break;
             }
-            matched = true;
           }
         }
-        // If not matched but has records, add as standalone
-        if (!matched && (r.status === 'P' || r.status === 'A')) {
-          if (!activeDateSubjects[codeRaw]) {
-            activeDateSubjects[codeRaw] = { code: codeRaw, name: codeRaw };
-          }
+
+        if (!matchedKey) {
+          matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
+          studentMap[matchedKey] = {
+            rollNo: rNo || 'N/A',
+            name: r.name || matchedKey,
+            batch: r.batch || 'General',
+            att: {},
+            topics: {}
+          };
+        }
+
+        if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
+          studentMap[matchedKey].name = r.name;
+        }
+        if (r.batch && r.batch !== 'General') {
+          studentMap[matchedKey].batch = r.batch;
+        }
+
+        // Resolve clean subject info (clean code & name, unfused!)
+        const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects);
+        const sKey = cleanInfo.code;
+        activeSubjectsMap[sKey] = cleanInfo;
+
+        const st = String(r.status || '').toUpperCase().trim();
+        if (st === 'P' || st === 'PRESENT' || st === '1') {
+          studentMap[matchedKey].att[sKey] = 'P';
+        } else if (st === 'A' || st === 'ABSENT' || st === '0') {
+          studentMap[matchedKey].att[sKey] = 'A';
+        }
+
+        if (r.topic && !studentMap[matchedKey].topics[sKey]) {
+          studentMap[matchedKey].topics[sKey] = r.topic;
+        }
+        if (r.topic && !cleanInfo.topic) {
+          cleanInfo.topic = r.topic;
+        }
+        if (r.faculty && !cleanInfo.faculty) {
+          cleanInfo.faculty = r.faculty;
         }
       });
 
-      const subjectKeys = Object.keys(activeDateSubjects);
-
-      // Format date for display
-      const dtParts = dateStr.split('-');
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const displayDate = dtParts.length === 3 ? `${dtParts[2]}-${months[parseInt(dtParts[1])-1]}-${dtParts[0]}` : dateStr;
-
-      if (subjectKeys.length === 0) {
-        container.innerHTML = `
-          <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
-            <i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.6; margin-bottom: 12px;"></i>
-            <h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--text-main);">No Lectures Found on ${escHtml(displayDate)}</h4>
-            <p style="margin: 0; font-size: 13px; font-weight: 600;">No attendance records (P/A entries) were found for class <strong>${escHtml(className)}</strong> on this date. Try selecting a different date.</p>
-          </div>
-        `;
-        return;
-      }
-
-      // Build student attendance map: { rollNo: { subjectCode: 'P'|'A' } }
-      const studentAttMap = {};
-      dateRecords.forEach(r => {
-        if (!r.rollNo || (r.status !== 'P' && r.status !== 'A')) return;
-        const rollKey = String(r.rollNo).trim();
-        if (!studentAttMap[rollKey]) studentAttMap[rollKey] = {};
-        // Match to subject keys
-        const codeClean = String(r.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        for (const sk of subjectKeys) {
-          const skClean = sk.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (codeClean === skClean || codeClean.indexOf(skClean) !== -1 || skClean.indexOf(codeClean) !== -1) {
-            studentAttMap[rollKey][sk] = r.status;
-          }
-        }
-      });
-
-      // Build student list: merge from class students and attendance records
-      const studentList = [];
-      const seenRolls = {};
-
-      // Add from class student roster
-      students.forEach(s => {
-        const roll = String(s.rollNo || s.roll || '').trim();
-        if (!roll || seenRolls[roll]) return;
-        seenRolls[roll] = true;
-        studentList.push({
-          rollNo: roll,
-          name: String(s.name || s.studentName || '').trim(),
-          att: studentAttMap[roll] || {}
-        });
-      });
-
-      // Add any students from attendance records not in the roster
-      Object.keys(studentAttMap).forEach(roll => {
-        if (seenRolls[roll]) return;
-        seenRolls[roll] = true;
-        // Try to find name from records
-        const rec = dateRecords.find(r => String(r.rollNo).trim() === roll);
-        studentList.push({
-          rollNo: roll,
-          name: rec ? String(rec.name || '').trim() : '',
-          att: studentAttMap[roll] || {}
-        });
-      });
-
-      // Sort by roll number (numeric sort)
+      const studentList = Object.values(studentMap);
       studentList.sort((a, b) => {
         const numA = parseInt(a.rollNo), numB = parseInt(b.rollNo);
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
         return String(a.rollNo).localeCompare(String(b.rollNo));
       });
 
-      // Build subject headers
-      let subjectHeaders = '';
-      subjectKeys.forEach(sk => {
-        const subj = activeDateSubjects[sk];
-        const fmt = formatCompactSubjectHeader(subj);
-        subjectHeaders += `<th style="padding: 8px 6px; font-size: 10px; font-weight: 800; text-align: center; min-width: 55px; max-width: 80px; word-break: break-word; line-height: 1.3; white-space: normal;">${escHtml(fmt.shortName || fmt.code)}</th>`;
-      });
+      // 5. Update Student Dropdown Options
+      const studentSelectEl = document.getElementById('daywise-student-select');
+      if (studentSelectEl) {
+        let studentOpts = studentList.map(st => {
+          const isSel = (st.rollNo === state.activeDaywiseStudent || (!state.activeDaywiseStudent && st === studentList[0])) ? 'selected' : '';
+          return `<option value="${escHtml(st.rollNo)}" ${isSel}>Roll ${escHtml(st.rollNo)} — ${escHtml(st.name)}</option>`;
+        }).join('');
 
-      // Build table rows
-      let tableRows = '';
-      studentList.forEach((stu, idx) => {
-        let presentCount = 0, absentCount = 0;
-        let cellsHtml = '';
+        studentOpts += `<option value="ALL" ${state.activeDaywiseStudent === 'ALL' ? 'selected' : ''}>👥 View All Students (${studentList.length} Students)</option>`;
+        studentSelectEl.innerHTML = studentOpts || '<option value="">No students found in class</option>';
 
-        subjectKeys.forEach(sk => {
-          const status = stu.att[sk] || '-';
-          if (status === 'P') { presentCount++; }
-          if (status === 'A') { absentCount++; }
+        if (!state.activeDaywiseStudent && studentList.length > 0) {
+          state.activeDaywiseStudent = studentList[0].rollNo;
+          studentSelectEl.value = studentList[0].rollNo;
+        }
+      }
 
-          const cellBg = status === 'P' ? 'rgba(16, 185, 129, 0.15)' : status === 'A' ? 'rgba(239, 68, 68, 0.12)' : 'transparent';
-          const cellColor = status === 'P' ? '#059669' : status === 'A' ? '#dc2626' : '#94a3b8';
-          cellsHtml += `<td style="padding: 6px 4px; text-align: center; font-weight: 900; font-size: 13px; background: ${cellBg}; color: ${cellColor};">${status}</td>`;
+      // Format display date
+      const dtParts = dateStr.split('-');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const displayDate = dtParts.length === 3 ? `${dtParts[2]}-${months[parseInt(dtParts[1])-1]}-${dtParts[0]}` : dateStr;
+
+      const activeSubjectKeys = Object.keys(activeSubjectsMap);
+
+      if (activeSubjectKeys.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 44px 20px; color: var(--text-secondary); background: var(--colorless-glass-base); border-radius: 16px; border: 1px dashed rgba(217, 119, 6, 0.3);">
+            <i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.8; margin-bottom: 12px; display: block;"></i>
+            <h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--text-main);">No Lectures Recorded on ${escHtml(displayDate)}</h4>
+            <p style="margin: 0 auto; max-width: 480px; font-size: 13px; font-weight: 600; color: var(--text-muted);">
+              No attendance records were found for <strong>${escHtml(className)}</strong> on this date. Select another date from the date picker above.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      // 6. RENDER VIEW
+      if (state.activeDaywiseStudent !== 'ALL') {
+        // ── SINGLE STUDENT VIEW ──
+        const curStudent = studentList.find(st => String(st.rollNo) === String(state.activeDaywiseStudent)) || studentList[0];
+        if (!curStudent) {
+          container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--text-muted);">Selected student record not found.</div>`;
+          return;
+        }
+
+        let presCount = 0, absCount = 0, totalClasses = 0;
+        let subjectRowsHtml = '';
+
+        activeSubjectKeys.forEach(sk => {
+          const subInfo = activeSubjectsMap[sk];
+          const st = curStudent.att[sk] || '-';
+          if (st === 'P') presCount++;
+          if (st === 'A') absCount++;
+          if (st === 'P' || st === 'A') totalClasses++;
+
+          const topicText = curStudent.topics[sk] || subInfo.topic || '';
+          const facultyText = subInfo.faculty || 'Assigned Faculty';
+
+          const statusBadge = st === 'P' ? `
+            <span style="
+              background: rgba(16, 185, 129, 0.15); color: #059669; border: 1.5px solid rgba(16, 185, 129, 0.35);
+              padding: 6px 16px; border-radius: var(--radius-pill); font-weight: 900; font-size: 12.5px;
+              display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+            ">
+              <i class="ph ph-check-circle-fill" style="font-size: 16px;"></i> PRESENT
+            </span>
+          ` : st === 'A' ? `
+            <span style="
+              background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1.5px solid rgba(239, 68, 68, 0.35);
+              padding: 6px 16px; border-radius: var(--radius-pill); font-weight: 900; font-size: 12.5px;
+              display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+            ">
+              <i class="ph ph-x-circle-fill" style="font-size: 16px;"></i> ABSENT
+            </span>
+          ` : `
+            <span style="
+              background: rgba(148, 163, 184, 0.12); color: #64748b;
+              padding: 6px 14px; border-radius: var(--radius-pill); font-weight: 700; font-size: 12px;
+              display: inline-flex; align-items: center; gap: 6px;
+            ">
+              <i class="ph ph-minus-circle"></i> NOT RECORDED
+            </span>
+          `;
+
+          subjectRowsHtml += `
+            <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); transition: background 0.2s ease;">
+              <td style="padding: 14px 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="
+                    background: ${subInfo.isPractical ? 'linear-gradient(135deg, #ec4899, #db2777)' : 'linear-gradient(135deg, #8b5cf6, #6d28d9)'};
+                    color: #ffffff; padding: 4px 10px; border-radius: 8px; font-weight: 900; font-size: 11px; letter-spacing: 0.5px;
+                  ">
+                    ${escHtml(subInfo.code)}
+                  </span>
+                  <span style="
+                    background: ${subInfo.isPractical ? 'rgba(236,72,153,0.12)' : 'rgba(139,92,246,0.12)'};
+                    color: ${subInfo.isPractical ? '#db2777' : '#6d28d9'};
+                    font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: var(--radius-pill); text-transform: uppercase;
+                  ">
+                    ${subInfo.isPractical ? 'Practical' : 'Theory'}
+                  </span>
+                </div>
+              </td>
+              <td style="padding: 14px 16px;">
+                <div style="font-size: 13.5px; font-weight: 800; color: var(--text-main); margin-bottom: 2px;">
+                  ${escHtml(subInfo.name)}
+                </div>
+                <div style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                  <i class="ph ph-chalkboard-teacher" style="color: var(--accent-blue);"></i> ${escHtml(facultyText)}
+                </div>
+              </td>
+              <td style="padding: 14px 16px;">
+                ${topicText ? `
+                  <div style="font-size: 12px; font-weight: 600; color: #334155; line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
+                    <i class="ph ph-bookmark-simple" style="color: #8b5cf6; font-size: 14px; flex-shrink: 0; margin-top: 2px;"></i>
+                    <span>${escHtml(topicText)}</span>
+                  </div>
+                ` : `<span style="font-size: 11.5px; color: var(--text-muted); font-style: italic;">Topic not specified</span>`}
+              </td>
+              <td style="padding: 14px 16px; text-align: center;">
+                ${statusBadge}
+              </td>
+            </tr>
+          `;
         });
 
-        const bgColor = idx % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'transparent';
-        tableRows += `
-          <tr style="border-bottom: 1px solid rgba(0,0,0,0.04); background: ${bgColor};">
-            <td style="padding: 8px 10px; font-weight: 700; font-size: 12px; color: #334155; white-space: nowrap;">${escHtml(stu.rollNo)}</td>
-            <td style="padding: 8px 10px; font-weight: 700; font-size: 12px; color: #0f172a; white-space: nowrap;">${escHtml(stu.name)}</td>
-            <td style="padding: 8px 6px; font-weight: 600; font-size: 11px; color: #64748b; white-space: nowrap;">${escHtml(className)}</td>
-            ${cellsHtml}
-            <td style="padding: 8px 6px; text-align: center; font-weight: 900; font-size: 13px; color: #059669;">${presentCount}</td>
-            <td style="padding: 8px 6px; text-align: center; font-weight: 900; font-size: 13px; color: #dc2626;">${absentCount}</td>
-          </tr>
-        `;
-      });
+        const dayPct = totalClasses > 0 ? Math.round((presCount / totalClasses) * 100) : null;
+        const dayPctText = dayPct !== null ? `${dayPct}%` : '--%';
+        const dayPctBg = dayPct !== null && dayPct >= 75 ? '#10b981' : dayPct !== null && dayPct >= 50 ? '#0284c7' : '#ef4444';
 
-      container.innerHTML = `
-        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <span style="font-size: 12px; font-weight: 800; color: var(--text-secondary);">
-            📅 ${escHtml(displayDate)} · ${studentList.length} students · ${subjectKeys.length} subjects with lectures
-          </span>
-        </div>
-        <div class="smart-matrix-container">
-          <div class="smart-matrix-scroll-wrapper" id="daywise-report-scroll-wrapper">
-            <table class="smart-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+        const studentInitials = curStudent.name ? curStudent.name.split(' ').map(n => n.charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase() : 'ST';
+
+        container.innerHTML = `
+          <!-- HERO SNAPSHOT CARD -->
+          <div style="
+            background: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(248,250,252,0.85) 100%);
+            border: 1.5px solid rgba(139,92,246,0.25); border-radius: 20px;
+            padding: 22px 24px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(139,92,246,0.08);
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px;
+          ">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="
+                width: 56px; height: 56px; border-radius: 16px;
+                background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+                color: #ffffff; display: flex; align-items: center; justify-content: center;
+                font-weight: 900; font-size: 20px; box-shadow: 0 6px 18px rgba(139,92,246,0.35); flex-shrink: 0;
+              ">
+                ${escHtml(studentInitials)}
+              </div>
+              <div>
+                <h4 style="margin: 0 0 6px; font-size: 19px; font-weight: 900; color: var(--text-main); line-height: 1.2;">
+                  ${escHtml(curStudent.name)}
+                </h4>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="background: rgba(139,92,246,0.12); color: #7c3aed; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 800;">
+                    Roll No: ${escHtml(curStudent.rollNo)}
+                  </span>
+                  <span style="background: rgba(2,132,199,0.12); color: #0284c7; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 800;">
+                    Batch: ${escHtml(curStudent.batch || 'General')}
+                  </span>
+                  <span style="background: rgba(217,119,6,0.12); color: #d97706; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 800;">
+                    📅 ${escHtml(displayDate)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- STATS PILLS -->
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div style="background: rgba(2,132,199,0.08); border: 1px solid rgba(2,132,199,0.2); border-radius: 14px; padding: 10px 16px; text-align: center; min-width: 80px;">
+                <div style="font-size: 10.5px; font-weight: 800; color: #0284c7; text-transform: uppercase;">Conducted</div>
+                <div style="font-size: 18px; font-weight: 900; color: #0369a1;">${totalClasses}</div>
+              </div>
+              <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 14px; padding: 10px 16px; text-align: center; min-width: 80px;">
+                <div style="font-size: 10.5px; font-weight: 800; color: #059669; text-transform: uppercase;">Present</div>
+                <div style="font-size: 18px; font-weight: 900; color: #047857;">${presCount}</div>
+              </div>
+              <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 14px; padding: 10px 16px; text-align: center; min-width: 80px;">
+                <div style="font-size: 10.5px; font-weight: 800; color: #dc2626; text-transform: uppercase;">Absent</div>
+                <div style="font-size: 18px; font-weight: 900; color: #b91c1c;">${absCount}</div>
+              </div>
+              <div style="background: ${dayPctBg}; color: #ffffff; border-radius: 14px; padding: 10px 18px; text-align: center; min-width: 90px; box-shadow: 0 4px 14px rgba(0,0,0,0.12);">
+                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; opacity: 0.9;">Day's Att.</div>
+                <div style="font-size: 19px; font-weight: 900;">${dayPctText}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUBJECT CONDUCTION DETAIL TABLE -->
+          <div class="smart-matrix-container" style="border-radius: 18px; overflow: hidden; border: 1px solid var(--colorless-glass-hover); box-shadow: 0 6px 20px rgba(0,0,0,0.04);">
+            <table style="width: 100%; border-collapse: collapse; background: #ffffff;">
               <thead>
-                <tr style="text-align: center; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(0,0,0,0.03);">
-                  <th style="padding: 10px 10px; text-align: left; font-weight: 900; min-width: 60px;">Roll No</th>
-                  <th style="padding: 10px 10px; text-align: left; font-weight: 900; min-width: 120px;">Student Name</th>
-                  <th style="padding: 10px 6px; text-align: left; font-weight: 900; min-width: 80px;">Class</th>
-                  ${subjectHeaders}
-                  <th style="padding: 10px 6px; font-weight: 900; min-width: 45px; color: #059669;">Present</th>
-                  <th style="padding: 10px 6px; font-weight: 900; min-width: 45px; color: #dc2626;">Absent</th>
+                <tr style="background: rgba(241, 245, 249, 0.85); color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1.5px solid rgba(0,0,0,0.08);">
+                  <th style="padding: 12px 16px; text-align: left; font-weight: 900; width: 140px;">Subject Code</th>
+                  <th style="padding: 12px 16px; text-align: left; font-weight: 900;">Subject & Faculty</th>
+                  <th style="padding: 12px 16px; text-align: left; font-weight: 900;">Topic Covered on Date</th>
+                  <th style="padding: 12px 16px; text-align: center; font-weight: 900; width: 150px;">Attendance Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${tableRows || '<tr><td colspan="' + (subjectKeys.length + 5) + '" style="padding: 20px; text-align: center; color: #64748b;">No student data available.</td></tr>'}
+                ${subjectRowsHtml}
               </tbody>
             </table>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        // ── ALL STUDENTS MATRIX VIEW ──
+        let subjectHeaders = '';
+        activeSubjectKeys.forEach(sk => {
+          const subInfo = activeSubjectsMap[sk];
+          const fmt = formatCompactSubjectHeader(subInfo);
+          subjectHeaders += `<th style="padding: 10px 8px; font-size: 11px; font-weight: 900; text-align: center; min-width: 90px; max-width: 130px; word-break: break-word; line-height: 1.3;" title="${escHtml(fmt.fullName)} (${escHtml(fmt.code)})">
+            <div style="background: ${fmt.isPractical ? 'rgba(236,72,153,0.12)' : 'rgba(139,92,246,0.12)'}; color: ${fmt.isPractical ? '#db2777' : '#6d28d9'}; padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; margin-bottom: 2px;">
+              ${escHtml(fmt.code)}
+            </div>
+            <div style="font-size: 10px; font-weight: 600; color: #475569; line-height: 1.2;">
+              ${escHtml(fmt.shortName)}
+            </div>
+          </th>`;
+        });
 
-      // Enable horizontal scroll for table
-      const scrollWrapper = document.getElementById('daywise-report-scroll-wrapper');
-      if (scrollWrapper) enableHorizontalWheelScroll(scrollWrapper);
+        let tableRows = '';
+        studentList.forEach((stu, idx) => {
+          let pCount = 0, aCount = 0;
+          let cellsHtml = '';
+
+          activeSubjectKeys.forEach(sk => {
+            const status = stu.att[sk] || '-';
+            if (status === 'P') pCount++;
+            if (status === 'A') aCount++;
+
+            const cellBg = status === 'P' ? 'rgba(16, 185, 129, 0.15)' : status === 'A' ? 'rgba(239, 68, 68, 0.12)' : 'transparent';
+            const cellColor = status === 'P' ? '#059669' : status === 'A' ? '#dc2626' : '#94a3b8';
+            cellsHtml += `<td style="padding: 8px 4px; text-align: center; font-weight: 900; font-size: 13px; background: ${cellBg}; color: ${cellColor};">${status}</td>`;
+          });
+
+          const bgColor = idx % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'transparent';
+          tableRows += `
+            <tr style="border-bottom: 1px solid rgba(0,0,0,0.04); background: ${bgColor};">
+              <td style="padding: 10px 12px; font-weight: 800; font-size: 12px; color: #334155; white-space: nowrap;">${escHtml(stu.rollNo)}</td>
+              <td style="padding: 10px 12px; font-weight: 700; font-size: 12.5px; color: #0f172a; white-space: nowrap;">${escHtml(stu.name)}</td>
+              <td style="padding: 10px 8px; font-weight: 600; font-size: 11px; color: #64748b; white-space: nowrap;">${escHtml(className)}</td>
+              ${cellsHtml}
+              <td style="padding: 10px 8px; text-align: center; font-weight: 900; font-size: 13px; color: #059669;">${pCount}</td>
+              <td style="padding: 10px 8px; text-align: center; font-weight: 900; font-size: 13px; color: #dc2626;">${aCount}</td>
+            </tr>
+          `;
+        });
+
+        container.innerHTML = `
+          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 12px; font-weight: 800; color: var(--text-secondary);">
+              📅 ${escHtml(displayDate)} · ${studentList.length} students · ${activeSubjectKeys.length} subjects conducted
+            </span>
+          </div>
+          <div class="smart-matrix-container">
+            <div class="smart-matrix-scroll-wrapper" id="daywise-report-scroll-wrapper">
+              <table class="smart-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+                <thead>
+                  <tr style="text-align: center; color: #475569; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(0,0,0,0.03);">
+                    <th style="padding: 10px 12px; text-align: left; font-weight: 900; min-width: 60px;">Roll No</th>
+                    <th style="padding: 10px 12px; text-align: left; font-weight: 900; min-width: 130px;">Student Name</th>
+                    <th style="padding: 10px 8px; text-align: left; font-weight: 900; min-width: 80px;">Class</th>
+                    ${subjectHeaders}
+                    <th style="padding: 10px 8px; font-weight: 900; min-width: 50px; color: #059669;">Present</th>
+                    <th style="padding: 10px 8px; font-weight: 900; min-width: 50px; color: #dc2626;">Absent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tableRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        const scrollWrapper = document.getElementById('daywise-report-scroll-wrapper');
+        if (scrollWrapper) enableHorizontalWheelScroll(scrollWrapper);
+      }
 
       // Store model for DOCX download
       state.daywiseReportModel = {
         className,
         date: dateStr,
         displayDate,
-        subjects: subjectKeys.map(sk => ({ code: sk, ...(activeDateSubjects[sk] || {}) })),
+        subjects: activeSubjectKeys.map(sk => activeSubjectsMap[sk]),
         students: studentList,
-        collegeName: (data.collegeName || state.metadata?.collegeName || ''),
-        managementName: (data.managementName || state.metadata?.managementName || '')
+        activeStudent: state.activeDaywiseStudent,
+        collegeName: (data.collegeName || (state.metadata && state.metadata.collegeName) || ''),
+        managementName: (data.managementName || (state.metadata && state.metadata.managementName) || '')
       };
 
     } catch (err) {
@@ -5032,6 +5334,11 @@ Generated: ${formatDisplayDate(new Date())}
     Toast.show('Generating', 'Building daywise attendance .docx report...', 'success');
 
     try {
+      const isSingleStudent = model.activeStudent && model.activeStudent !== 'ALL';
+      const studentsToPrint = isSingleStudent
+        ? model.students.filter(s => String(s.rollNo) === String(model.activeStudent))
+        : model.students;
+
       const subjectKeys = model.subjects.map(s => s.code);
       const totalCols = 5 + subjectKeys.length; // Roll, Name, Class, subjects..., Present, Absent
 
@@ -5055,7 +5362,7 @@ Generated: ${formatDisplayDate(new Date())}
 
       // Data rows
       let dataRows = '';
-      model.students.forEach(stu => {
+      studentsToPrint.forEach(stu => {
         let presCount = 0, absCount = 0;
         let subjectCells = '';
         subjectKeys.forEach(sk => {
@@ -5103,7 +5410,7 @@ Generated: ${formatDisplayDate(new Date())}
     <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:u w:val="single"/></w:rPr><w:t>Daywise Student Attendance Report</w:t></w:r>
   </w:p>
   <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
-    <w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">Date: ${xmlEsc(model.displayDate)} | Class: ${xmlEsc(model.className)} | Total Students: ${model.students.length}</w:t></w:r>
+    <w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">Date: ${xmlEsc(model.displayDate)} | Class: ${xmlEsc(model.className)} | Total Students: ${studentsToPrint.length}</w:t></w:r>
   </w:p>
   <w:p/>
   <w:tbl>
@@ -5667,6 +5974,8 @@ Generated: ${formatDisplayDate(new Date())}
     generateReportType,
     selectStudentYearCard,
     selectDaywiseYear,
+    onDaywiseClassChange,
+    onDaywiseStudentChange,
     onDaywiseDateChange,
     downloadDaywiseReportDoc,
     toggleClassMindmap,
