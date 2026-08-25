@@ -5352,16 +5352,6 @@ Generated: ${formatDisplayDate(new Date())}
       const data = state.inchargeDashboard || {};
       const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
-      function extractLiveClassName(item) {
-        if (!item) return '';
-        const name = item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '';
-        return String(name).trim();
-      }
-
-      // 2. Class subjects
-      const data = state.inchargeDashboard || {};
-      const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
-
       const classSubjects = [];
       faculties.forEach(f => {
         (f.subjects || []).forEach(s => {
