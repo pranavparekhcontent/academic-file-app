@@ -4766,8 +4766,285 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   // ═══════════════════════════════════════════════════════
-  //  DAYWISE ATTENDANCE REPORT (3 Dropdowns & Clean View)
+  //  DAYWISE ATTENDANCE REPORT (Custom Glass Dropdowns & Calendar)
   // ═══════════════════════════════════════════════════════
+
+  function formatDaywiseDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const mIdx = parseInt(m, 10) - 1;
+      const mName = months[mIdx] || m;
+      return `${d} ${mName} ${y}`;
+    }
+    return dateStr;
+  }
+
+  function closeAllDaywiseDropdowns() {
+    const classMenu = document.getElementById('daywise-class-menu');
+    const classTrig = document.getElementById('daywise-class-trigger');
+    if (classMenu) classMenu.style.display = 'none';
+    if (classTrig) classTrig.classList.remove('active');
+
+    const studentMenu = document.getElementById('daywise-student-menu');
+    const studentTrig = document.getElementById('daywise-student-trigger');
+    if (studentMenu) studentMenu.style.display = 'none';
+    if (studentTrig) studentTrig.classList.remove('active');
+
+    const dateMenu = document.getElementById('daywise-date-menu');
+    const dateTrig = document.getElementById('daywise-date-trigger');
+    if (dateMenu) dateMenu.style.display = 'none';
+    if (dateTrig) dateTrig.classList.remove('active');
+  }
+
+  // Bind outside click listener once
+  if (typeof window !== 'undefined' && !window._daywiseOutsideClickBound) {
+    window._daywiseOutsideClickBound = true;
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#daywise-class-dropdown-wrap') &&
+          !e.target.closest('#daywise-student-dropdown-wrap') &&
+          !e.target.closest('#daywise-date-dropdown-wrap')) {
+        closeAllDaywiseDropdowns();
+      }
+    });
+  }
+
+  function toggleDaywiseClassDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('daywise-class-menu');
+    const trig = document.getElementById('daywise-class-trigger');
+    const isVisible = menu && menu.style.display === 'block';
+
+    closeAllDaywiseDropdowns();
+
+    if (menu && trig && !isVisible) {
+      menu.style.display = 'block';
+      trig.classList.add('active');
+    }
+  }
+
+  function selectDaywiseClass(className) {
+    state.activeDaywiseYear = className;
+    state.activeDaywiseStudent = '';
+    closeAllDaywiseDropdowns();
+    onDaywiseClassChange(className);
+  }
+
+  function toggleDaywiseStudentDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('daywise-student-menu');
+    const trig = document.getElementById('daywise-student-trigger');
+    const isVisible = menu && menu.style.display === 'block';
+
+    closeAllDaywiseDropdowns();
+
+    if (menu && trig && !isVisible) {
+      menu.style.display = 'block';
+      trig.classList.add('active');
+      const searchInput = document.getElementById('daywise-student-search');
+      if (searchInput) {
+        searchInput.value = '';
+        setTimeout(() => searchInput.focus(), 60);
+        filterDaywiseStudentList('');
+      }
+    }
+  }
+
+  function selectDaywiseStudent(studentRoll) {
+    state.activeDaywiseStudent = studentRoll;
+    closeAllDaywiseDropdowns();
+    onDaywiseStudentChange(studentRoll);
+  }
+
+  function filterDaywiseStudentList(query) {
+    const q = (query || '').toLowerCase().trim();
+    document.querySelectorAll('.daywise-student-option').forEach(opt => {
+      const text = opt.getAttribute('data-search') || '';
+      opt.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+    });
+  }
+
+  function toggleDaywiseDateDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('daywise-date-menu');
+    const trig = document.getElementById('daywise-date-trigger');
+    const isVisible = menu && menu.style.display === 'block';
+
+    closeAllDaywiseDropdowns();
+
+    if (menu && trig && !isVisible) {
+      menu.style.display = 'block';
+      trig.classList.add('active');
+      renderDaywiseCalendarGrid();
+    }
+  }
+
+  function selectDaywiseDate(dateStr) {
+    state.activeDaywiseDate = dateStr;
+    const label = document.getElementById('daywise-date-label');
+    if (label) {
+      label.innerText = formatDaywiseDisplayDate(dateStr);
+    }
+    closeAllDaywiseDropdowns();
+    onDaywiseDateChange(dateStr);
+  }
+
+  function changeDaywiseCalendarMonth(delta) {
+    if (!state.daywiseCalendarViewDate) {
+      state.daywiseCalendarViewDate = new Date();
+    }
+    const currentMonth = state.daywiseCalendarViewDate.getMonth();
+    const currentYear = state.daywiseCalendarViewDate.getFullYear();
+    state.daywiseCalendarViewDate = new Date(currentYear, currentMonth + delta, 1);
+    renderDaywiseCalendarGrid();
+  }
+
+  function renderDaywiseCalendarGrid() {
+    const container = document.getElementById('daywise-cal-grid-container');
+    const titleEl = document.getElementById('daywise-cal-title-text');
+    if (!container || !titleEl) return;
+
+    if (!state.daywiseCalendarViewDate) {
+      if (state.activeDaywiseDate) {
+        const [y, m] = state.activeDaywiseDate.split('-');
+        state.daywiseCalendarViewDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+      } else {
+        state.daywiseCalendarViewDate = new Date();
+      }
+    }
+
+    const viewDate = state.daywiseCalendarViewDate;
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    titleEl.innerText = `${monthNames[month]} ${year}`;
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const selDateStr = state.activeDaywiseDate || todayStr;
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalDaysInPrevMonth = new Date(year, month, 0).getDate();
+
+    let gridHtml = '';
+
+    // Previous month filler days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = totalDaysInPrevMonth - i;
+      const prevM = month === 0 ? 12 : month;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = `${prevY}-${String(prevM).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      gridHtml += `
+        <div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">
+          ${dayNum}
+        </div>
+      `;
+    }
+
+    // Current month days
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isSelected = (dStr === selDateStr);
+      const isToday = (dStr === todayStr);
+
+      gridHtml += `
+        <div class="daywise-cal-day ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}"
+             onclick="App.selectDaywiseDate('${dStr}')">
+          ${day}
+        </div>
+      `;
+    }
+
+    // Next month filler days (fill complete rows)
+    const totalCellsSoFar = firstDayIndex + totalDaysInMonth;
+    const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
+    for (let day = 1; day <= remainingCells; day++) {
+      const nextM = month === 11 ? 1 : month + 2;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      gridHtml += `
+        <div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">
+          ${day}
+        </div>
+      `;
+    }
+
+    container.innerHTML = gridHtml;
+  }
+
+  function populateDaywiseStudentDropdown(studentList = []) {
+    const menuList = document.getElementById('daywise-student-options-list');
+    const labelEl = document.getElementById('daywise-student-label');
+    if (!menuList) return;
+
+    if (studentList.length === 0) {
+      menuList.innerHTML = '<div style="padding: 14px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 700;">No students found in class roster</div>';
+      if (labelEl) labelEl.innerHTML = '<span style="font-weight: 700; color: var(--text-muted);">No students found</span>';
+      return;
+    }
+
+    if (!state.activeDaywiseStudent) {
+      state.activeDaywiseStudent = studentList[0].rollNo;
+    }
+
+    if (labelEl) {
+      if (state.activeDaywiseStudent === 'ALL') {
+        labelEl.innerHTML = `
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: linear-gradient(135deg, #8b5cf6, #3b82f6); color: #fff; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 900;">ALL</span>
+            <span style="font-weight: 800;">👥 View All Students (${studentList.length})</span>
+          </span>
+        `;
+      } else {
+        const cur = studentList.find(s => String(s.rollNo) === String(state.activeDaywiseStudent)) || studentList[0];
+        labelEl.innerHTML = `
+          <span style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span style="background: rgba(2, 132, 199, 0.12); color: #0284c7; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 900; flex-shrink: 0;">
+              Roll ${escHtml(cur.rollNo)}
+            </span>
+            <span style="font-weight: 800; color: var(--text-main); overflow: hidden; text-overflow: ellipsis;">${escHtml(cur.name)}</span>
+            ${cur.batch && cur.batch !== 'General' ? `<span style="font-size: 10.5px; color: #64748b; font-weight: 700; background: rgba(0,0,0,0.04); padding: 1px 6px; border-radius: 4px; flex-shrink: 0;">${escHtml(cur.batch)}</span>` : ''}
+          </span>
+        `;
+      }
+    }
+
+    let html = `
+      <div class="daywise-option-item ${state.activeDaywiseStudent === 'ALL' ? 'is-selected' : ''}" onclick="App.selectDaywiseStudent('ALL')" style="border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 4px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="background: linear-gradient(135deg, #8b5cf6, #3b82f6); color: #fff; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 900;">ALL</span>
+          <span style="font-weight: 800; color: var(--text-main);">👥 View All Students (${studentList.length} Students)</span>
+        </div>
+        ${state.activeDaywiseStudent === 'ALL' ? '<i class="ph ph-check-bold" style="color: #8b5cf6; font-size: 15px;"></i>' : ''}
+      </div>
+    `;
+
+    studentList.forEach(st => {
+      const isSel = String(st.rollNo) === String(state.activeDaywiseStudent);
+      html += `
+        <div class="daywise-option-item daywise-student-option ${isSel ? 'is-selected' : ''}"
+             data-search="${escHtml(String(st.rollNo) + ' ' + String(st.name)).toLowerCase()}"
+             onclick="App.selectDaywiseStudent('${escHtml(st.rollNo)}')">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis;">
+            <span style="background: rgba(2, 132, 199, 0.12); color: #0284c7; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 900; flex-shrink: 0;">
+              Roll ${escHtml(st.rollNo)}
+            </span>
+            <span style="font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${escHtml(st.name)}
+            </span>
+            ${st.batch && st.batch !== 'General' ? `<span style="font-size: 10px; color: #64748b; font-weight: 700; background: rgba(0,0,0,0.04); padding: 1px 5px; border-radius: 4px; flex-shrink: 0;">${escHtml(st.batch)}</span>` : ''}
+          </div>
+          ${isSel ? '<i class="ph ph-check-bold" style="color: #0284c7; font-size: 15px; flex-shrink: 0;"></i>' : ''}
+        </div>
+      `;
+    });
+
+    menuList.innerHTML = html;
+  }
 
   function onDaywiseClassChange(className) {
     state.activeDaywiseYear = className;
@@ -4829,9 +5106,17 @@ Generated: ${formatDisplayDate(new Date())}
       state.activeDaywiseDate = todayStr;
     }
 
-    const classOptionsHtml = activeClassNames.map(clsName => {
-      const isSelected = clsName === state.activeDaywiseYear ? 'selected' : '';
-      return `<option value="${escHtml(clsName)}" ${isSelected}>🎓 ${escHtml(clsName)}</option>`;
+    const classMenuItemsHtml = activeClassNames.map(clsName => {
+      const isSelected = clsName === state.activeDaywiseYear;
+      return `
+        <div class="daywise-option-item ${isSelected ? 'is-selected' : ''}" onclick="App.selectDaywiseClass('${escHtml(clsName)}')">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="ph ph-graduation-cap" style="color: #8b5cf6; font-size: 16px;"></i>
+            <span style="font-weight: 800; color: var(--text-main);">${escHtml(clsName)}</span>
+          </div>
+          ${isSelected ? '<i class="ph ph-check-bold" style="color: #8b5cf6; font-size: 15px;"></i>' : ''}
+        </div>
+      `;
     }).join('');
 
     outputEl.innerHTML = `
@@ -4852,51 +5137,100 @@ Generated: ${formatDisplayDate(new Date())}
         </div>
       </div>
 
-      <!-- 3 DROPDOWNS BAR -->
-      <div style="
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;
-        background: var(--colorless-glass-base, rgba(255,255,255,0.7)); backdrop-filter: blur(16px);
-        border: 1px solid var(--colorless-glass-hover, rgba(0,0,0,0.08)); border-radius: 16px;
-        padding: 16px 18px; margin-bottom: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);
-      ">
-        <!-- Dropdown 1: Class -->
-        <div>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
-            <i class="ph ph-graduation-cap" style="color: #8b5cf6; font-size: 14px;"></i> 1. Select Class / Year
+      <!-- 3 THEMED GLASS DROPDOWNS (EXPANDING DOWNSIDE) -->
+      <div class="daywise-controls-bar">
+        <!-- Dropdown 1: Class / Year -->
+        <div class="daywise-dropdown-wrap" id="daywise-class-dropdown-wrap">
+          <label class="daywise-field-label">
+            <i class="ph ph-graduation-cap" style="color: #8b5cf6; font-size: 15px;"></i> 1. Select Class / Year
           </label>
-          <select id="daywise-class-select" onchange="App.onDaywiseClassChange(this.value)" style="
-            width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
-            border: 1.5px solid rgba(139, 92, 246, 0.35); background: #ffffff; color: var(--text-main);
-            outline: none; cursor: pointer; transition: all 0.2s ease;
-          ">
-            ${classOptionsHtml}
-          </select>
+          <div class="daywise-glass-trigger trigger-class" id="daywise-class-trigger" onclick="App.toggleDaywiseClassDropdown(event)">
+            <span style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis;">
+              <i class="ph ph-graduation-cap" style="color: #8b5cf6; font-size: 16px;"></i>
+              <span id="daywise-class-label" style="font-weight: 800;">${escHtml(state.activeDaywiseYear)}</span>
+            </span>
+            <i class="ph ph-caret-down trigger-caret"></i>
+          </div>
+          <div class="daywise-downside-menu" id="daywise-class-menu">
+            <div class="daywise-menu-scrollable">
+              ${classMenuItemsHtml}
+            </div>
+          </div>
         </div>
 
         <!-- Dropdown 2: Student -->
-        <div>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
-            <i class="ph ph-user" style="color: #0284c7; font-size: 14px;"></i> 2. Select Student
+        <div class="daywise-dropdown-wrap" id="daywise-student-dropdown-wrap">
+          <label class="daywise-field-label">
+            <i class="ph ph-user" style="color: #0284c7; font-size: 15px;"></i> 2. Select Student
           </label>
-          <select id="daywise-student-select" onchange="App.onDaywiseStudentChange(this.value)" style="
-            width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
-            border: 1.5px solid rgba(2, 132, 199, 0.35); background: #ffffff; color: var(--text-main);
-            outline: none; cursor: pointer; transition: all 0.2s ease;
-          ">
-            <option value="">Loading student roster...</option>
-          </select>
+          <div class="daywise-glass-trigger trigger-student" id="daywise-student-trigger" onclick="App.toggleDaywiseStudentDropdown(event)">
+            <span id="daywise-student-label" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <i class="ph ph-user-circle" style="color: #0284c7; font-size: 16px;"></i>
+              <span style="font-weight: 800;">Loading student roster...</span>
+            </span>
+            <i class="ph ph-caret-down trigger-caret"></i>
+          </div>
+          <div class="daywise-downside-menu" id="daywise-student-menu" style="min-width: 320px;">
+            <div style="padding: 4px 4px 8px;">
+              <div style="position: relative; display: flex; align-items: center;">
+                <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; color: var(--text-muted); font-size: 14px;"></i>
+                <input type="text" id="daywise-student-search" placeholder="Search student name or roll..." oninput="App.filterDaywiseStudentList(this.value)" style="
+                  width: 100%; padding: 8px 10px 8px 32px; font-size: 12px; font-weight: 700; border-radius: 10px;
+                  border: 1px solid rgba(2, 132, 199, 0.25); background: rgba(241, 245, 249, 0.85); outline: none;
+                ">
+              </div>
+            </div>
+            <div class="daywise-menu-scrollable" id="daywise-student-options-list">
+              <div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px;">Loading student list...</div>
+            </div>
+          </div>
         </div>
 
-        <!-- Dropdown 3: Date -->
-        <div>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">
-            <i class="ph ph-calendar" style="color: #d97706; font-size: 14px;"></i> 3. Attendance Date
+        <!-- Dropdown 3: Attendance Date (Interactive Calendar View) -->
+        <div class="daywise-dropdown-wrap" id="daywise-date-dropdown-wrap">
+          <label class="daywise-field-label">
+            <i class="ph ph-calendar" style="color: #d97706; font-size: 15px;"></i> 3. Attendance Date
           </label>
-          <input type="date" id="daywise-date-picker" value="${escHtml(state.activeDaywiseDate)}" onchange="App.onDaywiseDateChange(this.value)" style="
-            width: 100%; padding: 9px 14px; font-size: 13px; font-weight: 700; border-radius: 10px;
-            border: 1.5px solid rgba(245, 158, 11, 0.4); background: #ffffff; color: #92400e;
-            outline: none; cursor: pointer; transition: all 0.2s ease;
-          ">
+          <div class="daywise-glass-trigger trigger-date" id="daywise-date-trigger" onclick="App.toggleDaywiseDateDropdown(event)">
+            <span style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis;">
+              <i class="ph ph-calendar-blank" style="color: #d97706; font-size: 16px;"></i>
+              <span id="daywise-date-label" style="font-weight: 800; color: #92400e;">${escHtml(formatDaywiseDisplayDate(state.activeDaywiseDate))}</span>
+            </span>
+            <i class="ph ph-caret-down trigger-caret"></i>
+          </div>
+          <div class="daywise-downside-menu" id="daywise-date-menu" style="min-width: 310px;">
+            <div class="daywise-calendar-container">
+              <div class="daywise-cal-header">
+                <button type="button" class="daywise-cal-nav-btn" onclick="App.changeDaywiseCalendarMonth(-1)" title="Previous Month">
+                  <i class="ph ph-caret-left-bold"></i>
+                </button>
+                <div class="daywise-cal-title" id="daywise-cal-title-text">
+                  August 2026
+                </div>
+                <button type="button" class="daywise-cal-nav-btn" onclick="App.changeDaywiseCalendarMonth(1)" title="Next Month">
+                  <i class="ph ph-caret-right-bold"></i>
+                </button>
+              </div>
+              <div class="daywise-cal-weekdays">
+                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+              </div>
+              <div class="daywise-cal-grid" id="daywise-cal-grid-container">
+                <!-- Days grid populated by JS -->
+              </div>
+              <div class="daywise-cal-quick-bar">
+                <button type="button" onclick="App.selectDaywiseDate('${todayStr}')" style="
+                  background: rgba(245, 158, 11, 0.12); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.25);
+                  padding: 4px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800; cursor: pointer;
+                  display: inline-flex; align-items: center; gap: 4px;
+                ">
+                  <i class="ph ph-clock"></i> Today (${todayStr})
+                </button>
+                <span style="font-size: 10.5px; font-weight: 700; color: var(--text-muted);">
+                  Click day to inspect
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -5069,21 +5403,11 @@ Generated: ${formatDisplayDate(new Date())}
         return String(a.rollNo).localeCompare(String(b.rollNo));
       });
 
-      // 5. Update Student Dropdown Options
-      const studentSelectEl = document.getElementById('daywise-student-select');
-      if (studentSelectEl) {
-        let studentOpts = studentList.map(st => {
-          const isSel = (st.rollNo === state.activeDaywiseStudent || (!state.activeDaywiseStudent && st === studentList[0])) ? 'selected' : '';
-          return `<option value="${escHtml(st.rollNo)}" ${isSel}>Roll ${escHtml(st.rollNo)} — ${escHtml(st.name)}</option>`;
-        }).join('');
-
-        studentOpts += `<option value="ALL" ${state.activeDaywiseStudent === 'ALL' ? 'selected' : ''}>👥 View All Students (${studentList.length} Students)</option>`;
-        studentSelectEl.innerHTML = studentOpts || '<option value="">No students found in class</option>';
-
-        if (!state.activeDaywiseStudent && studentList.length > 0) {
-          state.activeDaywiseStudent = studentList[0].rollNo;
-          studentSelectEl.value = studentList[0].rollNo;
-        }
+      // 5. Update Custom Student Dropdown Options & Active Labels
+      populateDaywiseStudentDropdown(studentList);
+      const dateLabel = document.getElementById('daywise-date-label');
+      if (dateLabel) {
+        dateLabel.innerText = formatDaywiseDisplayDate(dateStr);
       }
 
       // Format display date
@@ -6036,6 +6360,14 @@ Generated: ${formatDisplayDate(new Date())}
     onDaywiseClassChange,
     onDaywiseStudentChange,
     onDaywiseDateChange,
+    toggleDaywiseClassDropdown,
+    selectDaywiseClass,
+    toggleDaywiseStudentDropdown,
+    selectDaywiseStudent,
+    filterDaywiseStudentList,
+    toggleDaywiseDateDropdown,
+    selectDaywiseDate,
+    changeDaywiseCalendarMonth,
     downloadDaywiseReportDoc,
     toggleClassMindmap,
     printReport
