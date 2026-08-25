@@ -2439,16 +2439,16 @@ const App = (() => {
         const unitLabel = isPractical ? 'practicals' : 'lectures';
         const effectiveBatch = resolveSubjectBatch(s, f.faculty);
 
+        const hasPlan = (s.hasTeachingPlan !== false && s.totalLectures > 0);
+        const totalDisplay = hasPlan ? s.totalLectures : '?';
         const conductedDisplay = s.totalConducted !== undefined ? (hasPlan ? Math.min(s.totalConducted, s.totalLectures) : s.totalConducted) : 0;
+        const progressPct = hasPlan ? (conductedDisplay === 0 ? 0 : (s.percent || 0)) : 0;
+
         const liveSubAtt = (conductedDisplay === 0) ? null : ((s.avgAttendance !== undefined && s.avgAttendance !== null && s.avgAttendance > 0) ? s.avgAttendance : getLiveSubjectAttendancePct(s.code || s.name, effectiveBatch || s.batch));
         const liveSubAttText = (liveSubAtt !== null && liveSubAtt > 0 && conductedDisplay > 0) ? `${liveSubAtt}%` : (s.avgAttendance > 0 && conductedDisplay > 0 ? `${s.avgAttendance}%` : '--%');
 
         const semRaw = String(s.semester || 'I').trim();
         const semLabel = /^sem/i.test(semRaw) ? escHtml(semRaw) : `Sem ${escHtml(semRaw)}`;
-
-        const hasPlan = (s.hasTeachingPlan !== false && s.totalLectures > 0);
-        const totalDisplay = hasPlan ? s.totalLectures : '?';
-        const progressPct = hasPlan ? (conductedDisplay === 0 ? 0 : (s.percent || 0)) : 0;
 
         const isSubZero = (progressPct === 0);
         const pctColor = !hasPlan ? '#b45309' : (isSubZero ? '#dc2626' : '#059669');
