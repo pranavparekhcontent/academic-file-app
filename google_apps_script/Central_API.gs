@@ -346,10 +346,10 @@ function _findSheetByCode(ss, inputCode, nameHint, batchHint) {
         if (parsedInput.batch === parsedSheet.batch) {
           score = 98; // Exact base code & exact batch
         } else {
-          score = 10; // Mismatching batch
+          score = 60; // Sibling batch fallback for syllabus topics
         }
       } else if (parsedInput.batch && !parsedSheet.batch) {
-        score = cleanSheetName.indexOf(parsedInput.batch) !== -1 ? 92 : 40;
+        score = 85; // Exact base code matches! Master teaching plan sheet for subject
       } else if (!parsedInput.batch && parsedSheet.batch) {
         score = 80;
       } else {
@@ -1083,7 +1083,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v50_' + sheetId;
+  var cacheKey = 'dash_v51_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -2128,8 +2128,28 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
       return { success: false, error: 'Teaching plan spreadsheet ID not found for ' + code };
     }
 
+    var subNameHint = '';
+    try {
+      if (sheetId) {
+        var mainSs = _getSpreadsheet(sheetId);
+        var subWs = mainSs ? mainSs.getSheetByName('subjects') : null;
+        if (subWs) {
+          var subData = subWs.getDataRange().getValues();
+          var sCols = _mapSubjectCols(subData[0] || []);
+          var targetParsed = _parseSubjectCode(code);
+          for (var i = 1; i < subData.length; i++) {
+            var rowCode = String(subData[i][sCols.code] || '').trim();
+            if (_parseSubjectCode(rowCode).cleanBaseCode === targetParsed.cleanBaseCode) {
+              subNameHint = String(subData[i][sCols.name] || '').trim();
+              break;
+            }
+          }
+        }
+      }
+    } catch(nhErr) {}
+
     var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
-    var ws = _findSheetByCode(tpSs, code, '', batchHint);
+    var ws = _findSheetByCode(tpSs, code, subNameHint, batchHint);
     
     if (!ws) {
       return { success: false, error: 'No sheet found for subject code: ' + code + ' in Teaching Plan spreadsheet' };
@@ -2451,8 +2471,9 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
       return planResult;
     }
 
+    var subNameHint = (planResult && planResult.metadata && planResult.metadata.subjectName) || '';
     var tpSs = _getSpreadsheet(targetIds.teachingPlanId);
-    var tpWs = _findSheetByCode(tpSs, code, '', batchHint);
+    var tpWs = _findSheetByCode(tpSs, code, subNameHint, batchHint);
     if (!tpWs) {
       return planResult;
     }
@@ -2461,7 +2482,7 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
     try { outSs = _getSpreadsheet(targetIds.outputSheetId); } catch(e) {}
     if (!outSs) return planResult;
 
-    var outWs = _findSheetByCode(outSs, code, '', batchHint);
+    var outWs = _findSheetByCode(outSs, code, subNameHint, batchHint);
     if (!outWs) return planResult;
 
     var outData = outWs.getDataRange().getValues();
