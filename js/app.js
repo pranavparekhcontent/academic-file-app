@@ -58,12 +58,13 @@ const App = (() => {
   }
 
   function extractBatchInfo(topic, subject) {
-    if (!topic) return 'Batch A';
-    if (topic.batch) return String(topic.batch).trim();
-    if (topic.executedBatch) return String(topic.executedBatch).trim();
+    if (topic && topic.batch) return String(topic.batch).trim();
+    if (topic && topic.executedBatch) return String(topic.executedBatch).trim();
+    if (state && state.activeBatch) return state.activeBatch;
+    if (subject && subject.batch) return String(subject.batch).trim();
 
     // Check syllabus text or remark
-    const text = `${topic.syllabus || ''} ${topic.remark || ''} ${subject ? subject.name || '' : ''} ${subject ? subject.code || '' : ''}`;
+    const text = `${(topic && topic.syllabus) || ''} ${(topic && topic.remark) || ''} ${subject ? subject.name || '' : ''} ${subject ? subject.code || '' : ''}`;
     const match = text.match(/\b(batch\s*[a-d0-9]+|batch\s*[a-d]|batch\s*all)\b/i);
     if (match) {
       const raw = match[0].trim();
@@ -76,11 +77,11 @@ const App = (() => {
       if (codeMatch && codeMatch[1]) {
         const val = codeMatch[1].trim();
         if (/^[a-d0-9]+$/i.test(val)) return `Batch ${val.toUpperCase()}`;
+        if (/^batch\s*[a-d0-9]+/i.test(val)) return val.charAt(0).toUpperCase() + val.slice(1);
       }
     }
 
-    // Default for practical milestones
-    return 'Batch A';
+    return '';
   }
 
   // ─── TOAST NOTIFICATIONS ────────────────────────────────
@@ -984,6 +985,7 @@ const App = (() => {
     const menu = document.getElementById('custom-subject-menu');
     const trigger = document.getElementById('custom-subject-trigger');
     if (!menu) return;
+
     const isVisible = menu.style.display === 'block';
     menu.style.display = isVisible ? 'none' : 'block';
     if (trigger) {
@@ -992,7 +994,7 @@ const App = (() => {
     }
   }
 
-  function selectCustomSubjectOption(code, label) {
+  function selectCustomSubjectOption(code, label, batch) {
     const selector = document.getElementById('subject-selector');
     const labelEl = document.getElementById('custom-subject-label');
     const menu = document.getElementById('custom-subject-menu');
@@ -1003,11 +1005,15 @@ const App = (() => {
     if (menu) menu.style.display = 'none';
     if (trigger) trigger.classList.remove('open');
 
+    state.activeBatch = batch || '';
+
     // Update active highlight class on glass options
     if (menu) {
       menu.querySelectorAll('.custom-glass-option').forEach(opt => {
         const check = opt.querySelector('.item-check');
-        if (opt.dataset.code === code) {
+        const codeMatches = opt.dataset.code === code;
+        const batchMatches = !batch || opt.dataset.batch === batch;
+        if (codeMatches && batchMatches) {
           opt.classList.add('selected');
           if (check) check.style.display = 'inline-block';
         } else {
@@ -1017,7 +1023,7 @@ const App = (() => {
       });
     }
 
-    changeActiveSubject(code);
+    changeActiveSubject(code, batch);
   }
 
   // ─── REPORTS PERIOD FILTER (CUSTOM 3D GLASS DROPDOWN) ──────────────────────
@@ -1078,12 +1084,35 @@ const App = (() => {
 
   // Close dropdown menus when clicking anywhere outside
   document.addEventListener('click', (e) => {
-    const subjectWrapper = document.getElementById('custom-subject-wrapper');
-    const subjectMenu = document.getElementById('custom-subject-menu');
-    const subjectTrigger = document.getElementById('custom-subject-trigger');
-    if (subjectWrapper && !subjectWrapper.contains(e.target)) {
-      if (subjectMenu) subjectMenu.style.display = 'none';
-      if (subjectTrigger) subjectTrigger.classList.remove('open');
+    const sMenu = document.getElementById('custom-subject-menu');
+    const sTrigger = document.getElementById('custom-subject-trigger');
+    if (sMenu && sMenu.style.display === 'block') {
+      if (!sTrigger || !sTrigger.contains(e.target)) {
+        sMenu.style.display = 'none';
+        if (sTrigger) sTrigger.classList.remove('open');
+      }
+    }
+
+    const pMenu = document.getElementById('custom-period-menu');
+    const pTrigger = document.getElementById('custom-period-trigger');
+    const pWrapper = document.getElementById('custom-period-wrapper');
+    const filterBar = pWrapper ? pWrapper.closest('.incharge-glass-filter-bar') : null;
+    if (pMenu && pMenu.style.display === 'block') {
+      if (!pTrigger || !pTrigger.contains(e.target)) {
+        pMenu.style.display = 'none';
+        if (pTrigger) pTrigger.classList.remove('open');
+        if (pWrapper) pWrapper.classList.remove('open');
+        if (filterBar) filterBar.classList.remove('dropdown-open');
+      }
+    }
+
+    const incMenu = document.getElementById('custom-incharge-menu');
+    const incTrigger = document.getElementById('custom-incharge-trigger');
+    if (incMenu && incMenu.style.display === 'block') {
+      if (!incTrigger || !incTrigger.contains(e.target)) {
+        incMenu.style.display = 'none';
+        if (incTrigger) incTrigger.classList.remove('open');
+      }
     }
 
     const facultyWrapper = document.getElementById('custom-faculty-wrapper');
@@ -1095,17 +1124,6 @@ const App = (() => {
       facultyWrapper.classList.remove('open');
       const fg = facultyWrapper.closest('.form-group');
       if (fg) fg.classList.remove('dropdown-open');
-    }
-
-    const periodWrapper = document.getElementById('custom-period-wrapper');
-    const periodMenu = document.getElementById('custom-period-menu');
-    const periodTrigger = document.getElementById('custom-period-trigger');
-    if (periodWrapper && !periodWrapper.contains(e.target)) {
-      if (periodMenu) periodMenu.style.display = 'none';
-      if (periodTrigger) periodTrigger.classList.remove('open');
-      periodWrapper.classList.remove('open');
-      const filterBar = periodWrapper.closest('.incharge-glass-filter-bar');
-      if (filterBar) filterBar.classList.remove('dropdown-open');
     }
   });
 
@@ -1142,7 +1160,10 @@ const App = (() => {
     }
 
     facultySubs.forEach((s) => {
-      const optionLabel = `${s.name} (${s.code}) - SEM ${s.semester}`;
+      const sBatch = s.batch ? s.batch.trim() : '';
+      const optionLabel = sBatch 
+        ? `${s.name} (${s.code}) [${sBatch}] - SEM ${s.semester}` 
+        : `${s.name} (${s.code}) - SEM ${s.semester}`;
       
       if (selector) {
         const opt = document.createElement('option');
@@ -1155,13 +1176,14 @@ const App = (() => {
         const item = document.createElement('div');
         item.className = 'custom-glass-option';
         item.dataset.code = s.code;
+        if (sBatch) item.dataset.batch = sBatch;
         item.innerHTML = `
           <span>${escHtml(optionLabel)}</span>
           <i class="ph ph-check item-check" style="display:none;"></i>
         `;
         item.onclick = (e) => {
           e.stopPropagation();
-          selectCustomSubjectOption(s.code, optionLabel);
+          selectCustomSubjectOption(s.code, optionLabel, sBatch);
         };
         menu.appendChild(item);
       }
@@ -1170,7 +1192,7 @@ const App = (() => {
     if (trigger) trigger.classList.add('pulse-subject');
   }
 
-  async function changeActiveSubject(code) {
+  async function changeActiveSubject(code, batch) {
     if (!code) return;
 
     // Remove pulse animation once a subject is selected
@@ -1178,7 +1200,20 @@ const App = (() => {
     if (trigger) trigger.classList.remove('pulse-subject');
 
     state.activeCode = code;
-    state.activeSubject = state.subjects.find(s => s.code === code);
+    state.activeBatch = batch || '';
+
+    // Match subject by code and batch if present
+    state.activeSubject = state.subjects.find(s => {
+      if (s.code !== code) return false;
+      if (batch && s.batch) {
+        return s.batch.replace(/\s+/g, '').toUpperCase() === batch.replace(/\s+/g, '').toUpperCase();
+      }
+      return true;
+    }) || state.subjects.find(s => s.code === code) || { code: code, name: code, batch: batch };
+
+    if (batch && !state.activeSubject.batch) {
+      state.activeSubject = { ...state.activeSubject, batch: batch };
+    }
 
     // Reset teaching plan state immediately for new subject to avoid showing stale data from previous subject
     state.teachingPlan = { all: [], theory: [], practical: [] };
@@ -1196,7 +1231,8 @@ const App = (() => {
     updateDashboardStats();
 
     // Show loading indicators
-    Toast.show('Refreshing Workload', `Loading active database logs for ${code}...`, 'success');
+    const displayLabel = batch ? `${code} (${batch})` : code;
+    Toast.show('Refreshing Workload', `Loading active database logs for ${displayLabel}...`, 'success');
 
     // Sync dataset with Sheets
     await triggerSyncAllViews();
@@ -1231,8 +1267,8 @@ const App = (() => {
     if (!state.activeCode) return;
 
     try {
-      // Trigger auto-sync matching algorithm with Smart Attendance
-      const syncRes = await API.syncTeachingPlan(state.activeCode, state.facultyName);
+      // Trigger auto-sync matching algorithm with Smart Attendance (passing batch)
+      const syncRes = await API.syncTeachingPlan(state.activeCode, state.facultyName, state.activeBatch);
       if (syncRes.success && syncRes.topics && syncRes.topics.length > 0) {
         const cleanTopics = _deduplicateTopics(syncRes.topics);
         state.metadata = { ...state.metadata, ...(syncRes.metadata || {}) };
@@ -2213,7 +2249,7 @@ const App = (() => {
 
             <!-- Row 2: Action Buttons (View Plan & Student's Feedback side-by-side centered) -->
             <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 8px;">
-              <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+              <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}', '${_escAttr(s.batch || effectiveBatch || '')}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                 View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
               </button>
               <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: rgba(255, 255, 255, 0.75); border: 1.5px solid ${pal.icon}; color: ${pal.icon} !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
@@ -2304,8 +2340,11 @@ const App = (() => {
     `;
   }
 
-  function selectSubjectForDrilldown(code, name) {
-    selectCustomSubjectOption(code, name || code);
+  function selectSubjectForDrilldown(code, name, batch) {
+    state.activeBatch = batch || '';
+    const fullCode = batch ? `${code} (${batch})` : code;
+    const label = name ? (batch ? `${name} [${batch}]` : name) : fullCode;
+    selectCustomSubjectOption(code, label, batch);
     switchView('teaching-plan');
   }
 
@@ -4300,7 +4339,7 @@ Generated: ${formatDisplayDate(new Date())}
                   <span style="font-size: 11px; font-weight: 800; color: ${attBadgeColor}; background: ${attBadgeBg}; border: 1px solid ${attBadgeBorder}; padding: 4px 10px; border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">
                     ${attText} Avg Student Attendance
                   </span>
-                  <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}')" style="
+                  <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}', '${escHtml(s.name || s.code)}', '${escHtml(s.batch || '')}')" style="
                     display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
                     font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
                     background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);

@@ -283,10 +283,10 @@ const API = (() => {
   //  READ APIs — Always network (per-subject, not bulk)
   // ═══════════════════════════════════════════════════════
 
-  async function getTeachingPlan(code, teacher) {
+  async function getTeachingPlan(code, teacher, batch) {
     if (navigator.onLine) {
       try {
-        return await _get('getTeachingPlan', { code: code, teacher: teacher });
+        return await _get('getTeachingPlan', { code: code, teacher: teacher, batch: batch || '' });
       } catch (e) {
         console.warn('API.getTeachingPlan network failed:', e.message);
       }
@@ -326,12 +326,12 @@ const API = (() => {
   //  WRITE APIs — Always hit the network
   // ═══════════════════════════════════════════════════════
 
-  async function syncTeachingPlan(code, teacher) {
+  async function syncTeachingPlan(code, teacher, batch) {
     if (!navigator.onLine) {
-      return getTeachingPlan(code, teacher);
+      return getTeachingPlan(code, teacher, batch);
     }
     try {
-      return await _get('syncTeachingPlan', { code: code, teacher: teacher });
+      return await _get('syncTeachingPlan', { code: code, teacher: teacher, batch: batch || '' });
     } catch (e) {
       return { success: false, error: e.message };
     }
