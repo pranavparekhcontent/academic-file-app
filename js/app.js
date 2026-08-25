@@ -254,43 +254,25 @@ const App = (() => {
     // Always force session clearance on fresh engine launch
     clearSession();
 
-    // Immediately display login screen to eliminate any blank delay
-    showScreen('login');
-
-    // Register exit/unload listeners to always logout on app close/exit
-    window.addEventListener('beforeunload', clearSession);
-    window.addEventListener('pagehide', clearSession);
-
-    // 1. Initialize Session Cache — single bulk download of ALL data
+    // 1. First priority: Use engine's pre-fetched data (fetched in parallel during splash animation)
     let rawData = null;
-    try {
-      const bulkData = await API.initSessionCache();
-      if (bulkData && bulkData.success) {
-        // Session cache loaded — construct rawData from it
-        rawData = {
-          success: true,
-          teachers: bulkData.teachers || [],
-          subjects: bulkData.subjects || [],
-          attendanceLimit: bulkData.attendanceLimit || 75,
-          config: bulkData.config || {}
-        };
-        console.log('[App] Session cache initialized successfully');
+    if (context && context.fetchedData) {
+      rawData = context.fetchedData.allData || context.fetchedData.data || context.fetchedData;
+      if (typeof rawData === 'string' && rawData.trim().startsWith('{')) {
+        try { rawData = JSON.parse(rawData); } catch(e) {}
       }
-    } catch (e) {
-      console.warn('[App] Session cache init failed, falling back:', e.message);
     }
 
-    // 2. Fallback: try engine's pre-fetched data or direct API call
-    if (!rawData || !rawData.success) {
-      if (context.fetchedData) {
-        rawData = context.fetchedData.allData || context.fetchedData.data || context.fetchedData;
-        if (typeof rawData === 'string' && rawData.trim().startsWith('{')) {
-          try { rawData = JSON.parse(rawData); } catch(e) {}
-        }
-      }
-      if (!rawData || (!rawData.success && !rawData.teachers)) {
-        console.log("Fallback: fetching getAllData directly...");
-        rawData = await API.getAllData();
+    // 2. Second priority: Local cache
+    if (!rawData || (!rawData.success && !rawData.teachers)) {
+      const cached = localStorage.getItem('acad_cache_allData');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.data && (parsed.data.success || parsed.data.teachers)) {
+            rawData = parsed.data;
+          }
+        } catch(e) {}
       }
     }
 
@@ -300,7 +282,36 @@ const App = (() => {
       state.subjects = rawData.subjects || [];
     }
 
-    // 3. Register network status listeners
+    // 3. Immediately display login screen with preloaded faculty selector
+    showScreen('login');
+    updateMasterConfigDisplay();
+    buildFacultySelector();
+
+    // 4. Background: initialize session cache for subsequent reads without blocking UI
+    API.initSessionCache().then(bulkData => {
+      if (bulkData && bulkData.success) {
+        state.allData = {
+          success: true,
+          teachers: bulkData.teachers || state.teachers || [],
+          subjects: bulkData.subjects || state.subjects || [],
+          attendanceLimit: bulkData.attendanceLimit || 75,
+          config: bulkData.config || {}
+        };
+        if (Array.isArray(bulkData.teachers) && bulkData.teachers.length > 0) {
+          state.teachers = bulkData.teachers;
+        }
+        if (Array.isArray(bulkData.subjects) && bulkData.subjects.length > 0) {
+          state.subjects = bulkData.subjects;
+        }
+        buildFacultySelector();
+      }
+    }).catch(e => console.warn('[App] Background session cache init:', e.message));
+
+    // 5. Register exit/unload listeners
+    window.addEventListener('beforeunload', clearSession);
+    window.addEventListener('pagehide', clearSession);
+
+    // 6. Register network status listeners
     window.addEventListener('online', () => {
       document.body.classList.remove('offline');
       Toast.show('Connected', 'Systems are online.', 'success');
@@ -311,10 +322,6 @@ const App = (() => {
       Toast.show('Disconnected', 'Offline mode activated.', 'warning');
     });
     if (!navigator.onLine) document.body.classList.add('offline');
-
-    // 4. Setup select options & update headers
-    updateMasterConfigDisplay();
-    buildFacultySelector();
   }
 
   function updateMasterConfigDisplay() {
@@ -938,13 +945,20 @@ const App = (() => {
     if (select) select.innerHTML = '<option value="">Select Faculty</option>';
     if (menu) menu.innerHTML = '';
 
-    if (!state.teachers || state.teachers.length === 0) {
+    const validTeachers = (state.teachers || []).filter(t => {
+      const name = (typeof t === 'string') ? t : (t.name || t.facultyName || String(t));
+      if (!name) return false;
+      const clean = name.trim().toLowerCase();
+      return clean !== 'academic incharge' && !clean.includes('academic incharge') && clean !== 'unassigned' && clean !== 'assigned';
+    });
+
+    if (validTeachers.length === 0) {
       if (labelEl) labelEl.innerText = 'Select Faculty';
       if (menu) menu.innerHTML = '<div style="padding: 14px; font-size: 13px; font-weight: 600; color: #475569; text-align: center;">No faculty entries found</div>';
       return;
     }
 
-    state.teachers.forEach(t => {
+    validTeachers.forEach(t => {
       const name = (typeof t === 'string') ? t : (t.name || t.facultyName || String(t));
       if (!name) return;
 
