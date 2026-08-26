@@ -1078,7 +1078,7 @@ function academicInchargeLogin(name, pin, sheetId) {
 
 function getInchargeDashboard(sheetId) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'dash_v53_' + sheetId;
+  var cacheKey = 'dash_v54_' + sheetId;
   var cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -1322,7 +1322,7 @@ function getInchargeDashboard(sheetId) {
                 }
               }
 
-              var finalPlannedTopics = (headerTotalPlanned > 0) ? headerTotalPlanned : topicsCount;
+              var finalPlannedTopics = (topicsCount > 0) ? ((headerTotalPlanned > 0) ? headerTotalPlanned : topicsCount) : 0;
               var statsObj = { totalLectures: finalPlannedTopics, totalConducted: conductedCount };
 
               // Match this tab stats to any subject code or name
@@ -1652,6 +1652,8 @@ function getInchargeDashboard(sheetId) {
   }
 }
 
+
+
 /* ═══════════════════════════════════════════════════════════════
    BULK SESSION DATA — Single endpoint for all session data
    Replaces multiple API calls (getAllData, getInchargeDashboard,
@@ -1975,18 +1977,48 @@ function debugAttendanceData(sheetId) {
     try { outSs = SpreadsheetApp.openById(cleanOutId); } catch(e) { return { error: 'Cannot open: ' + e.message, id: cleanOutId }; }
 
     var sheets = outSs.getSheets();
+    var allSheetsList = sheets.map(function(s) {
+      return { name: s.getName(), lastRow: s.getLastRow(), lastCol: s.getLastColumn() };
+    });
+
+    // Also inspect Teaching Plan Spreadsheet
+    var tpTarget = getTargetSheetIds('BP503T', sheetId);
+    var tpDebug = {};
+    if (tpTarget.teachingPlanId) {
+      var tpSs = _getSpreadsheet(tpTarget.teachingPlanId);
+      if (tpSs) {
+        var tpSheets = tpSs.getSheets();
+        tpDebug.sheetNames = tpSheets.map(function(s) { return s.getName(); });
+        var foundWs = _findSheetByCode(tpSs, 'BP503T', 'Pharmacology II');
+        if (foundWs) {
+          tpDebug.matchedSheetName = foundWs.getName();
+          tpDebug.lastRow = foundWs.getLastRow();
+          tpDebug.lastCol = foundWs.getLastColumn();
+          tpDebug.sampleRows = foundWs.getRange(1, 1, Math.min(30, foundWs.getLastRow()), Math.min(10, foundWs.getLastColumn())).getValues();
+        } else {
+          tpDebug.matchedSheetName = 'NONE';
+        }
+      }
+    }
+
     var debugInfo = {
       outputSheetId: cleanOutId,
+      tpDebug: tpDebug,
       sheetCount: sheets.length,
-      sheets: []
+      allSheets: allSheetsList,
+      matchedSheets: []
     };
 
-    for (var i = 0; i < Math.min(sheets.length, 5); i++) {
+    for (var i = 0; i < sheets.length; i++) {
       var s = sheets[i], name = s.getName();
       var lr = s.getLastRow(), lc = s.getLastColumn();
+      var lowerName = name.toLowerCase();
+      var isTarget = lowerName.indexOf('306') !== -1 || lowerName.indexOf('302') !== -1 || lowerName.indexOf('sachin') !== -1 || lowerName.indexOf('pharmaceutics') !== -1 || lowerName.indexOf('batch a') !== -1 || lowerName.indexOf('batch b') !== -1;
+      if (!isTarget) continue;
+
       var sheetDebug = { name: name, lastRow: lr, lastCol: lc };
 
-      if (lr < 3 || lc < 3) { sheetDebug.skip = 'too small'; debugInfo.sheets.push(sheetDebug); continue; }
+      if (lr < 3 || lc < 3) { sheetDebug.skip = 'too small'; debugInfo.matchedSheets.push(sheetDebug); continue; }
 
       var data = s.getRange(1, 1, Math.min(lr, 15), lc).getValues();
 
@@ -2018,14 +2050,6 @@ function debugAttendanceData(sheetId) {
         });
       }
 
-      // Show first student row (first 10 cells)
-      if (hdrRowIdx + 2 < data.length) {
-        var stuRow = data[hdrRowIdx + 2] || [];
-        sheetDebug.firstStudentRow = stuRow.slice(0, 10).map(function(c) {
-          return String(c === null || c === undefined ? 'NULL' : c);
-        });
-      }
-
       // Count dates and P/A values
       var rawH = data[hdrRowIdx] || [];
       var nextH = data[hdrRowIdx + 1] || [];
@@ -2040,7 +2064,6 @@ function debugAttendanceData(sheetId) {
         if (/^\d{1,2}[-\/]/.test(vStr) || /^\d{4}-\d{2}/.test(vStr)) dateCount++;
         if (/^\d{1,2}[-\/]/.test(nvStr) || /^\d{4}-\d{2}/.test(nvStr)) dateCount++;
       }
-      // Check P/A in data rows
       for (var r = hdrRowIdx + 2; r < Math.min(data.length, hdrRowIdx + 5); r++) {
         for (var c = 2; c < data[r].length; c++) {
           var st = String(data[r][c] || '').trim();
@@ -2050,7 +2073,7 @@ function debugAttendanceData(sheetId) {
       sheetDebug.dateColumnsFound = dateCount;
       sheetDebug.paCellsInFirst3Rows = paCount;
 
-      debugInfo.sheets.push(sheetDebug);
+      debugInfo.matchedSheets.push(sheetDebug);
     }
 
     // Also run the actual function and report record count
@@ -2439,7 +2462,7 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
         faculty: faculty,
         subject: subject,
         isPractical: parsedSubjectCodeInfo.isPractical,
-        totalLectures: totalLectures,
+        totalLectures: topics.length > 0 ? (totalLectures || topics.length) : 0,
         totalTutorials: totalTutorials,
         percent: percent,
         conductedCount: conductedCount,

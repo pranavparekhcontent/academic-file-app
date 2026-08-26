@@ -1472,8 +1472,8 @@ const App = (() => {
           percent: 0,
           totalTopics: 0
         };
-        const errMsg = (syncRes && syncRes.error) || `No teaching plan sheet found for ${state.activeCode}.`;
-        Toast.show('Sheet Not Found', errMsg, 'warning');
+        const errMsg = (syncRes && syncRes.error) || `No teaching plan topics found for ${state.activeCode}.`;
+        Toast.show('No Plan Found', errMsg, 'warning');
       }
 
       // Update Dashboard stats
@@ -1565,7 +1565,7 @@ const App = (() => {
       setText('tp-column-title', `${unitPlural} Progress`);
       setText('tp-milestone-title', `${unit} Milestones`);
       setText('tp-metadata-pct', 0);
-      setText('tp-hero-sub', `No teaching plan sheet found for ${state.activeSubject ? state.activeSubject.code : ''}`);
+      setText('tp-hero-sub', `No teaching plan found for ${state.activeSubject ? state.activeSubject.code : ''}`);
       setText('tp-hero-covered', `0/0`);
       setText('tp-hero-required', 0);
       const heroBar = document.getElementById('tp-hero-bar-fill');
@@ -1574,8 +1574,8 @@ const App = (() => {
       list.innerHTML = `
         <div class="schedule-empty" style="padding: 60px 20px; text-align: center;">
           <i class="ph ph-file-x" style="font-size: 48px; color: var(--accent-blue); opacity: 0.5;"></i>
-          <h4 style="margin: 12px 0 6px;">No Syllabus Sheet Found</h4>
-          <p>The teaching plan sheet for <strong>${escHtml(state.activeSubject ? state.activeSubject.name : '')} (${escHtml(state.activeSubject ? state.activeSubject.code : '')})</strong> is not present in your Google Spreadsheet.</p>
+          <h4 style="margin: 12px 0 6px;">No Teaching Plan Found</h4>
+          <p>The teaching plan for <strong>${escHtml(state.activeSubject ? state.activeSubject.name : '')} (${escHtml(state.activeSubject ? state.activeSubject.code : '')})</strong> has not been added or has no topics in your Google Spreadsheet.</p>
         </div>
       `;
       return;
@@ -2469,14 +2469,19 @@ const App = (() => {
 
             <!-- Row 2: Action Buttons (View Plan & Student's Feedback side-by-side centered) -->
             <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 8px;">
-              <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}', '${_escAttr(s.batch || effectiveBatch || '')}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
-                View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
-              </button>
+              ${hasPlan ? `
+                <button type="button" class="btn-view-plan-link" onclick="App.selectSubjectForDrilldown('${_escAttr(s.code)}', '${_escAttr(s.name)}', '${_escAttr(s.batch || effectiveBatch || '')}')" title="Click to open full syllabus & teaching plan for ${s.name}" style="background: linear-gradient(135deg, rgba(0, 122, 255, 0.12), rgba(0, 195, 255, 0.18)); border: 1.5px solid rgba(0, 122, 255, 0.35); color: #0284c7 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
+                  View Plan <i class="ph ph-caret-right" style="color: #0284c7 !important; font-weight: 800;"></i>
+                </button>
+              ` : `
+                <span class="badge-no-plan" style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid rgba(245, 158, 11, 0.35); color: #b45309 !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px; box-shadow: inset 0 1px 1px #ffffff;">
+                  <i class="ph ph-warning" style="color: #b45309; font-size: 13px;"></i> No Plan
+                </span>
+              `}
               <button type="button" class="btn-student-feedback-link" onclick="Toast.show('Student Feedback', 'Student feedback module coming soon.', 'info')" title="Student\'s Feedback for ${escHtml(s.name)}" style="background: rgba(255, 255, 255, 0.75); border: 1.5px solid ${pal.icon}; color: ${pal.icon} !important; font-size: 11.5px; font-weight: 800; padding: 0 12px; height: 28px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease; box-shadow: inset 0 1px 1px #ffffff;">
                 Student's Feedback <i class="ph ph-chat-teardrop-text" style="color: ${pal.icon} !important;"></i>
               </button>
             </div>
-            ${!hasPlan ? `<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 4px;"><span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:#b45309;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:2px 8px;border-radius:6px;"><i class="ph ph-warning" style="font-size:12px;"></i> No Teaching Plan Found</span></div>` : ''}
 
             <!-- Row 3: Sem, Lectures & Live Avg Attendance (SINGLE ROW ABOVE STATUS BAR) -->
             <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px;">
@@ -4571,14 +4576,20 @@ Generated: ${formatDisplayDate(new Date())}
                   <span style="font-size: 11px; font-weight: 800; color: ${attBadgeColor}; background: ${attBadgeBg}; border: 1px solid ${attBadgeBorder}; padding: 4px 10px; border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">
                     ${attText} Avg Student Attendance
                   </span>
-                  <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}', '${escHtml(s.name || s.code)}', '${escHtml(s.batch || '')}')" style="
-                    display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
-                    font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
-                    background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
-                    border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
-                  " onmouseover="this.style.background='var(--accent-blue)';this.style.color='#fff';" onmouseout="this.style.background='var(--colorless-glass-hover)';this.style.color='var(--accent-blue)';">
-                    View Plan <i class="ph ph-caret-right" style="font-size: 12px;"></i>
-                  </button>
+                  ${(s.hasTeachingPlan !== false && s.totalLectures > 0) ? `
+                    <button type="button" onclick="App.selectSubjectForDrilldown('${escHtml(s.code || s.name)}', '${escHtml(s.name || s.code)}', '${escHtml(s.batch || '')}')" style="
+                      display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
+                      font-size: 11px; font-weight: 800; color: var(--accent-blue, #0071e3);
+                      background: var(--colorless-glass-hover); border: 1px solid rgba(0, 113, 227, 0.25);
+                      border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+                    " onmouseover="this.style.background='var(--accent-blue)';this.style.color='#fff';" onmouseout="this.style.background='var(--colorless-glass-hover)';this.style.color='var(--accent-blue)';">
+                      View Plan <i class="ph ph-caret-right" style="font-size: 12px;"></i>
+                    </button>
+                  ` : `
+                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 800; color: #b45309; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-pill); flex-shrink: 0; white-space: nowrap;">
+                      <i class="ph ph-warning"></i> No Plan
+                    </span>
+                  `}
                 </div>
 
               </div>
