@@ -4247,39 +4247,43 @@ Generated: ${formatDisplayDate(new Date())}
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY (Indian/British day-first: DD/MM/YYYY)
-    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY
+    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
     if (m) {
       const d = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26, 26-Aug-2026, 26-Aug-26)
-    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+    // DD-MMM-YY / DD-MMM-YYYY
+    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
     if (m) {
       const mi = mos.indexOf(m[2].toLowerCase());
       let y = +m[3]; if (y < 100) y += 2000;
       if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
-    // DD-MMM or DD MMM (e.g. 24-Jul, 5-Aug, 26 Aug)
-    m = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})$/);
+    // DD-MMM or DD MMM
+    m = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})/);
     if (m) {
-      const mi = mos.indexOf(m[2].toLowerCase());
-      const y = new Date().getFullYear();
-      if (mi >= 0) return new Date(y, mi, +m[1]);
+      // make sure it isn't actually DD MMM YYYY by checking next chars
+      let hasYear = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[-\s,](\d{2,4})/);
+      if(hasYear) {
+         let y = +hasYear[3]; if(y < 100) y+=2000;
+         const mi = mos.indexOf(hasYear[2].toLowerCase());
+         if(mi >= 0) return new Date(y, mi, +hasYear[1]);
+      } else {
+         const mi = mos.indexOf(m[2].toLowerCase());
+         const y = new Date().getFullYear();
+         if (mi >= 0) return new Date(y, mi, +m[1]);
+      }
     }
 
-    // DD MMM YYYY (e.g. 26 Aug 2026)
-    m = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
-    if (m) {
-      const mi = mos.indexOf(m[2].substring(0, 3).toLowerCase());
-      const y = +m[3];
-      if (mi >= 0) return new Date(y, mi, +m[1]);
+    try {
+      const fallback = new Date(trimmed);
+      return isNaN(fallback.getTime()) ? null : fallback;
+    } catch(e) {
+      return null;
     }
-
-    const fallback = new Date(trimmed);
-    return isNaN(fallback.getTime()) ? null : fallback;
   }
 
   // Format any recognised date value as dd/mm/yyyy. Unparseable input is
@@ -5743,17 +5747,11 @@ Generated: ${formatDisplayDate(new Date())}
         const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curStudentBatch);
         const sKey = cleanInfo.code;
         
-        // MULTIPLE LECTURE FIX: If this student already has this subject recorded today, suffix it
-        let suffixNum = 2;
+        // Standardize subject key
         let finalSKey = sKey;
-        while (studentMap[matchedKey].att[finalSKey] !== undefined) {
-           finalSKey = sKey + ' (L' + suffixNum + ')';
-           suffixNum++;
-        }
 
         if (!activeSubjectsMap[finalSKey]) {
-           // Clone to prevent mutating original cleanInfo if suffixed
-           activeSubjectsMap[finalSKey] = { ...cleanInfo, code: finalSKey };
+           activeSubjectsMap[finalSKey] = cleanInfo;
         }
 
         const st = String(r.status || '').toUpperCase().trim();
