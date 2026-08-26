@@ -4900,12 +4900,14 @@ Generated: ${formatDisplayDate(new Date())}
     const code = typeof subjectOrCode === 'string' ? subjectOrCode : (subjectOrCode.code || subjectOrCode.name || '');
     const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-    // 1. Direct match in classSubjects list (if provided and populated)
+    // 1. Direct match in classSubjects list (check code AND subject name)
     if (Array.isArray(classSubjects) && classSubjects.length > 0) {
       const matchInList = classSubjects.some(cs => {
-        if (!cs || !cs.code) return false;
-        const csClean = String(cs.code).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return csClean === cleanCode || (csClean && cleanCode && (csClean.startsWith(cleanCode) || cleanCode.startsWith(csClean)));
+        if (!cs) return false;
+        const csClean = String(cs.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const csNameClean = String(cs.name || cs.subjectName || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return (csClean && (csClean === cleanCode || csClean.startsWith(cleanCode) || cleanCode.startsWith(csClean) || csClean.includes(cleanCode) || cleanCode.includes(csClean))) ||
+               (csNameClean && (csNameClean === cleanCode || csNameClean.includes(cleanCode) || cleanCode.includes(csNameClean)));
       });
       if (matchInList) return true;
     }
@@ -5101,17 +5103,94 @@ Generated: ${formatDisplayDate(new Date())}
   //  DAYWISE ATTENDANCE REPORT (Custom Glass Dropdowns & Calendar)
   // ═══════════════════════════════════════════════════════
 
+  // Universal date matching helper — handles YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, DD-MMM-YYYY, DD-MMM, spaces, dots, Date objects
+  function isSameDateMatch(recordDateStr, targetDateStr) {
+    if (!recordDateStr || !targetDateStr) return false;
+    const rd = String(recordDateStr).trim().toLowerCase();
+    const td = String(targetDateStr).trim().toLowerCase();
+    if (rd === td || rd.includes(td)) return true;
+
+    // Parse target date (targetDateStr is typically YYYY-MM-DD e.g. 2026-08-26)
+    let tY = null, tM = null, tD = null;
+    const tParts = targetDateStr.split(/[\/\-.\s]+/);
+    if (tParts.length === 3) {
+      if (tParts[0].length === 4) {
+        tY = parseInt(tParts[0], 10);
+        tM = parseInt(tParts[1], 10);
+        tD = parseInt(tParts[2], 10);
+      } else {
+        tD = parseInt(tParts[0], 10);
+        tM = parseInt(tParts[1], 10);
+        tY = parseInt(tParts[2], 10);
+      }
+    } else {
+      const parsedTar = parseToDate(targetDateStr);
+      if (parsedTar && !isNaN(parsedTar.getTime())) {
+        tY = parsedTar.getFullYear();
+        tM = parsedTar.getMonth() + 1;
+        tD = parsedTar.getDate();
+      }
+    }
+
+    if (!tD || !tM) return false;
+
+    // Parse record date
+    const parsedRec = parseToDate(recordDateStr);
+    if (parsedRec && !isNaN(parsedRec.getTime())) {
+      const rY = parsedRec.getFullYear();
+      const rM = parsedRec.getMonth() + 1;
+      const rD = parsedRec.getDate();
+      if (rD === tD && rM === tM) {
+        if (!tY || !rY || rY === tY) return true;
+      }
+    }
+
+    // Substring variations:
+    const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    const mName = months[tM - 1] || '';
+    const dStr = String(tD);
+    const dPad = String(tD).padStart(2, '0');
+    const mStr = String(tM);
+    const mPad = String(tM).padStart(2, '0');
+
+    if (mName) {
+      if (rd.includes(dStr + '-' + mName) || rd.includes(dPad + '-' + mName) ||
+          rd.includes(dStr + ' ' + mName) || rd.includes(dPad + ' ' + mName) ||
+          rd.includes(dStr + '/' + mName) || rd.includes(dPad + '/' + mName) ||
+          rd.includes(dStr + '.' + mName) || rd.includes(dPad + '.' + mName)) {
+        return true;
+      }
+    }
+
+    if (rd.includes(dPad + '/' + mPad) || rd.includes(dStr + '/' + mStr) || rd.includes(dPad + '/' + mStr) ||
+        rd.includes(dPad + '-' + mPad) || rd.includes(dStr + '-' + mStr) || rd.includes(dPad + '-' + mStr) ||
+        rd.includes(dPad + '.' + mPad) || rd.includes(dStr + '.' + mStr)) {
+      return true;
+    }
+
+    return false;
+  }
+
   function formatDaywiseDisplayDate(dateStr) {
     if (!dateStr) return '';
-    const parts = dateStr.split('-');
+    const parts = String(dateStr).split(/[\/\-.\s]+/);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     if (parts.length === 3) {
-      const [y, m, d] = parts;
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const mIdx = parseInt(m, 10) - 1;
-      const mName = months[mIdx] || m;
-      return `${d} ${mName} ${y}`;
+      if (parts[0].length === 4) { // YYYY-MM-DD
+        const y = parts[0], m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+        const mName = months[m - 1] || parts[1];
+        return `${d} ${mName} ${y}`;
+      } else { // DD-MM-YYYY
+        const d = parseInt(parts[0], 10), m = parseInt(parts[1], 10), y = parts[2];
+        const mName = months[m - 1] || parts[1];
+        return `${d} ${mName} ${y}`;
+      }
     }
-    return dateStr;
+    const d = parseToDate(dateStr);
+    if (d && !isNaN(d.getTime())) {
+      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    return String(dateStr);
   }
 
   function closeAllDaywiseDropdowns() {
@@ -5139,6 +5218,9 @@ Generated: ${formatDisplayDate(new Date())}
           !e.target.closest('#daywise-student-dropdown-wrap') &&
           !e.target.closest('#daywise-date-dropdown-wrap')) {
         closeAllDaywiseDropdowns();
+      }
+      if (!e.target.closest('#absenty-date-dropdown-wrap')) {
+        closeAbsentyDateDropdown();
       }
     });
   }
@@ -5619,7 +5701,7 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      // 3. Filter attendance records for the selected date and class
+      // 3. Filter attendance records for the selected date and class using universal isSameDateMatch
       const dateRecords = allRecords.filter(r => {
         if (!r.date || !r.code) return false;
         
@@ -5628,18 +5710,7 @@ Generated: ${formatDisplayDate(new Date())}
           return false;
         }
 
-        const rd = String(r.date).trim().toLowerCase();
-        if (rd.includes(dateStr.toLowerCase())) return true;
-        const parts = dateStr.split('-');
-        if (parts.length === 3) {
-          const [y, m, d] = parts;
-          const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-          const mName = months[parseInt(m, 10) - 1] || '';
-          const dNum = parseInt(d, 10);
-          if (mName && (rd.includes(`${dNum}-${mName}`) || rd.includes(`${d}-${mName}`))) return true;
-          if (rd.includes(`${d}-${m}-${y}`) || rd.includes(`${d}/${m}/${y}`) || rd.includes(`${dNum}/${parseInt(m,10)}/${y}`)) return true;
-        }
-        return false;
+        return isSameDateMatch(r.date, dateStr);
       });
 
       // 4. Build student list: merge roster & date records
@@ -6218,15 +6289,15 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   // ═══════════════════════════════════════════════════════
-  //  DAYWISE ABSENTY REPORT FOR CLASS (POPUP MODAL)
+  //  DAYWISE ABSENTY REPORT FOR CLASS (POPUP MODAL + CALENDAR)
   // ═══════════════════════════════════════════════════════
 
   function openDaywiseAbsentyModal() {
     const modal = document.getElementById('daywise-absenty-modal');
     if (!modal) return;
 
-    // Populate class dropdown from existing daywise data
-    const data = state.inchargeDashboard || {};
+    // Populate class dropdown
+    const data = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (SessionCache.data && SessionCache.data.dashboard) || {};
     const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
     function extractLiveClassName(item) {
@@ -6253,26 +6324,31 @@ Generated: ${formatDisplayDate(new Date())}
     if (classNames.length === 0) classNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
     classNames = sortAcademicClassNames(classNames);
 
+    const activeClass = state.activeDaywiseYear || classNames[0];
+    state.activeAbsentyClass = activeClass;
+
     const classSelect = document.getElementById('absenty-class-select');
     if (classSelect) {
-      const currentClass = state.activeDaywiseYear || classNames[0];
       classSelect.innerHTML = classNames.map(c =>
-        '<option value="' + escHtml(c) + '"' + (c === currentClass ? ' selected' : '') + '>' + escHtml(c) + '</option>'
+        '<option value="' + escHtml(c) + '"' + (c === activeClass ? ' selected' : '') + '>' + escHtml(c) + '</option>'
       ).join('');
     }
 
-    // Set date to currently selected daywise date or today
-    const dateInput = document.getElementById('absenty-date-select');
-    if (dateInput) {
-      const now = new Date();
-      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-      dateInput.value = state.activeDaywiseDate || todayStr;
+    // Initialize date: sync with active Daywise date or today
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    state.activeAbsentyDate = state.activeDaywiseDate || todayStr;
+    state.absentyCalendarViewDate = null;
+
+    const dateLabel = document.getElementById('absenty-date-label');
+    if (dateLabel) {
+      dateLabel.innerText = formatDaywiseDisplayDate(state.activeAbsentyDate);
     }
 
     // Reset content
     const content = document.getElementById('absenty-report-content');
     if (content) {
-      content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;"><i class="ph ph-magnifying-glass" style="font-size: 38px; color: #8b5cf6; opacity: 0.7; margin-bottom: 10px; display: block;"></i><p style="font-size: 13px; font-weight: 700; margin: 0;">Select Class & Date, then click <strong>Apply</strong> to generate the absenty report.</p></div>';
+      content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #475569;"><i class="ph ph-magnifying-glass" style="font-size: 38px; color: #8b5cf6; opacity: 0.8; margin-bottom: 10px; display: block;"></i><p style="font-size: 13.5px; font-weight: 800; color: #1e293b; margin: 0;">Select Class & Date, then click <strong>Apply</strong> to generate the absenty report.</p></div>';
     }
     const actionBar = document.getElementById('absenty-action-bar');
     if (actionBar) actionBar.style.display = 'none';
@@ -6280,14 +6356,158 @@ Generated: ${formatDisplayDate(new Date())}
     if (statsBar) statsBar.style.display = 'none';
 
     modal.style.display = 'flex';
+    closeAbsentyDateDropdown();
 
-    // Auto-load if class and date are already set
-    setTimeout(function() { loadDaywiseAbsentyData(); }, 100);
+    // Auto-load
+    setTimeout(function() { loadDaywiseAbsentyData(); }, 80);
   }
 
   function closeDaywiseAbsentyModal() {
     const modal = document.getElementById('daywise-absenty-modal');
     if (modal) modal.style.display = 'none';
+    closeAbsentyDateDropdown();
+  }
+
+  function toggleAbsentyDateDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('absenty-date-menu');
+    const trig = document.getElementById('absenty-date-trigger');
+    if (!menu) return;
+    const isVisible = menu.style.display === 'block';
+    if (isVisible) {
+      menu.style.display = 'none';
+      if (trig) trig.classList.remove('active');
+    } else {
+      menu.style.display = 'block';
+      if (trig) trig.classList.add('active');
+      renderAbsentyCalendarGrid();
+    }
+  }
+
+  function closeAbsentyDateDropdown() {
+    const menu = document.getElementById('absenty-date-menu');
+    const trig = document.getElementById('absenty-date-trigger');
+    if (menu) menu.style.display = 'none';
+    if (trig) trig.classList.remove('active');
+  }
+
+  function onAbsentyClassChange() {
+    const classSelect = document.getElementById('absenty-class-select');
+    if (classSelect) {
+      state.activeAbsentyClass = classSelect.value;
+    }
+    renderAbsentyCalendarGrid();
+    loadDaywiseAbsentyData();
+  }
+
+  function changeAbsentyCalendarMonth(delta) {
+    if (!state.absentyCalendarViewDate) {
+      if (state.activeAbsentyDate) {
+        const parts = state.activeAbsentyDate.split('-');
+        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      } else {
+        state.absentyCalendarViewDate = new Date();
+      }
+    }
+    const currentMonth = state.absentyCalendarViewDate.getMonth();
+    const currentYear = state.absentyCalendarViewDate.getFullYear();
+    state.absentyCalendarViewDate = new Date(currentYear, currentMonth + delta, 1);
+    renderAbsentyCalendarGrid();
+  }
+
+  function selectAbsentyDate(dStr) {
+    state.activeAbsentyDate = dStr;
+    const label = document.getElementById('absenty-date-label');
+    if (label) {
+      label.innerText = formatDaywiseDisplayDate(dStr);
+    }
+    closeAbsentyDateDropdown();
+    loadDaywiseAbsentyData();
+  }
+
+  function selectAbsentyDateToday() {
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    selectAbsentyDate(todayStr);
+  }
+
+  function renderAbsentyCalendarGrid() {
+    const container = document.getElementById('absenty-cal-grid-container');
+    const titleEl = document.getElementById('absenty-cal-title-text');
+    if (!container || !titleEl) return;
+
+    if (!state.absentyCalendarViewDate) {
+      if (state.activeAbsentyDate) {
+        const parts = state.activeAbsentyDate.split('-');
+        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      } else {
+        state.absentyCalendarViewDate = new Date();
+      }
+    }
+
+    const viewDate = state.absentyCalendarViewDate;
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    titleEl.innerText = monthNames[month] + ' ' + year;
+
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const selDateStr = state.activeAbsentyDate || todayStr;
+    const targetClass = state.activeAbsentyClass || (document.getElementById('absenty-class-select') ? document.getElementById('absenty-class-select').value : '');
+
+    // Collect all dates that have attendance for this class in this month to show green indicator dots!
+    const datesWithData = {};
+    if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
+      const records = SessionCache.data.attendance.records;
+      records.forEach(r => {
+        if (!r.date || !r.code) return;
+        if (!isSubjectMatchingClass(r.code, targetClass)) return;
+        const parsed = parseToDate(r.date);
+        if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
+          const dNum = parsed.getDate();
+          datesWithData[dNum] = true;
+        }
+      });
+    }
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalDaysInPrevMonth = new Date(year, month, 0).getDate();
+
+    let gridHtml = '';
+
+    // Previous month filler days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = totalDaysInPrevMonth - i;
+      const prevM = month === 0 ? 12 : month;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = prevY + '-' + String(prevM).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+      gridHtml += '<div class="daywise-cal-day other-month" onclick="App.selectAbsentyDate(\'' + dStr + '\')">' + dayNum + '</div>';
+    }
+
+    // Current month days
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      const isSelected = (dStr === selDateStr);
+      const isToday = (dStr === todayStr);
+      const hasData = !!datesWithData[day];
+
+      gridHtml += '<div class="daywise-cal-day ' + (isSelected ? 'is-selected' : '') + ' ' + (isToday ? 'is-today' : '') + ' ' + (hasData ? 'has-data' : '') + '" onclick="App.selectAbsentyDate(\'' + dStr + '\')">' + day + '</div>';
+    }
+
+    // Next month filler days
+    const totalCellsSoFar = firstDayIndex + totalDaysInMonth;
+    const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
+    for (let day = 1; day <= remainingCells; day++) {
+      const nextM = month === 11 ? 1 : month + 2;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = nextY + '-' + String(nextM).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      gridHtml += '<div class="daywise-cal-day other-month" onclick="App.selectAbsentyDate(\'' + dStr + '\')">' + day + '</div>';
+    }
+
+    container.innerHTML = gridHtml;
   }
 
   // Store latest absenty model for WhatsApp/Copy sharing
@@ -6295,23 +6515,29 @@ Generated: ${formatDisplayDate(new Date())}
 
   async function loadDaywiseAbsentyData() {
     const classSelect = document.getElementById('absenty-class-select');
-    const dateInput = document.getElementById('absenty-date-select');
     const content = document.getElementById('absenty-report-content');
     const actionBar = document.getElementById('absenty-action-bar');
     const statsBar = document.getElementById('absenty-stats-bar');
-    if (!classSelect || !dateInput || !content) return;
+    if (!content) return;
 
-    const className = classSelect.value;
-    const dateStr = dateInput.value;
+    const className = (classSelect && classSelect.value) || state.activeAbsentyClass || state.activeDaywiseYear || '';
+    state.activeAbsentyClass = className;
+    const dateStr = state.activeAbsentyDate || state.activeDaywiseDate || '';
+
     if (!className || !dateStr) {
-      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #64748b;"><p style="font-weight: 700; font-size: 13px;">Please select both Class and Date.</p></div>';
+      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #475569;"><p style="font-weight: 800; font-size: 13.5px;">Please select both Class and Date.</p></div>';
       if (actionBar) actionBar.style.display = 'none';
       if (statsBar) statsBar.style.display = 'none';
       _absentyReportModel = null;
       return;
     }
 
-    content.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="ph ph-spinner" style="font-size: 28px; animation: spin 1s linear infinite; color: #8b5cf6;"></i><p style="margin: 8px 0 0; font-size: 13px; font-weight: 700; color: #64748b;">Loading absenty data...</p></div>';
+    const dateLabel = document.getElementById('absenty-date-label');
+    if (dateLabel) {
+      dateLabel.innerText = formatDaywiseDisplayDate(dateStr);
+    }
+
+    content.innerHTML = '<div style="text-align: center; padding: 36px;"><i class="ph ph-spinner" style="font-size: 32px; animation: spin 1s linear infinite; color: #8b5cf6;"></i><p style="margin: 10px 0 0; font-size: 13.5px; font-weight: 800; color: #1e293b;">Loading absenty records for ' + escHtml(formatDaywiseDisplayDate(dateStr)) + '...</p></div>';
 
     try {
       // 1. Fetch attendance records and student roster from local cache
@@ -6324,7 +6550,7 @@ Generated: ${formatDisplayDate(new Date())}
       const rawStudents = (studResult && studResult.success && Array.isArray(studResult.students)) ? studResult.students : [];
 
       // 2. Build class subjects list
-      const dashData = state.inchargeDashboard || {};
+      const dashData = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (SessionCache.data && SessionCache.data.dashboard) || {};
       const faculties = (dashData.faculties || []).filter(function(f) { return f.faculty && f.faculty.toLowerCase() !== 'unassigned'; });
 
       const classSubjects = [];
@@ -6340,7 +6566,8 @@ Generated: ${formatDisplayDate(new Date())}
       if (classSubjects.length === 0) {
         var allSubs = [
           ...((state.allData && state.allData.enrichedSubjects) || []),
-          ...((state.allData && state.allData.subjects) || [])
+          ...((state.allData && state.allData.subjects) || []),
+          ...((SessionCache.data && SessionCache.data.subjects) || [])
         ];
         allSubs.forEach(function(s) {
           if (!s || !s.code) return;
@@ -6350,23 +6577,11 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      // 3. Filter attendance records for the selected date and class
+      // 3. Filter attendance records for the selected date and class using universal isSameDateMatch
       var dateRecords = allRecords.filter(function(r) {
         if (!r.date || !r.code) return false;
         if (!isSubjectMatchingClass(r.code, className, classSubjects)) return false;
-
-        var rd = String(r.date).trim().toLowerCase();
-        if (rd.includes(dateStr.toLowerCase())) return true;
-        var parts = dateStr.split('-');
-        if (parts.length === 3) {
-          var y = parts[0], m = parts[1], d = parts[2];
-          var months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-          var mName = months[parseInt(m, 10) - 1] || '';
-          var dNum = parseInt(d, 10);
-          if (mName && (rd.includes(dNum + '-' + mName) || rd.includes(d + '-' + mName))) return true;
-          if (rd.includes(d + '-' + m + '-' + y) || rd.includes(d + '/' + m + '/' + y) || rd.includes(dNum + '/' + parseInt(m,10) + '/' + y)) return true;
-        }
-        return false;
+        return isSameDateMatch(r.date, dateStr);
       });
 
       // 4. Build student map with attendance
@@ -6411,6 +6626,9 @@ Generated: ${formatDisplayDate(new Date())}
 
         if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
           studentMap[matchedKey].name = r.name;
+        }
+        if (r.batch && r.batch !== 'General') {
+          studentMap[matchedKey].batch = r.batch;
         }
 
         var curBatch = studentMap[matchedKey].batch || '';
@@ -6473,13 +6691,9 @@ Generated: ${formatDisplayDate(new Date())}
         }
       });
 
-      // Format display date
-      var dtParts = dateStr.split('-');
-      var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      var displayDate = dtParts.length === 3 ? (dtParts[2] + '-' + monthNames[parseInt(dtParts[1])-1] + '-' + dtParts[0]) : dateStr;
-
-      // Store model for sharing
+      var displayDate = formatDaywiseDisplayDate(dateStr);
       var collegeName = (dashData.collegeName || (state.metadata && state.metadata.collegeName) || '');
+
       _absentyReportModel = {
         className: className,
         date: dateStr,
@@ -6490,46 +6704,46 @@ Generated: ${formatDisplayDate(new Date())}
         collegeName: collegeName
       };
 
-      // 6. Render stats
+      // 6. Render stats pills (vibrant, high contrast)
       if (statsBar) {
         statsBar.style.display = 'flex';
         statsBar.innerHTML = ''
-          + '<div class="absenty-stat-pill" style="background: rgba(2,132,199,0.08); border: 1px solid rgba(2,132,199,0.20);">'
-          + '  <div class="stat-label" style="color: #0284c7;">Total Students</div>'
-          + '  <div class="stat-value" style="color: #0369a1;">' + studentList.length + '</div>'
+          + '<div class="absenty-stat-pill" style="background: #e0f2fe; border: 1.5px solid #7dd3fc;">'
+          + '  <div class="stat-label" style="color: #0369a1;">Total Students</div>'
+          + '  <div class="stat-value" style="color: #0c4a6e;">' + studentList.length + '</div>'
           + '</div>'
-          + '<div class="absenty-stat-pill" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.20);">'
-          + '  <div class="stat-label" style="color: #7c3aed;">Lectures/Pract.</div>'
-          + '  <div class="stat-value" style="color: #6d28d9;">' + activeSubjectKeys.length + '</div>'
+          + '<div class="absenty-stat-pill" style="background: #ede9fe; border: 1.5px solid #c4b5fd;">'
+          + '  <div class="stat-label" style="color: #6d28d9;">Lectures/Pract.</div>'
+          + '  <div class="stat-value" style="color: #4c1d95;">' + activeSubjectKeys.length + '</div>'
           + '</div>'
-          + '<div class="absenty-stat-pill" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);">'
-          + '  <div class="stat-label" style="color: #dc2626;">Absentees</div>'
-          + '  <div class="stat-value" style="color: #b91c1c;">' + absentStudents.length + '</div>'
+          + '<div class="absenty-stat-pill" style="background: #fee2e2; border: 1.5px solid #fca5a5;">'
+          + '  <div class="stat-label" style="color: #b91c1c;">Absentees</div>'
+          + '  <div class="stat-value" style="color: #991b1b;">' + absentStudents.length + '</div>'
           + '</div>'
-          + '<div class="absenty-stat-pill" style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25);">'
-          + '  <div class="stat-label" style="color: #059669;">All Present</div>'
-          + '  <div class="stat-value" style="color: #047857;">' + (studentList.length - absentStudents.length) + '</div>'
+          + '<div class="absenty-stat-pill" style="background: #dcfce7; border: 1.5px solid #86efac;">'
+          + '  <div class="stat-label" style="color: #15803d;">All Present</div>'
+          + '  <div class="stat-value" style="color: #14532d;">' + (studentList.length - absentStudents.length) + '</div>'
           + '</div>';
       }
 
       // 7. No lectures found
       if (activeSubjectKeys.length === 0) {
-        content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b; background: rgba(241,245,249,0.50); border-radius: 16px; border: 1px dashed rgba(217,119,6,0.30);">'
-          + '<i class="ph ph-calendar-x" style="font-size: 44px; color: #d97706; opacity: 0.8; margin-bottom: 10px; display: block;"></i>'
-          + '<h4 style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: #0f172a;">No Lectures Recorded on ' + escHtml(displayDate) + '</h4>'
-          + '<p style="margin: 0; font-size: 12.5px; font-weight: 600; color: #64748b;">No attendance data found for <strong>' + escHtml(className) + '</strong> on this date.</p>'
+        content.innerHTML = '<div style="text-align: center; padding: 44px 20px; color: #1e293b; background: #fffbeb; border-radius: 16px; border: 1.5px dashed #f59e0b;">'
+          + '<i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.9; margin-bottom: 10px; display: block;"></i>'
+          + '<h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 900; color: #0f172a;">No Lectures Recorded on ' + escHtml(displayDate) + '</h4>'
+          + '<p style="margin: 0; font-size: 13px; font-weight: 700; color: #475569;">No attendance data found for <strong>' + escHtml(className) + '</strong> on this date. Click the date picker to choose a date with recorded sessions.</p>'
           + '</div>';
         if (actionBar) actionBar.style.display = 'none';
         _absentyReportModel = null;
         return;
       }
 
-      // 8. No absentees
+      // 8. No absentees (100% Present)
       if (absentStudents.length === 0) {
-        content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #059669; background: rgba(16,185,129,0.06); border-radius: 16px; border: 1px solid rgba(16,185,129,0.20);">'
-          + '<i class="ph ph-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 10px; display: block;"></i>'
-          + '<h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 900; color: #047857;">100% Attendance 🎉</h4>'
-          + '<p style="margin: 0; font-size: 13px; font-weight: 700; color: #059669;">All ' + studentList.length + ' students were present for all ' + activeSubjectKeys.length + ' session(s) on ' + escHtml(displayDate) + '</p>'
+        content.innerHTML = '<div style="text-align: center; padding: 44px 20px; color: #14532d; background: #f0fdf4; border-radius: 16px; border: 1.5px solid #86efac;">'
+          + '<i class="ph ph-check-circle" style="font-size: 48px; color: #16a34a; margin-bottom: 10px; display: block;"></i>'
+          + '<h4 style="margin: 0 0 6px; font-size: 17px; font-weight: 900; color: #14532d;">100% Attendance 🎉</h4>'
+          + '<p style="margin: 0; font-size: 13.5px; font-weight: 700; color: #15803d;">All ' + studentList.length + ' students were present for all ' + activeSubjectKeys.length + ' session(s) on ' + escHtml(displayDate) + '</p>'
           + '</div>';
         if (actionBar) actionBar.style.display = 'none';
         return;
@@ -6544,29 +6758,30 @@ Generated: ${formatDisplayDate(new Date())}
         stu.absentSubjects.forEach(function(sub) {
           var pillClass = sub.isPractical ? 'practical' : 'theory';
           var typeLabel = sub.isPractical ? 'P' : 'T';
-          pillsHtml += '<span class="absenty-subject-pill ' + pillClass + '">' + escHtml(sub.code) + ' <span style="opacity:0.7;font-size:9px;">(' + typeLabel + ')</span></span>';
+          pillsHtml += '<span class="absenty-subject-pill ' + pillClass + '">' + escHtml(sub.code) + ' <span style="opacity:0.85; font-size:10px; font-weight:900;">(' + typeLabel + ')</span></span>';
         });
 
-        var bgColor = idx % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'transparent';
+        var bgColor = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
         tableRows += '<tr style="background: ' + bgColor + ';">'
-          + '<td style="font-weight: 800; font-size: 12.5px; color: #334155; white-space: nowrap; text-align: center;">' + escHtml(stu.rollNo) + '</td>'
-          + '<td style="font-weight: 700; font-size: 12.5px; color: #0f172a; white-space: nowrap;">' + escHtml(stu.name) + '</td>'
+          + '<td style="font-weight: 900; font-size: 13px; color: #0f172a; white-space: nowrap; text-align: center;">' + escHtml(stu.rollNo) + '</td>'
+          + '<td style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap;">' + escHtml(stu.name) + '</td>'
           + '<td style="line-height: 1.6;">' + pillsHtml + '</td>'
-          + '<td style="text-align: center; font-weight: 900; font-size: 13px; color: #dc2626;">' + stu.absentSubjects.length + '</td>'
+          + '<td style="text-align: center; font-weight: 900; font-size: 14px; color: #dc2626;">' + stu.absentSubjects.length + '</td>'
           + '</tr>';
       });
 
       content.innerHTML = ''
-        + '<div style="margin-bottom: 10px; font-size: 11.5px; font-weight: 700; color: #64748b;">'
-        + '  📅 ' + escHtml(displayDate) + ' · ' + escHtml(className) + ' · ' + absentStudents.length + ' student(s) absent'
+        + '<div style="margin-bottom: 12px; font-size: 12.5px; font-weight: 800; color: #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">'
+        + '  <span>📅 <strong>' + escHtml(displayDate) + '</strong> · <strong>' + escHtml(className) + '</strong></span>'
+        + '  <span style="background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 8px; font-size: 11.5px;"><strong>' + absentStudents.length + '</strong> student(s) absent</span>'
         + '</div>'
         + '<div class="absenty-table-wrap">'
         + '  <table class="absenty-table">'
         + '    <thead><tr>'
-        + '      <th style="width: 70px; text-align: center;">Roll No</th>'
-        + '      <th style="min-width: 140px;">Student Name</th>'
+        + '      <th style="width: 75px; text-align: center;">Roll No</th>'
+        + '      <th style="min-width: 150px;">Student Name</th>'
         + '      <th>Absent For (Subjects)</th>'
-        + '      <th style="width: 70px; text-align: center;">Count</th>'
+        + '      <th style="width: 75px; text-align: center;">Count</th>'
         + '    </tr></thead>'
         + '    <tbody>' + tableRows + '</tbody>'
         + '  </table>'
@@ -6574,7 +6789,7 @@ Generated: ${formatDisplayDate(new Date())}
 
     } catch (err) {
       console.error('Absenty report error:', err);
-      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #dc2626;"><i class="ph ph-warning-circle" style="font-size: 36px; margin-bottom: 8px;"></i><p style="font-size: 13px; font-weight: 700;">Error: ' + escHtml(err.message) + '</p></div>';
+      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #dc2626;"><i class="ph ph-warning-circle" style="font-size: 36px; margin-bottom: 8px;"></i><p style="font-size: 13px; font-weight: 800;">Error: ' + escHtml(err.message) + '</p></div>';
       if (actionBar) actionBar.style.display = 'none';
       if (statsBar) statsBar.style.display = 'none';
       _absentyReportModel = null;
@@ -7174,6 +7389,13 @@ Generated: ${formatDisplayDate(new Date())}
     downloadDaywiseReportDoc,
     openDaywiseAbsentyModal,
     closeDaywiseAbsentyModal,
+    toggleAbsentyDateDropdown,
+    closeAbsentyDateDropdown,
+    onAbsentyClassChange,
+    changeAbsentyCalendarMonth,
+    selectAbsentyDate,
+    selectAbsentyDateToday,
+    renderAbsentyCalendarGrid,
     loadDaywiseAbsentyData,
     shareDaywiseAbsentyWhatsApp,
     copyDaywiseAbsentyText,
