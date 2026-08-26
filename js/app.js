@@ -4247,43 +4247,39 @@ Generated: ${formatDisplayDate(new Date())}
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY
-    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY (Indian/British day-first: DD/MM/YYYY)
+    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
     if (m) {
       const d = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // DD-MMM-YY / DD-MMM-YYYY
-    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+    // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26, 26-Aug-2026, 26-Aug-26)
+    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
     if (m) {
       const mi = mos.indexOf(m[2].toLowerCase());
       let y = +m[3]; if (y < 100) y += 2000;
       if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
-    // DD-MMM or DD MMM
-    m = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})/);
+    // DD-MMM or DD MMM (e.g. 24-Jul, 5-Aug, 26 Aug)
+    m = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})$/);
     if (m) {
-      // make sure it isn't actually DD MMM YYYY by checking next chars
-      let hasYear = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[-\s,](\d{2,4})/);
-      if(hasYear) {
-         let y = +hasYear[3]; if(y < 100) y+=2000;
-         const mi = mos.indexOf(hasYear[2].toLowerCase());
-         if(mi >= 0) return new Date(y, mi, +hasYear[1]);
-      } else {
-         const mi = mos.indexOf(m[2].toLowerCase());
-         const y = new Date().getFullYear();
-         if (mi >= 0) return new Date(y, mi, +m[1]);
-      }
+      const mi = mos.indexOf(m[2].toLowerCase());
+      const y = new Date().getFullYear();
+      if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
-    try {
-      const fallback = new Date(trimmed);
-      return isNaN(fallback.getTime()) ? null : fallback;
-    } catch(e) {
-      return null;
+    // DD MMM YYYY (e.g. 26 Aug 2026)
+    m = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+    if (m) {
+      const mi = mos.indexOf(m[2].substring(0, 3).toLowerCase());
+      const y = +m[3];
+      if (mi >= 0) return new Date(y, mi, +m[1]);
     }
+
+    const fallback = new Date(trimmed);
+    return isNaN(fallback.getTime()) ? null : fallback;
   }
 
   // Format any recognised date value as dd/mm/yyyy. Unparseable input is
@@ -5136,9 +5132,21 @@ Generated: ${formatDisplayDate(new Date())}
 
   function formatDaywiseDisplayDate(dateStr) {
     if (!dateStr) return '';
+    const parts = String(dateStr).split(/[\/\-.\s]+/);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (parts.length === 3) {
+      if (parts[0].length === 4) { // YYYY-MM-DD
+        const y = parts[0], m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+        const mName = months[m - 1] || parts[1];
+        return `${d} ${mName} ${y}`;
+      } else { // DD-MM-YYYY
+        const d = parseInt(parts[0], 10), m = parseInt(parts[1], 10), y = parts[2];
+        const mName = months[m - 1] || parts[1];
+        return `${d} ${mName} ${y}`;
+      }
+    }
     const d = parseToDate(dateStr);
     if (d && !isNaN(d.getTime())) {
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
     }
     return String(dateStr);
@@ -5257,9 +5265,8 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   function changeDaywiseCalendarMonth(delta) {
-    if (!state.daywiseCalendarViewDate || isNaN(state.daywiseCalendarViewDate.getTime())) {
-      const d = parseToDate(state.activeDaywiseDate);
-      state.daywiseCalendarViewDate = (d && !isNaN(d.getTime())) ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date();
+    if (!state.daywiseCalendarViewDate) {
+      state.daywiseCalendarViewDate = new Date();
     }
     const currentMonth = state.daywiseCalendarViewDate.getMonth();
     const currentYear = state.daywiseCalendarViewDate.getFullYear();
@@ -5272,9 +5279,13 @@ Generated: ${formatDisplayDate(new Date())}
     const titleEl = document.getElementById('daywise-cal-title-text');
     if (!container || !titleEl) return;
 
-    if (!state.daywiseCalendarViewDate || isNaN(state.daywiseCalendarViewDate.getTime())) {
-      const d = parseToDate(state.activeDaywiseDate);
-      state.daywiseCalendarViewDate = (d && !isNaN(d.getTime())) ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date();
+    if (!state.daywiseCalendarViewDate) {
+      if (state.activeDaywiseDate) {
+        const [y, m] = state.activeDaywiseDate.split('-');
+        state.daywiseCalendarViewDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+      } else {
+        state.daywiseCalendarViewDate = new Date();
+      }
     }
 
     const viewDate = state.daywiseCalendarViewDate;
@@ -5286,25 +5297,7 @@ Generated: ${formatDisplayDate(new Date())}
 
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
-    const selD = parseToDate(state.activeDaywiseDate);
-    const selDateStr = selD ? `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-${String(selD.getDate()).padStart(2, '0')}` : todayStr;
-
-    const targetClass = state.activeDaywiseYear || '';
-
-    // Collect dates with data
-    const datesWithData = {};
-    if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
-      const records = SessionCache.data.attendance.records;
-      records.forEach(r => {
-        if (!r.date || !r.code) return;
-        if (!isSubjectMatchingClass(r.code, targetClass)) return;
-        const parsed = parseToDate(r.date);
-        if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
-          datesWithData[parsed.getDate()] = true;
-        }
-      });
-    }
+    const selDateStr = state.activeDaywiseDate || todayStr;
 
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
@@ -5315,8 +5308,9 @@ Generated: ${formatDisplayDate(new Date())}
     // Previous month filler days
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = totalDaysInPrevMonth - i;
-      const prevDate = new Date(year, month - 1, dayNum);
-      const dStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+      const prevM = month === 0 ? 12 : month;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = `${prevY}-${String(prevM).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
       gridHtml += `
         <div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">
           ${dayNum}
@@ -5329,10 +5323,9 @@ Generated: ${formatDisplayDate(new Date())}
       const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isSelected = (dStr === selDateStr);
       const isToday = (dStr === todayStr);
-      const hasData = !!datesWithData[day];
 
       gridHtml += `
-        <div class="daywise-cal-day ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''} ${hasData ? 'has-data' : ''}"
+        <div class="daywise-cal-day ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}"
              onclick="App.selectDaywiseDate('${dStr}')">
           ${day}
         </div>
@@ -5343,8 +5336,9 @@ Generated: ${formatDisplayDate(new Date())}
     const totalCellsSoFar = firstDayIndex + totalDaysInMonth;
     const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
     for (let day = 1; day <= remainingCells; day++) {
-      const nextDate = new Date(year, month + 1, day);
-      const dStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+      const nextM = month === 11 ? 1 : month + 2;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       gridHtml += `
         <div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">
           ${day}
@@ -5747,11 +5741,17 @@ Generated: ${formatDisplayDate(new Date())}
         const cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curStudentBatch);
         const sKey = cleanInfo.code;
         
-        // Standardize subject key
+        // MULTIPLE LECTURE FIX: If this student already has this subject recorded today, suffix it
+        let suffixNum = 2;
         let finalSKey = sKey;
+        while (studentMap[matchedKey].att[finalSKey] !== undefined) {
+           finalSKey = sKey + ' (L' + suffixNum + ')';
+           suffixNum++;
+        }
 
         if (!activeSubjectsMap[finalSKey]) {
-           activeSubjectsMap[finalSKey] = cleanInfo;
+           // Clone to prevent mutating original cleanInfo if suffixed
+           activeSubjectsMap[finalSKey] = { ...cleanInfo, code: finalSKey };
         }
 
         const st = String(r.status || '').toUpperCase().trim();
@@ -6360,9 +6360,13 @@ Generated: ${formatDisplayDate(new Date())}
   }
 
   function changeAbsentyCalendarMonth(delta) {
-    if (!state.absentyCalendarViewDate || isNaN(state.absentyCalendarViewDate.getTime())) {
-      const d = parseToDate(state.activeAbsentyDate);
-      state.absentyCalendarViewDate = (d && !isNaN(d.getTime())) ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date();
+    if (!state.absentyCalendarViewDate) {
+      if (state.activeAbsentyDate) {
+        const parts = state.activeAbsentyDate.split('-');
+        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      } else {
+        state.absentyCalendarViewDate = new Date();
+      }
     }
     const currentMonth = state.absentyCalendarViewDate.getMonth();
     const currentYear = state.absentyCalendarViewDate.getFullYear();
@@ -6391,9 +6395,13 @@ Generated: ${formatDisplayDate(new Date())}
     const titleEl = document.getElementById('absenty-cal-title-text');
     if (!container || !titleEl) return;
 
-    if (!state.absentyCalendarViewDate || isNaN(state.absentyCalendarViewDate.getTime())) {
-      const d = parseToDate(state.activeAbsentyDate);
-      state.absentyCalendarViewDate = (d && !isNaN(d.getTime())) ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date();
+    if (!state.absentyCalendarViewDate) {
+      if (state.activeAbsentyDate) {
+        const parts = state.activeAbsentyDate.split('-');
+        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      } else {
+        state.absentyCalendarViewDate = new Date();
+      }
     }
 
     const viewDate = state.absentyCalendarViewDate;
@@ -6405,9 +6413,7 @@ Generated: ${formatDisplayDate(new Date())}
 
     const now = new Date();
     const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-    
-    const selD = parseToDate(state.activeAbsentyDate);
-    const selDateStr = selD ? `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-${String(selD.getDate()).padStart(2, '0')}` : todayStr;
+    const selDateStr = state.activeAbsentyDate || todayStr;
     const targetClass = state.activeAbsentyClass || (document.getElementById('absenty-class-select') ? document.getElementById('absenty-class-select').value : '');
 
     // Collect all dates that have attendance for this class in this month to show green indicator dots
@@ -6434,14 +6440,15 @@ Generated: ${formatDisplayDate(new Date())}
     // Previous month filler days
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = totalDaysInPrevMonth - i;
-      const prevDate = new Date(year, month - 1, dayNum);
-      const dStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+      const prevM = month === 0 ? 12 : month;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = prevY + '-' + String(prevM).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
       gridHtml += '<div class="daywise-cal-day other-month" onclick="App.selectAbsentyDate(\'' + dStr + '\')">' + dayNum + '</div>';
     }
 
     // Current month days
     for (let day = 1; day <= totalDaysInMonth; day++) {
-      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
       const isSelected = (dStr === selDateStr);
       const isToday = (dStr === todayStr);
       const hasData = !!datesWithData[day];
@@ -6453,8 +6460,9 @@ Generated: ${formatDisplayDate(new Date())}
     const totalCellsSoFar = firstDayIndex + totalDaysInMonth;
     const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
     for (let day = 1; day <= remainingCells; day++) {
-      const nextDate = new Date(year, month + 1, day);
-      const dStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+      const nextM = month === 11 ? 1 : month + 2;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = nextY + '-' + String(nextM).padStart(2, '0') + '-' + String(day).padStart(2, '0');
       gridHtml += '<div class="daywise-cal-day other-month" onclick="App.selectAbsentyDate(\'' + dStr + '\')">' + day + '</div>';
     }
 
@@ -6660,15 +6668,6 @@ Generated: ${formatDisplayDate(new Date())}
       // 8. Render absenty table (Roll No, Student Name, Absent For Subjects)
       if (actionBar) actionBar.style.display = 'flex';
 
-      function getStudentInitials(name) {
-        if (!name) return 'ST';
-        var parts = String(name).trim().split(/\s+/);
-        if (parts.length >= 2) {
-          return (parts[0][0] + parts[1][0]).toUpperCase();
-        }
-        return parts[0].substring(0, 2).toUpperCase();
-      }
-
       var tableRows = '';
       absentStudents.forEach(function(stu, idx) {
         var pillsHtml = '';
@@ -6680,19 +6679,9 @@ Generated: ${formatDisplayDate(new Date())}
 
         var bgColor = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
         tableRows += '<tr style="background: ' + bgColor + ';">'
-          + '<td style="text-align: center; vertical-align: middle; width: 85px;">'
-          + '  <span class="absenty-roll-pill">Roll ' + escHtml(stu.rollNo) + '</span>'
-          + '</td>'
-          + '<td style="vertical-align: middle; min-width: 220px;">'
-          + '  <div style="display: flex; align-items: center; gap: 10px;">'
-          + '    <div class="absenty-student-avatar">' + escHtml(getStudentInitials(stu.name)) + '</div>'
-          + '    <div>'
-          + '      <div class="absenty-student-name">' + escHtml(stu.name) + '</div>'
-          + (stu.batch && stu.batch !== 'General' ? '      <span class="absenty-batch-pill">Batch ' + escHtml(stu.batch) + '</span>' : '')
-          + '    </div>'
-          + '  </div>'
-          + '</td>'
-          + '<td style="vertical-align: middle; line-height: 1.6;">' + pillsHtml + '</td>'
+          + '<td style="font-weight: 900; font-size: 13px; color: #0f172a; white-space: nowrap; text-align: center;">' + escHtml(stu.rollNo) + '</td>'
+          + '<td style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap;">' + escHtml(stu.name) + '</td>'
+          + '<td style="line-height: 1.6;">' + pillsHtml + '</td>'
           + '</tr>';
       });
 
@@ -6700,8 +6689,8 @@ Generated: ${formatDisplayDate(new Date())}
         + '<div class="absenty-table-wrap">'
         + '  <table class="absenty-table">'
         + '    <thead><tr>'
-        + '      <th style="width: 85px; text-align: center;">Roll No</th>'
-        + '      <th style="min-width: 220px;">Student Name</th>'
+        + '      <th style="width: 80px; text-align: center;">Roll No</th>'
+        + '      <th style="min-width: 180px;">Student Name</th>'
         + '      <th>Absent For (Subjects)</th>'
         + '    </tr></thead>'
         + '    <tbody>' + tableRows + '</tbody>'
