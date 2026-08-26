@@ -4240,14 +4240,21 @@ Generated: ${formatDisplayDate(new Date())}
     const trimmed = String(dateStr).trim();
     const mos = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
+    // YYYY-MM-DD or YYYY/MM/DD (ISO / Standard)
+    let m = trimmed.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+    if (m) {
+      const y = +m[1], mo = +m[2], d = +m[3];
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
+    }
+
     // DD/MM/YY, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YY (Indian/British day-first: DD/MM/YYYY)
-    let m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
     if (m) {
       const d = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
     }
 
-    // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26)
+    // DD-MMM-YY / DD-MMM-YYYY (e.g. 13-Jul-26, 26-Aug-2026, 26-Aug-26)
     m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
     if (m) {
       const mi = mos.indexOf(m[2].toLowerCase());
@@ -4255,11 +4262,19 @@ Generated: ${formatDisplayDate(new Date())}
       if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
-    // DD-MMM (e.g. 24-Jul, 5-Aug)
-    m = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})$/);
+    // DD-MMM or DD MMM (e.g. 24-Jul, 5-Aug, 26 Aug)
+    m = trimmed.match(/^(\d{1,2})[-\s]([A-Za-z]{3})$/);
     if (m) {
       const mi = mos.indexOf(m[2].toLowerCase());
       const y = new Date().getFullYear();
+      if (mi >= 0) return new Date(y, mi, +m[1]);
+    }
+
+    // DD MMM YYYY (e.g. 26 Aug 2026)
+    m = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+    if (m) {
+      const mi = mos.indexOf(m[2].substring(0, 3).toLowerCase());
+      const y = +m[3];
       if (mi >= 0) return new Date(y, mi, +m[1]);
     }
 
@@ -4906,8 +4921,9 @@ Generated: ${formatDisplayDate(new Date())}
         if (!cs) return false;
         const csClean = String(cs.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
         const csNameClean = String(cs.name || cs.subjectName || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return (csClean && (csClean === cleanCode || csClean.startsWith(cleanCode) || cleanCode.startsWith(csClean) || csClean.includes(cleanCode) || cleanCode.includes(csClean))) ||
-               (csNameClean && (csNameClean === cleanCode || csNameClean.includes(cleanCode) || cleanCode.includes(csNameClean)));
+        if (csClean && cleanCode && (csClean === cleanCode || csClean.startsWith(cleanCode) || cleanCode.startsWith(csClean))) return true;
+        if (csNameClean && cleanCode && (csNameClean === cleanCode || csNameClean.startsWith(cleanCode) || cleanCode.startsWith(csNameClean))) return true;
+        return false;
       });
       if (matchInList) return true;
     }
@@ -5103,72 +5119,15 @@ Generated: ${formatDisplayDate(new Date())}
   //  DAYWISE ATTENDANCE REPORT (Custom Glass Dropdowns & Calendar)
   // ═══════════════════════════════════════════════════════
 
-  // Universal date matching helper — handles YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, DD-MMM-YYYY, DD-MMM, spaces, dots, Date objects
+  // Strict exact date matching helper — parses both recordDateStr and targetDateStr into exact year, month, day
   function isSameDateMatch(recordDateStr, targetDateStr) {
     if (!recordDateStr || !targetDateStr) return false;
-    const rd = String(recordDateStr).trim().toLowerCase();
-    const td = String(targetDateStr).trim().toLowerCase();
-    if (rd === td || rd.includes(td)) return true;
-
-    // Parse target date (targetDateStr is typically YYYY-MM-DD e.g. 2026-08-26)
-    let tY = null, tM = null, tD = null;
-    const tParts = targetDateStr.split(/[\/\-.\s]+/);
-    if (tParts.length === 3) {
-      if (tParts[0].length === 4) {
-        tY = parseInt(tParts[0], 10);
-        tM = parseInt(tParts[1], 10);
-        tD = parseInt(tParts[2], 10);
-      } else {
-        tD = parseInt(tParts[0], 10);
-        tM = parseInt(tParts[1], 10);
-        tY = parseInt(tParts[2], 10);
-      }
-    } else {
-      const parsedTar = parseToDate(targetDateStr);
-      if (parsedTar && !isNaN(parsedTar.getTime())) {
-        tY = parsedTar.getFullYear();
-        tM = parsedTar.getMonth() + 1;
-        tD = parsedTar.getDate();
-      }
-    }
-
-    if (!tD || !tM) return false;
-
-    // Parse record date
-    const parsedRec = parseToDate(recordDateStr);
-    if (parsedRec && !isNaN(parsedRec.getTime())) {
-      const rY = parsedRec.getFullYear();
-      const rM = parsedRec.getMonth() + 1;
-      const rD = parsedRec.getDate();
-      if (rD === tD && rM === tM) {
-        if (!tY || !rY || rY === tY) return true;
-      }
-    }
-
-    // Substring variations:
-    const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-    const mName = months[tM - 1] || '';
-    const dStr = String(tD);
-    const dPad = String(tD).padStart(2, '0');
-    const mStr = String(tM);
-    const mPad = String(tM).padStart(2, '0');
-
-    if (mName) {
-      if (rd.includes(dStr + '-' + mName) || rd.includes(dPad + '-' + mName) ||
-          rd.includes(dStr + ' ' + mName) || rd.includes(dPad + ' ' + mName) ||
-          rd.includes(dStr + '/' + mName) || rd.includes(dPad + '/' + mName) ||
-          rd.includes(dStr + '.' + mName) || rd.includes(dPad + '.' + mName)) {
-        return true;
-      }
-    }
-
-    if (rd.includes(dPad + '/' + mPad) || rd.includes(dStr + '/' + mStr) || rd.includes(dPad + '/' + mStr) ||
-        rd.includes(dPad + '-' + mPad) || rd.includes(dStr + '-' + mStr) || rd.includes(dPad + '-' + mStr) ||
-        rd.includes(dPad + '.' + mPad) || rd.includes(dStr + '.' + mStr)) {
-      return true;
-    }
-
-    return false;
+    const dRec = parseToDate(recordDateStr);
+    const dTar = parseToDate(targetDateStr);
+    if (!dRec || !dTar) return false;
+    return dRec.getFullYear() === dTar.getFullYear() &&
+           dRec.getMonth() === dTar.getMonth() &&
+           dRec.getDate() === dTar.getDate();
   }
 
   function formatDaywiseDisplayDate(dateStr) {
@@ -6457,7 +6416,7 @@ Generated: ${formatDisplayDate(new Date())}
     const selDateStr = state.activeAbsentyDate || todayStr;
     const targetClass = state.activeAbsentyClass || (document.getElementById('absenty-class-select') ? document.getElementById('absenty-class-select').value : '');
 
-    // Collect all dates that have attendance for this class in this month to show green indicator dots!
+    // Collect all dates that have attendance for this class in this month to show green indicator dots
     const datesWithData = {};
     if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
       const records = SessionCache.data.attendance.records;
@@ -6517,7 +6476,6 @@ Generated: ${formatDisplayDate(new Date())}
     const classSelect = document.getElementById('absenty-class-select');
     const content = document.getElementById('absenty-report-content');
     const actionBar = document.getElementById('absenty-action-bar');
-    const statsBar = document.getElementById('absenty-stats-bar');
     if (!content) return;
 
     const className = (classSelect && classSelect.value) || state.activeAbsentyClass || state.activeDaywiseYear || '';
@@ -6527,7 +6485,6 @@ Generated: ${formatDisplayDate(new Date())}
     if (!className || !dateStr) {
       content.innerHTML = '<div style="text-align: center; padding: 30px; color: #475569;"><p style="font-weight: 800; font-size: 13.5px;">Please select both Class and Date.</p></div>';
       if (actionBar) actionBar.style.display = 'none';
-      if (statsBar) statsBar.style.display = 'none';
       _absentyReportModel = null;
       return;
     }
@@ -6577,7 +6534,7 @@ Generated: ${formatDisplayDate(new Date())}
         });
       }
 
-      // 3. Filter attendance records for the selected date and class using universal isSameDateMatch
+      // 3. Filter attendance records for the selected date and class using strict isSameDateMatch
       var dateRecords = allRecords.filter(function(r) {
         if (!r.date || !r.code) return false;
         if (!isSubjectMatchingClass(r.code, className, classSubjects)) return false;
@@ -6591,11 +6548,12 @@ Generated: ${formatDisplayDate(new Date())}
         var name = String(st.name || st.studentName || '').trim();
         if (roll || name) {
           var key = roll || name;
-          studentMap[key] = { rollNo: roll || 'N/A', name: name || key, batch: st.batch || st.batchGroup || 'General', att: {} };
+          studentMap[key] = { rollNo: roll || 'N/A', name: name || key, batch: st.batch || st.batchGroup || 'General', absentSubjectMap: {} };
         }
       });
 
-      var activeSubjectsMap = {};
+      var conductedSubjectsSet = {};
+
       dateRecords.forEach(function(r) {
         if (!r || !r.code) return;
         if (!isSubjectMatchingClass(r.code, className, classSubjects)) return;
@@ -6621,7 +6579,7 @@ Generated: ${formatDisplayDate(new Date())}
 
         if (!matchedKey) {
           matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
-          studentMap[matchedKey] = { rollNo: rNo || 'N/A', name: r.name || matchedKey, batch: r.batch || 'General', att: {} };
+          studentMap[matchedKey] = { rollNo: rNo || 'N/A', name: r.name || matchedKey, batch: r.batch || 'General', absentSubjectMap: {} };
         }
 
         if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
@@ -6633,65 +6591,57 @@ Generated: ${formatDisplayDate(new Date())}
 
         var curBatch = studentMap[matchedKey].batch || '';
         var cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curBatch);
-        var sKey = cleanInfo.code;
-
-        // Handle multiple lectures of same subject
-        var suffixNum = 2;
-        var finalSKey = sKey;
-        while (studentMap[matchedKey].att[finalSKey] !== undefined) {
-          finalSKey = sKey + ' (L' + suffixNum + ')';
-          suffixNum++;
-        }
-
-        if (!activeSubjectsMap[finalSKey]) {
-          activeSubjectsMap[finalSKey] = { ...cleanInfo, code: finalSKey };
-        }
+        var subDisplayName = (cleanInfo.name && cleanInfo.name !== 'Unknown Subject') ? cleanInfo.name : cleanInfo.code;
+        var subFullLabel = subDisplayName + (cleanInfo.isPractical ? ' (Practical)' : ' (Theory)');
+        
+        conductedSubjectsSet[subFullLabel] = true;
 
         var st = String(r.status || '').toUpperCase().trim();
-        if (st === 'P' || st === 'PRESENT' || st === '1') {
-          studentMap[matchedKey].att[finalSKey] = 'P';
-        } else if (st === 'A' || st === 'ABSENT' || st === '0') {
-          studentMap[matchedKey].att[finalSKey] = 'A';
+        if (st === 'A' || st === 'ABSENT' || st === '0') {
+          studentMap[matchedKey].absentSubjectMap[subFullLabel] = {
+            name: subDisplayName,
+            fullLabel: subFullLabel,
+            isPractical: cleanInfo.isPractical
+          };
         }
       });
 
-      var activeSubjectKeys = Object.keys(activeSubjectsMap).filter(function(sk) {
-        return isSubjectMatchingClass(sk, className, classSubjects);
-      });
+      var conductedSubjectKeys = Object.keys(conductedSubjectsSet);
+      var displayDate = formatDaywiseDisplayDate(dateStr);
 
-      // 5. Filter: only students with >= 1 absent session
+      // 5. No lectures conducted on this date
+      if (conductedSubjectKeys.length === 0) {
+        content.innerHTML = '<div style="text-align: center; padding: 44px 20px; color: #1e293b; background: #fffbeb; border-radius: 16px; border: 1.5px dashed #f59e0b;">'
+          + '<i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.9; margin-bottom: 10px; display: block;"></i>'
+          + '<h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 900; color: #0f172a;">No Lectures Recorded on ' + escHtml(displayDate) + '</h4>'
+          + '<p style="margin: 0; font-size: 13px; font-weight: 700; color: #475569;">No attendance records found for <strong>' + escHtml(className) + '</strong> on this date. Choose a date with recorded sessions from the date picker above.</p>'
+          + '</div>';
+        if (actionBar) actionBar.style.display = 'none';
+        _absentyReportModel = null;
+        return;
+      }
+
+      // 6. Filter absent students (at least 1 subject missed)
       var studentList = Object.values(studentMap);
       studentList.sort(function(a, b) {
-        var numA = parseInt(a.rollNo), numB = parseInt(b.rollNo);
+        var numA = parseInt(a.rollNo, 10), numB = parseInt(b.rollNo, 10);
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
         return String(a.rollNo).localeCompare(String(b.rollNo));
       });
 
       var absentStudents = [];
       studentList.forEach(function(stu) {
-        var absentSubjects = [];
-        activeSubjectKeys.forEach(function(sk) {
-          var status = stu.att[sk];
-          if (status === 'A') {
-            var subInfo = activeSubjectsMap[sk] || {};
-            absentSubjects.push({
-              code: subInfo.code || sk,
-              name: subInfo.name || sk,
-              isPractical: subInfo.isPractical || false
-            });
-          }
-        });
-        if (absentSubjects.length >= 1) {
+        var absSubjects = Object.values(stu.absentSubjectMap || {});
+        if (absSubjects.length >= 1) {
           absentStudents.push({
             rollNo: stu.rollNo,
             name: stu.name,
             batch: stu.batch,
-            absentSubjects: absentSubjects
+            absentSubjects: absSubjects
           });
         }
       });
 
-      var displayDate = formatDaywiseDisplayDate(dateStr);
       var collegeName = (dashData.collegeName || (state.metadata && state.metadata.collegeName) || '');
 
       _absentyReportModel = {
@@ -6699,57 +6649,23 @@ Generated: ${formatDisplayDate(new Date())}
         date: dateStr,
         displayDate: displayDate,
         totalStudents: studentList.length,
-        lecturesConducted: activeSubjectKeys.length,
+        lecturesConducted: conductedSubjectKeys.length,
         absentStudents: absentStudents,
         collegeName: collegeName
       };
 
-      // 6. Render stats pills (vibrant, high contrast)
-      if (statsBar) {
-        statsBar.style.display = 'flex';
-        statsBar.innerHTML = ''
-          + '<div class="absenty-stat-pill" style="background: #e0f2fe; border: 1.5px solid #7dd3fc;">'
-          + '  <div class="stat-label" style="color: #0369a1;">Total Students</div>'
-          + '  <div class="stat-value" style="color: #0c4a6e;">' + studentList.length + '</div>'
-          + '</div>'
-          + '<div class="absenty-stat-pill" style="background: #ede9fe; border: 1.5px solid #c4b5fd;">'
-          + '  <div class="stat-label" style="color: #6d28d9;">Lectures/Pract.</div>'
-          + '  <div class="stat-value" style="color: #4c1d95;">' + activeSubjectKeys.length + '</div>'
-          + '</div>'
-          + '<div class="absenty-stat-pill" style="background: #fee2e2; border: 1.5px solid #fca5a5;">'
-          + '  <div class="stat-label" style="color: #b91c1c;">Absentees</div>'
-          + '  <div class="stat-value" style="color: #991b1b;">' + absentStudents.length + '</div>'
-          + '</div>'
-          + '<div class="absenty-stat-pill" style="background: #dcfce7; border: 1.5px solid #86efac;">'
-          + '  <div class="stat-label" style="color: #15803d;">All Present</div>'
-          + '  <div class="stat-value" style="color: #14532d;">' + (studentList.length - absentStudents.length) + '</div>'
-          + '</div>';
-      }
-
-      // 7. No lectures found
-      if (activeSubjectKeys.length === 0) {
-        content.innerHTML = '<div style="text-align: center; padding: 44px 20px; color: #1e293b; background: #fffbeb; border-radius: 16px; border: 1.5px dashed #f59e0b;">'
-          + '<i class="ph ph-calendar-x" style="font-size: 48px; color: #d97706; opacity: 0.9; margin-bottom: 10px; display: block;"></i>'
-          + '<h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 900; color: #0f172a;">No Lectures Recorded on ' + escHtml(displayDate) + '</h4>'
-          + '<p style="margin: 0; font-size: 13px; font-weight: 700; color: #475569;">No attendance data found for <strong>' + escHtml(className) + '</strong> on this date. Click the date picker to choose a date with recorded sessions.</p>'
-          + '</div>';
-        if (actionBar) actionBar.style.display = 'none';
-        _absentyReportModel = null;
-        return;
-      }
-
-      // 8. No absentees (100% Present)
+      // 7. No absentees (100% Present)
       if (absentStudents.length === 0) {
         content.innerHTML = '<div style="text-align: center; padding: 44px 20px; color: #14532d; background: #f0fdf4; border-radius: 16px; border: 1.5px solid #86efac;">'
           + '<i class="ph ph-check-circle" style="font-size: 48px; color: #16a34a; margin-bottom: 10px; display: block;"></i>'
           + '<h4 style="margin: 0 0 6px; font-size: 17px; font-weight: 900; color: #14532d;">100% Attendance 🎉</h4>'
-          + '<p style="margin: 0; font-size: 13.5px; font-weight: 700; color: #15803d;">All ' + studentList.length + ' students were present for all ' + activeSubjectKeys.length + ' session(s) on ' + escHtml(displayDate) + '</p>'
+          + '<p style="margin: 0; font-size: 13.5px; font-weight: 700; color: #15803d;">All ' + studentList.length + ' students were present for all sessions on ' + escHtml(displayDate) + '</p>'
           + '</div>';
         if (actionBar) actionBar.style.display = 'none';
         return;
       }
 
-      // 9. Render absenty table
+      // 8. Render absenty table (Roll No, Student Name, Absent For Subjects)
       if (actionBar) actionBar.style.display = 'flex';
 
       var tableRows = '';
@@ -6757,8 +6673,8 @@ Generated: ${formatDisplayDate(new Date())}
         var pillsHtml = '';
         stu.absentSubjects.forEach(function(sub) {
           var pillClass = sub.isPractical ? 'practical' : 'theory';
-          var typeLabel = sub.isPractical ? 'P' : 'T';
-          pillsHtml += '<span class="absenty-subject-pill ' + pillClass + '">' + escHtml(sub.code) + ' <span style="opacity:0.85; font-size:10px; font-weight:900;">(' + typeLabel + ')</span></span>';
+          var iconClass = sub.isPractical ? 'ph-flask' : 'ph-book-open';
+          pillsHtml += '<span class="absenty-subject-pill ' + pillClass + '"><i class="ph ' + iconClass + '"></i> ' + escHtml(sub.fullLabel) + '</span>';
         });
 
         var bgColor = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
@@ -6766,22 +6682,16 @@ Generated: ${formatDisplayDate(new Date())}
           + '<td style="font-weight: 900; font-size: 13px; color: #0f172a; white-space: nowrap; text-align: center;">' + escHtml(stu.rollNo) + '</td>'
           + '<td style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap;">' + escHtml(stu.name) + '</td>'
           + '<td style="line-height: 1.6;">' + pillsHtml + '</td>'
-          + '<td style="text-align: center; font-weight: 900; font-size: 14px; color: #dc2626;">' + stu.absentSubjects.length + '</td>'
           + '</tr>';
       });
 
       content.innerHTML = ''
-        + '<div style="margin-bottom: 12px; font-size: 12.5px; font-weight: 800; color: #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">'
-        + '  <span>📅 <strong>' + escHtml(displayDate) + '</strong> · <strong>' + escHtml(className) + '</strong></span>'
-        + '  <span style="background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 8px; font-size: 11.5px;"><strong>' + absentStudents.length + '</strong> student(s) absent</span>'
-        + '</div>'
         + '<div class="absenty-table-wrap">'
         + '  <table class="absenty-table">'
         + '    <thead><tr>'
-        + '      <th style="width: 75px; text-align: center;">Roll No</th>'
-        + '      <th style="min-width: 150px;">Student Name</th>'
+        + '      <th style="width: 80px; text-align: center;">Roll No</th>'
+        + '      <th style="min-width: 180px;">Student Name</th>'
         + '      <th>Absent For (Subjects)</th>'
-        + '      <th style="width: 75px; text-align: center;">Count</th>'
         + '    </tr></thead>'
         + '    <tbody>' + tableRows + '</tbody>'
         + '  </table>'
@@ -6791,7 +6701,6 @@ Generated: ${formatDisplayDate(new Date())}
       console.error('Absenty report error:', err);
       content.innerHTML = '<div style="text-align: center; padding: 30px; color: #dc2626;"><i class="ph ph-warning-circle" style="font-size: 36px; margin-bottom: 8px;"></i><p style="font-size: 13px; font-weight: 800;">Error: ' + escHtml(err.message) + '</p></div>';
       if (actionBar) actionBar.style.display = 'none';
-      if (statsBar) statsBar.style.display = 'none';
       _absentyReportModel = null;
     }
   }
@@ -6803,18 +6712,17 @@ Generated: ${formatDisplayDate(new Date())}
     }
     var m = _absentyReportModel;
     var text = '';
-    text += '*📋 Absenty Report*\n';
-    text += '*' + (m.collegeName || 'College') + '*\n';
+    text += '*📋 Daywise Absenty Report*\n';
+    if (m.collegeName) text += '*' + m.collegeName + '*\n';
     text += '*Class:* ' + m.className + '\n';
     text += '*Date:* ' + m.displayDate + '\n';
-    text += '*Lectures:* ' + m.lecturesConducted + ' | *Absent:* ' + m.absentStudents.length + '/' + m.totalStudents + '\n';
-    text += '─────────────\n';
-    text += '*Roll | Name | Absent*\n';
+    text += '─────────────────\n';
+    text += '*Roll | Student Name | Absent For*\n';
     m.absentStudents.forEach(function(stu) {
-      var subCodes = stu.absentSubjects.map(function(s) { return s.code; }).join(', ');
-      text += stu.rollNo + ' | ' + stu.name + ' | ' + subCodes + '\n';
+      var subNames = stu.absentSubjects.map(function(s) { return s.fullLabel; }).join(', ');
+      text += stu.rollNo + ' | ' + stu.name + ' | ' + subNames + '\n';
     });
-    text += '─────────────\n';
+    text += '─────────────────\n';
     text += '_Total ' + m.absentStudents.length + ' absentee(s)_';
 
     var url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(text);
@@ -6828,18 +6736,17 @@ Generated: ${formatDisplayDate(new Date())}
     }
     var m = _absentyReportModel;
     var text = '';
-    text += '📋 Absenty Report\n';
-    text += (m.collegeName || 'College') + '\n';
+    text += '📋 Daywise Absenty Report\n';
+    if (m.collegeName) text += m.collegeName + '\n';
     text += 'Class: ' + m.className + '\n';
     text += 'Date: ' + m.displayDate + '\n';
-    text += 'Lectures: ' + m.lecturesConducted + ' | Absent: ' + m.absentStudents.length + '/' + m.totalStudents + '\n';
-    text += '─────────────\n';
-    text += 'Roll | Name | Absent For\n';
+    text += '─────────────────\n';
+    text += 'Roll | Student Name | Absent For\n';
     m.absentStudents.forEach(function(stu) {
-      var subCodes = stu.absentSubjects.map(function(s) { return s.code; }).join(', ');
-      text += stu.rollNo + ' | ' + stu.name + ' | ' + subCodes + '\n';
+      var subNames = stu.absentSubjects.map(function(s) { return s.fullLabel; }).join(', ');
+      text += stu.rollNo + ' | ' + stu.name + ' | ' + subNames + '\n';
     });
-    text += '─────────────\n';
+    text += '─────────────────\n';
     text += 'Total ' + m.absentStudents.length + ' absentee(s)';
 
     if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -4561,33 +4561,6 @@ select option {
   transform: translateY(-1px);
 }
 
-.absenty-stats-bar {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.absenty-stat-pill {
-  padding: 10px 18px;
-  border-radius: 14px;
-  text-align: center;
-  min-width: 110px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-}
-.absenty-stat-pill .stat-label {
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 1;
-}
-.absenty-stat-pill .stat-value {
-  font-size: 20px;
-  font-weight: 900;
-  margin-top: 2px;
-}
-
 .absenty-table-wrap {
   overflow-x: auto;
   border-radius: 16px;
@@ -4605,14 +4578,14 @@ select option {
 .absenty-table thead tr {
   background: #f1f5f9;
   color: #1e293b;
-  font-size: 11px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   border-bottom: 2px solid #cbd5e1;
 }
 
 .absenty-table thead th {
-  padding: 12px 14px;
+  padding: 12px 16px;
   text-align: left;
   font-weight: 900;
   white-space: nowrap;
@@ -4627,26 +4600,26 @@ select option {
 }
 
 .absenty-table tbody td {
-  padding: 12px 14px;
-  vertical-align: top;
+  padding: 12px 16px;
+  vertical-align: middle;
 }
 
 .absenty-subject-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 8px;
-  font-size: 11.5px;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12px;
   font-weight: 800;
-  margin: 2px 4px 2px 0;
-  white-space: nowrap;
+  margin: 3px 6px 3px 0;
+  line-height: 1.4;
 }
 
 .absenty-subject-pill.theory {
   background: #fee2e2;
   color: #991b1b;
-  border: 1px solid #f87171;
+  border: 1px solid #fca5a5;
 }
 
 .absenty-subject-pill.practical {
@@ -4666,16 +4639,6 @@ select option {
   }
   .absenty-filter-group {
     min-width: 100%;
-  }
-  .absenty-stats-bar {
-    gap: 8px;
-  }
-  .absenty-stat-pill {
-    min-width: 80px;
-    padding: 8px 12px;
-  }
-  .absenty-stat-pill .stat-value {
-    font-size: 16px;
   }
 }
 
