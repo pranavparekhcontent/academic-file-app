@@ -5452,9 +5452,20 @@ Generated: ${formatDisplayDate(new Date())}
     }).join('');
 
     outputEl.innerHTML = `
-      <div style="margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px;">
-        <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
-        <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Select Class, Student & Date to inspect instant daywise records</span>
+      <div style="margin-bottom: 16px; border-bottom: 1px solid var(--colorless-glass-base); padding-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 900; color: var(--text-main);">📅 Daywise Student Attendance Report</h3>
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Select Class, Student & Date to inspect instant daywise records</span>
+        </div>
+        <button onclick="App.openDaywiseAbsentyModal()" style="
+          display: inline-flex; align-items: center; gap: 7px;
+          padding: 9px 18px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff;
+          border: none; border-radius: 12px; font-size: 12px; font-weight: 800;
+          cursor: pointer; box-shadow: 0 4px 14px rgba(239,68,68,0.25); transition: all 0.2s ease;
+          white-space: nowrap; flex-shrink: 0;
+        " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
+          <i class="ph ph-user-minus" style="font-size: 15px;"></i> Absenty Report for Class
+        </button>
       </div>
 
       <!-- 3 THEMED GLASS DROPDOWNS (EXPANDING DOWNSIDE) -->
@@ -6206,6 +6217,443 @@ Generated: ${formatDisplayDate(new Date())}
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  DAYWISE ABSENTY REPORT FOR CLASS (POPUP MODAL)
+  // ═══════════════════════════════════════════════════════
+
+  function openDaywiseAbsentyModal() {
+    const modal = document.getElementById('daywise-absenty-modal');
+    if (!modal) return;
+
+    // Populate class dropdown from existing daywise data
+    const data = state.inchargeDashboard || {};
+    const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
+
+    function extractLiveClassName(item) {
+      if (!item) return '';
+      return String(item.year || item.className || item.class || item.courseYear || item.programYear || item.courseClass || item.course || item.branch || item.department || '').trim();
+    }
+    function resolveSubjectClassLocal(s) {
+      const liveName = extractLiveClassName(s);
+      if (liveName && !/^semester\s*\d+$/i.test(liveName) && !/^\d+$/i.test(liveName)) return liveName;
+      if (s.semester && String(s.semester).trim()) return 'Semester ' + String(s.semester).trim();
+      return 'General Academic Class';
+    }
+
+    const classNamesSet = {};
+    faculties.forEach(f => {
+      (f.subjects || []).forEach(s => {
+        if (!s) return;
+        const cName = resolveSubjectClassLocal(s);
+        if (cName) classNamesSet[cName] = true;
+      });
+    });
+
+    let classNames = Object.keys(classNamesSet);
+    if (classNames.length === 0) classNames.push('FY B. Pharm', 'SY B. Pharm', 'TY B. Pharm', 'Final Year B. Pharm');
+    classNames = sortAcademicClassNames(classNames);
+
+    const classSelect = document.getElementById('absenty-class-select');
+    if (classSelect) {
+      const currentClass = state.activeDaywiseYear || classNames[0];
+      classSelect.innerHTML = classNames.map(c =>
+        '<option value="' + escHtml(c) + '"' + (c === currentClass ? ' selected' : '') + '>' + escHtml(c) + '</option>'
+      ).join('');
+    }
+
+    // Set date to currently selected daywise date or today
+    const dateInput = document.getElementById('absenty-date-select');
+    if (dateInput) {
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      dateInput.value = state.activeDaywiseDate || todayStr;
+    }
+
+    // Reset content
+    const content = document.getElementById('absenty-report-content');
+    if (content) {
+      content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;"><i class="ph ph-magnifying-glass" style="font-size: 38px; color: #8b5cf6; opacity: 0.7; margin-bottom: 10px; display: block;"></i><p style="font-size: 13px; font-weight: 700; margin: 0;">Select Class & Date, then click <strong>Apply</strong> to generate the absenty report.</p></div>';
+    }
+    const actionBar = document.getElementById('absenty-action-bar');
+    if (actionBar) actionBar.style.display = 'none';
+    const statsBar = document.getElementById('absenty-stats-bar');
+    if (statsBar) statsBar.style.display = 'none';
+
+    modal.style.display = 'flex';
+
+    // Auto-load if class and date are already set
+    setTimeout(function() { loadDaywiseAbsentyData(); }, 100);
+  }
+
+  function closeDaywiseAbsentyModal() {
+    const modal = document.getElementById('daywise-absenty-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  // Store latest absenty model for WhatsApp/Copy sharing
+  let _absentyReportModel = null;
+
+  async function loadDaywiseAbsentyData() {
+    const classSelect = document.getElementById('absenty-class-select');
+    const dateInput = document.getElementById('absenty-date-select');
+    const content = document.getElementById('absenty-report-content');
+    const actionBar = document.getElementById('absenty-action-bar');
+    const statsBar = document.getElementById('absenty-stats-bar');
+    if (!classSelect || !dateInput || !content) return;
+
+    const className = classSelect.value;
+    const dateStr = dateInput.value;
+    if (!className || !dateStr) {
+      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #64748b;"><p style="font-weight: 700; font-size: 13px;">Please select both Class and Date.</p></div>';
+      if (actionBar) actionBar.style.display = 'none';
+      if (statsBar) statsBar.style.display = 'none';
+      _absentyReportModel = null;
+      return;
+    }
+
+    content.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="ph ph-spinner" style="font-size: 28px; animation: spin 1s linear infinite; color: #8b5cf6;"></i><p style="margin: 8px 0 0; font-size: 13px; font-weight: 700; color: #64748b;">Loading absenty data...</p></div>';
+
+    try {
+      // 1. Fetch attendance records and student roster from local cache
+      const [attResult, studResult] = await Promise.all([
+        API.getAttendance('', '', '', '').catch(function() { return { success: false }; }),
+        API.getStudents(className, '').catch(function() { return { success: false }; })
+      ]);
+
+      const allRecords = (attResult && attResult.success && Array.isArray(attResult.records)) ? attResult.records : [];
+      const rawStudents = (studResult && studResult.success && Array.isArray(studResult.students)) ? studResult.students : [];
+
+      // 2. Build class subjects list
+      const dashData = state.inchargeDashboard || {};
+      const faculties = (dashData.faculties || []).filter(function(f) { return f.faculty && f.faculty.toLowerCase() !== 'unassigned'; });
+
+      const classSubjects = [];
+      faculties.forEach(function(f) {
+        (f.subjects || []).forEach(function(s) {
+          if (!s || !s.code) return;
+          if (isSubjectMatchingClass(s, className)) {
+            classSubjects.push({ ...s, faculty: f.faculty, facultyName: f.faculty });
+          }
+        });
+      });
+
+      if (classSubjects.length === 0) {
+        var allSubs = [
+          ...((state.allData && state.allData.enrichedSubjects) || []),
+          ...((state.allData && state.allData.subjects) || [])
+        ];
+        allSubs.forEach(function(s) {
+          if (!s || !s.code) return;
+          if (isSubjectMatchingClass(s, className)) {
+            classSubjects.push(s);
+          }
+        });
+      }
+
+      // 3. Filter attendance records for the selected date and class
+      var dateRecords = allRecords.filter(function(r) {
+        if (!r.date || !r.code) return false;
+        if (!isSubjectMatchingClass(r.code, className, classSubjects)) return false;
+
+        var rd = String(r.date).trim().toLowerCase();
+        if (rd.includes(dateStr.toLowerCase())) return true;
+        var parts = dateStr.split('-');
+        if (parts.length === 3) {
+          var y = parts[0], m = parts[1], d = parts[2];
+          var months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+          var mName = months[parseInt(m, 10) - 1] || '';
+          var dNum = parseInt(d, 10);
+          if (mName && (rd.includes(dNum + '-' + mName) || rd.includes(d + '-' + mName))) return true;
+          if (rd.includes(d + '-' + m + '-' + y) || rd.includes(d + '/' + m + '/' + y) || rd.includes(dNum + '/' + parseInt(m,10) + '/' + y)) return true;
+        }
+        return false;
+      });
+
+      // 4. Build student map with attendance
+      var studentMap = {};
+      rawStudents.forEach(function(st) {
+        var roll = String(st.rollNo !== undefined && st.rollNo !== null ? st.rollNo : (st.roll || '')).trim();
+        var name = String(st.name || st.studentName || '').trim();
+        if (roll || name) {
+          var key = roll || name;
+          studentMap[key] = { rollNo: roll || 'N/A', name: name || key, batch: st.batch || st.batchGroup || 'General', att: {} };
+        }
+      });
+
+      var activeSubjectsMap = {};
+      dateRecords.forEach(function(r) {
+        if (!r || !r.code) return;
+        if (!isSubjectMatchingClass(r.code, className, classSubjects)) return;
+
+        var rNo = String(r.rollNo !== undefined && r.rollNo !== null ? r.rollNo : '').trim();
+        var rNoNum = parseInt(rNo, 10);
+        var rName = String(r.name || '').toLowerCase().replace(/\s+/g, '');
+
+        var matchedKey = null;
+        if (rNo && studentMap[rNo]) { matchedKey = rNo; }
+        else if (!isNaN(rNoNum) && studentMap[String(rNoNum)]) { matchedKey = String(rNoNum); }
+        else {
+          for (var k in studentMap) {
+            var s = studentMap[k];
+            if ((rNo && String(s.rollNo).trim() === rNo) ||
+                (!isNaN(rNoNum) && parseInt(s.rollNo, 10) === rNoNum) ||
+                (rName && s.name.toLowerCase().replace(/\s+/g, '') === rName)) {
+              matchedKey = k;
+              break;
+            }
+          }
+        }
+
+        if (!matchedKey) {
+          matchedKey = rNo || r.name || ('STU_' + Object.keys(studentMap).length);
+          studentMap[matchedKey] = { rollNo: rNo || 'N/A', name: r.name || matchedKey, batch: r.batch || 'General', att: {} };
+        }
+
+        if (r.name && (!studentMap[matchedKey].name || studentMap[matchedKey].name === matchedKey)) {
+          studentMap[matchedKey].name = r.name;
+        }
+
+        var curBatch = studentMap[matchedKey].batch || '';
+        var cleanInfo = resolveCleanSubjectInfo(r.code, classSubjects, curBatch);
+        var sKey = cleanInfo.code;
+
+        // Handle multiple lectures of same subject
+        var suffixNum = 2;
+        var finalSKey = sKey;
+        while (studentMap[matchedKey].att[finalSKey] !== undefined) {
+          finalSKey = sKey + ' (L' + suffixNum + ')';
+          suffixNum++;
+        }
+
+        if (!activeSubjectsMap[finalSKey]) {
+          activeSubjectsMap[finalSKey] = { ...cleanInfo, code: finalSKey };
+        }
+
+        var st = String(r.status || '').toUpperCase().trim();
+        if (st === 'P' || st === 'PRESENT' || st === '1') {
+          studentMap[matchedKey].att[finalSKey] = 'P';
+        } else if (st === 'A' || st === 'ABSENT' || st === '0') {
+          studentMap[matchedKey].att[finalSKey] = 'A';
+        }
+      });
+
+      var activeSubjectKeys = Object.keys(activeSubjectsMap).filter(function(sk) {
+        return isSubjectMatchingClass(sk, className, classSubjects);
+      });
+
+      // 5. Filter: only students with >= 1 absent session
+      var studentList = Object.values(studentMap);
+      studentList.sort(function(a, b) {
+        var numA = parseInt(a.rollNo), numB = parseInt(b.rollNo);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return String(a.rollNo).localeCompare(String(b.rollNo));
+      });
+
+      var absentStudents = [];
+      studentList.forEach(function(stu) {
+        var absentSubjects = [];
+        activeSubjectKeys.forEach(function(sk) {
+          var status = stu.att[sk];
+          if (status === 'A') {
+            var subInfo = activeSubjectsMap[sk] || {};
+            absentSubjects.push({
+              code: subInfo.code || sk,
+              name: subInfo.name || sk,
+              isPractical: subInfo.isPractical || false
+            });
+          }
+        });
+        if (absentSubjects.length >= 1) {
+          absentStudents.push({
+            rollNo: stu.rollNo,
+            name: stu.name,
+            batch: stu.batch,
+            absentSubjects: absentSubjects
+          });
+        }
+      });
+
+      // Format display date
+      var dtParts = dateStr.split('-');
+      var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var displayDate = dtParts.length === 3 ? (dtParts[2] + '-' + monthNames[parseInt(dtParts[1])-1] + '-' + dtParts[0]) : dateStr;
+
+      // Store model for sharing
+      var collegeName = (dashData.collegeName || (state.metadata && state.metadata.collegeName) || '');
+      _absentyReportModel = {
+        className: className,
+        date: dateStr,
+        displayDate: displayDate,
+        totalStudents: studentList.length,
+        lecturesConducted: activeSubjectKeys.length,
+        absentStudents: absentStudents,
+        collegeName: collegeName
+      };
+
+      // 6. Render stats
+      if (statsBar) {
+        statsBar.style.display = 'flex';
+        statsBar.innerHTML = ''
+          + '<div class="absenty-stat-pill" style="background: rgba(2,132,199,0.08); border: 1px solid rgba(2,132,199,0.20);">'
+          + '  <div class="stat-label" style="color: #0284c7;">Total Students</div>'
+          + '  <div class="stat-value" style="color: #0369a1;">' + studentList.length + '</div>'
+          + '</div>'
+          + '<div class="absenty-stat-pill" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.20);">'
+          + '  <div class="stat-label" style="color: #7c3aed;">Lectures/Pract.</div>'
+          + '  <div class="stat-value" style="color: #6d28d9;">' + activeSubjectKeys.length + '</div>'
+          + '</div>'
+          + '<div class="absenty-stat-pill" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);">'
+          + '  <div class="stat-label" style="color: #dc2626;">Absentees</div>'
+          + '  <div class="stat-value" style="color: #b91c1c;">' + absentStudents.length + '</div>'
+          + '</div>'
+          + '<div class="absenty-stat-pill" style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25);">'
+          + '  <div class="stat-label" style="color: #059669;">All Present</div>'
+          + '  <div class="stat-value" style="color: #047857;">' + (studentList.length - absentStudents.length) + '</div>'
+          + '</div>';
+      }
+
+      // 7. No lectures found
+      if (activeSubjectKeys.length === 0) {
+        content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b; background: rgba(241,245,249,0.50); border-radius: 16px; border: 1px dashed rgba(217,119,6,0.30);">'
+          + '<i class="ph ph-calendar-x" style="font-size: 44px; color: #d97706; opacity: 0.8; margin-bottom: 10px; display: block;"></i>'
+          + '<h4 style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: #0f172a;">No Lectures Recorded on ' + escHtml(displayDate) + '</h4>'
+          + '<p style="margin: 0; font-size: 12.5px; font-weight: 600; color: #64748b;">No attendance data found for <strong>' + escHtml(className) + '</strong> on this date.</p>'
+          + '</div>';
+        if (actionBar) actionBar.style.display = 'none';
+        _absentyReportModel = null;
+        return;
+      }
+
+      // 8. No absentees
+      if (absentStudents.length === 0) {
+        content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #059669; background: rgba(16,185,129,0.06); border-radius: 16px; border: 1px solid rgba(16,185,129,0.20);">'
+          + '<i class="ph ph-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 10px; display: block;"></i>'
+          + '<h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 900; color: #047857;">100% Attendance 🎉</h4>'
+          + '<p style="margin: 0; font-size: 13px; font-weight: 700; color: #059669;">All ' + studentList.length + ' students were present for all ' + activeSubjectKeys.length + ' session(s) on ' + escHtml(displayDate) + '</p>'
+          + '</div>';
+        if (actionBar) actionBar.style.display = 'none';
+        return;
+      }
+
+      // 9. Render absenty table
+      if (actionBar) actionBar.style.display = 'flex';
+
+      var tableRows = '';
+      absentStudents.forEach(function(stu, idx) {
+        var pillsHtml = '';
+        stu.absentSubjects.forEach(function(sub) {
+          var pillClass = sub.isPractical ? 'practical' : 'theory';
+          var typeLabel = sub.isPractical ? 'P' : 'T';
+          pillsHtml += '<span class="absenty-subject-pill ' + pillClass + '">' + escHtml(sub.code) + ' <span style="opacity:0.7;font-size:9px;">(' + typeLabel + ')</span></span>';
+        });
+
+        var bgColor = idx % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'transparent';
+        tableRows += '<tr style="background: ' + bgColor + ';">'
+          + '<td style="font-weight: 800; font-size: 12.5px; color: #334155; white-space: nowrap; text-align: center;">' + escHtml(stu.rollNo) + '</td>'
+          + '<td style="font-weight: 700; font-size: 12.5px; color: #0f172a; white-space: nowrap;">' + escHtml(stu.name) + '</td>'
+          + '<td style="line-height: 1.6;">' + pillsHtml + '</td>'
+          + '<td style="text-align: center; font-weight: 900; font-size: 13px; color: #dc2626;">' + stu.absentSubjects.length + '</td>'
+          + '</tr>';
+      });
+
+      content.innerHTML = ''
+        + '<div style="margin-bottom: 10px; font-size: 11.5px; font-weight: 700; color: #64748b;">'
+        + '  📅 ' + escHtml(displayDate) + ' · ' + escHtml(className) + ' · ' + absentStudents.length + ' student(s) absent'
+        + '</div>'
+        + '<div class="absenty-table-wrap">'
+        + '  <table class="absenty-table">'
+        + '    <thead><tr>'
+        + '      <th style="width: 70px; text-align: center;">Roll No</th>'
+        + '      <th style="min-width: 140px;">Student Name</th>'
+        + '      <th>Absent For (Subjects)</th>'
+        + '      <th style="width: 70px; text-align: center;">Count</th>'
+        + '    </tr></thead>'
+        + '    <tbody>' + tableRows + '</tbody>'
+        + '  </table>'
+        + '</div>';
+
+    } catch (err) {
+      console.error('Absenty report error:', err);
+      content.innerHTML = '<div style="text-align: center; padding: 30px; color: #dc2626;"><i class="ph ph-warning-circle" style="font-size: 36px; margin-bottom: 8px;"></i><p style="font-size: 13px; font-weight: 700;">Error: ' + escHtml(err.message) + '</p></div>';
+      if (actionBar) actionBar.style.display = 'none';
+      if (statsBar) statsBar.style.display = 'none';
+      _absentyReportModel = null;
+    }
+  }
+
+  function shareDaywiseAbsentyWhatsApp() {
+    if (!_absentyReportModel || !_absentyReportModel.absentStudents || _absentyReportModel.absentStudents.length === 0) {
+      Toast.show('No Data', 'Generate the absenty report first.', 'warning');
+      return;
+    }
+    var m = _absentyReportModel;
+    var text = '';
+    text += '*📋 Absenty Report*\n';
+    text += '*' + (m.collegeName || 'College') + '*\n';
+    text += '*Class:* ' + m.className + '\n';
+    text += '*Date:* ' + m.displayDate + '\n';
+    text += '*Lectures:* ' + m.lecturesConducted + ' | *Absent:* ' + m.absentStudents.length + '/' + m.totalStudents + '\n';
+    text += '─────────────\n';
+    text += '*Roll | Name | Absent*\n';
+    m.absentStudents.forEach(function(stu) {
+      var subCodes = stu.absentSubjects.map(function(s) { return s.code; }).join(', ');
+      text += stu.rollNo + ' | ' + stu.name + ' | ' + subCodes + '\n';
+    });
+    text += '─────────────\n';
+    text += '_Total ' + m.absentStudents.length + ' absentee(s)_';
+
+    var url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(text);
+    window.open(url, '_blank');
+  }
+
+  function copyDaywiseAbsentyText() {
+    if (!_absentyReportModel || !_absentyReportModel.absentStudents || _absentyReportModel.absentStudents.length === 0) {
+      Toast.show('No Data', 'Generate the absenty report first.', 'warning');
+      return;
+    }
+    var m = _absentyReportModel;
+    var text = '';
+    text += '📋 Absenty Report\n';
+    text += (m.collegeName || 'College') + '\n';
+    text += 'Class: ' + m.className + '\n';
+    text += 'Date: ' + m.displayDate + '\n';
+    text += 'Lectures: ' + m.lecturesConducted + ' | Absent: ' + m.absentStudents.length + '/' + m.totalStudents + '\n';
+    text += '─────────────\n';
+    text += 'Roll | Name | Absent For\n';
+    m.absentStudents.forEach(function(stu) {
+      var subCodes = stu.absentSubjects.map(function(s) { return s.code; }).join(', ');
+      text += stu.rollNo + ' | ' + stu.name + ' | ' + subCodes + '\n';
+    });
+    text += '─────────────\n';
+    text += 'Total ' + m.absentStudents.length + ' absentee(s)';
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        Toast.show('Copied', 'Absenty report copied to clipboard.', 'success');
+      }).catch(function() {
+        _fallbackCopyAbsentyText(text);
+      });
+    } else {
+      _fallbackCopyAbsentyText(text);
+    }
+  }
+
+  function _fallbackCopyAbsentyText(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      Toast.show('Copied', 'Absenty report copied to clipboard.', 'success');
+    } catch (e) {
+      Toast.show('Error', 'Failed to copy text.', 'danger');
+    }
+  }
+
 
   async function fetchStudentReportDataForClass(className) {
     try {
@@ -6724,6 +7172,11 @@ Generated: ${formatDisplayDate(new Date())}
     selectDaywiseDate,
     changeDaywiseCalendarMonth,
     downloadDaywiseReportDoc,
+    openDaywiseAbsentyModal,
+    closeDaywiseAbsentyModal,
+    loadDaywiseAbsentyData,
+    shareDaywiseAbsentyWhatsApp,
+    copyDaywiseAbsentyText,
     toggleClassMindmap,
     printReport
   };

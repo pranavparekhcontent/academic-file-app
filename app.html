@@ -729,6 +729,68 @@
   </div>
 </div>
 
+<!-- ═══════════ DAYWISE ABSENTY REPORT MODAL ═══════════ -->
+<div id="daywise-absenty-modal" class="absenty-modal-overlay">
+  <div class="absenty-modal-card">
+    <button class="absenty-modal-close" onclick="App.closeDaywiseAbsentyModal()" title="Close">
+      <i class="ph ph-x"></i>
+    </button>
+
+    <!-- Header -->
+    <div style="margin-bottom: 18px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 14px;">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 14px rgba(239,68,68,0.30);">
+          <i class="ph ph-user-minus"></i>
+        </div>
+        <div>
+          <h3 style="margin: 0; font-size: 17px; font-weight: 900; color: #0f172a;">Daywise Absenty Report for Class</h3>
+          <span style="font-size: 11.5px; font-weight: 700; color: #64748b;">Students absent for ≥1 lecture/practical on selected date</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Bar: Class + Date -->
+    <div class="absenty-filter-bar">
+      <div class="absenty-filter-group">
+        <label><i class="ph ph-graduation-cap" style="color: #8b5cf6;"></i> Class / Year</label>
+        <select id="absenty-class-select" onchange="App.loadDaywiseAbsentyData()"></select>
+      </div>
+      <div class="absenty-filter-group">
+        <label><i class="ph ph-calendar" style="color: #d97706;"></i> Date</label>
+        <input type="date" id="absenty-date-select" onchange="App.loadDaywiseAbsentyData()">
+      </div>
+      <div class="absenty-filter-group" style="flex: 0 0 auto; justify-content: flex-end;">
+        <label>&nbsp;</label>
+        <button onclick="App.loadDaywiseAbsentyData()" style="padding: 9px 18px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; border: none; border-radius: 12px; font-size: 12.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <i class="ph ph-funnel"></i> Apply
+        </button>
+      </div>
+    </div>
+
+    <!-- Action Buttons: WhatsApp + Copy -->
+    <div class="absenty-action-bar" id="absenty-action-bar" style="display: none;">
+      <button class="btn-absenty-whatsapp" onclick="App.shareDaywiseAbsentyWhatsApp()">
+        <i class="ph ph-whatsapp-logo"></i> Share via WhatsApp
+      </button>
+      <button class="btn-absenty-copy" onclick="App.copyDaywiseAbsentyText()">
+        <i class="ph ph-copy"></i> Copy Text
+      </button>
+    </div>
+
+    <!-- Stats Pills -->
+    <div class="absenty-stats-bar" id="absenty-stats-bar" style="display: none;"></div>
+
+    <!-- Report Content -->
+    <div id="absenty-report-content">
+      <div style="text-align: center; padding: 40px 20px; color: #64748b;">
+        <i class="ph ph-magnifying-glass" style="font-size: 38px; color: #8b5cf6; opacity: 0.7; margin-bottom: 10px; display: block;"></i>
+        <p style="font-size: 13px; font-weight: 700; margin: 0;">Select Class & Date, then click <strong>Apply</strong> to generate the absenty report.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- AppStart Engine Scripts -->
 <script src="./appstart/config.js"></script>
 <script src="./appstart/license.js"></script>
