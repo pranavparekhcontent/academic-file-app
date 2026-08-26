@@ -5435,6 +5435,121 @@ Generated: ${formatDisplayDate(new Date())}
     loadDaywiseReportData(state.activeDaywiseYear, state.activeDaywiseDate);
   }
 
+  function toggleDaywiseDateDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('daywise-date-menu');
+    const trig = document.getElementById('daywise-date-trigger');
+    const isVisible = menu && menu.style.display === 'block';
+
+    closeAllDaywiseDropdowns();
+
+    if (menu && trig && !isVisible) {
+      menu.style.display = 'block';
+      trig.classList.add('active');
+      renderDaywiseCalendarGrid();
+    }
+  }
+
+  function selectDaywiseDate(dateStr) {
+    state.activeDaywiseDate = dateStr;
+    const label = document.getElementById('daywise-date-label');
+    if (label) {
+      label.innerText = formatDaywiseDisplayDate(dateStr);
+    }
+    closeAllDaywiseDropdowns();
+    onDaywiseDateChange(dateStr);
+  }
+
+  function changeDaywiseCalendarMonth(delta) {
+    if (!state.daywiseCalendarViewDate) {
+      const parsed = parseToDate(state.activeDaywiseDate);
+      if (parsed && !isNaN(parsed.getTime())) {
+        state.daywiseCalendarViewDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      } else {
+        state.daywiseCalendarViewDate = new Date();
+      }
+    }
+    const currentMonth = state.daywiseCalendarViewDate.getMonth();
+    const currentYear = state.daywiseCalendarViewDate.getFullYear();
+    state.daywiseCalendarViewDate = new Date(currentYear, currentMonth + delta, 1);
+    renderDaywiseCalendarGrid();
+  }
+
+  function renderDaywiseCalendarGrid() {
+    const container = document.getElementById('daywise-cal-grid-container');
+    const titleEl = document.getElementById('daywise-cal-title-text');
+    if (!container || !titleEl) return;
+
+    if (!state.daywiseCalendarViewDate) {
+      const parsed = parseToDate(state.activeDaywiseDate);
+      if (parsed && !isNaN(parsed.getTime())) {
+        state.daywiseCalendarViewDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      } else {
+        state.daywiseCalendarViewDate = new Date();
+      }
+    }
+
+    const viewDate = state.daywiseCalendarViewDate;
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    titleEl.innerText = `${monthNames[month]} ${year}`;
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const selDateStr = state.activeDaywiseDate || todayStr;
+
+    // Indicator dots for days with data
+    const datesWithData = {};
+    if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
+      const records = SessionCache.data.attendance.records;
+      const targetClass = state.activeDaywiseYear || '';
+      records.forEach(r => {
+        if (!r.date || !r.code) return;
+        if (!isSubjectMatchingClass(r.code, targetClass)) return;
+        const parsed = parseToDate(r.date);
+        if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
+          datesWithData[parsed.getDate()] = true;
+        }
+      });
+    }
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalDaysInPrevMonth = new Date(year, month, 0).getDate();
+
+    let gridHtml = '';
+
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = totalDaysInPrevMonth - i;
+      const prevM = month === 0 ? 12 : month;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = `${prevY}-${String(prevM).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      gridHtml += `<div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">${dayNum}</div>`;
+    }
+
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isSelected = isSameDateMatch(dStr, selDateStr);
+      const isToday = (dStr === todayStr);
+      const hasData = !!datesWithData[day];
+
+      gridHtml += `<div class="daywise-cal-day ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''} ${hasData ? 'has-data' : ''}" onclick="App.selectDaywiseDate('${dStr}')">${day}</div>`;
+    }
+
+    const totalCellsSoFar = firstDayIndex + totalDaysInMonth;
+    const remainingCells = (7 - (totalCellsSoFar % 7)) % 7;
+    for (let day = 1; day <= remainingCells; day++) {
+      const nextM = month === 11 ? 1 : month + 2;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      gridHtml += `<div class="daywise-cal-day other-month" onclick="App.selectDaywiseDate('${dStr}')">${day}</div>`;
+    }
+
+    container.innerHTML = gridHtml;
+  }
+
   function selectDaywiseYear(className) {
     onDaywiseClassChange(className);
   }
@@ -6361,9 +6476,9 @@ Generated: ${formatDisplayDate(new Date())}
 
   function changeAbsentyCalendarMonth(delta) {
     if (!state.absentyCalendarViewDate) {
-      if (state.activeAbsentyDate) {
-        const parts = state.activeAbsentyDate.split('-');
-        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      const parsed = parseToDate(state.activeAbsentyDate);
+      if (parsed && !isNaN(parsed.getTime())) {
+        state.absentyCalendarViewDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
       } else {
         state.absentyCalendarViewDate = new Date();
       }
@@ -6396,9 +6511,9 @@ Generated: ${formatDisplayDate(new Date())}
     if (!container || !titleEl) return;
 
     if (!state.absentyCalendarViewDate) {
-      if (state.activeAbsentyDate) {
-        const parts = state.activeAbsentyDate.split('-');
-        state.absentyCalendarViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      const parsed = parseToDate(state.activeAbsentyDate);
+      if (parsed && !isNaN(parsed.getTime())) {
+        state.absentyCalendarViewDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
       } else {
         state.absentyCalendarViewDate = new Date();
       }
@@ -6449,7 +6564,7 @@ Generated: ${formatDisplayDate(new Date())}
     // Current month days
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const dStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
-      const isSelected = (dStr === selDateStr);
+      const isSelected = isSameDateMatch(dStr, selDateStr);
       const isToday = (dStr === todayStr);
       const hasData = !!datesWithData[day];
 
