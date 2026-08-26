@@ -4215,7 +4215,7 @@ select option {
   gap: 10px;
   padding: 10px 14px;
   border-radius: 12px;
-  color: var(--text-main);
+  color: #0f172a;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -4270,9 +4270,9 @@ select option {
 }
 
 .daywise-cal-title {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 900;
-  color: var(--text-main);
+  color: #0f172a;
   letter-spacing: 0.3px;
 }
 
@@ -4282,7 +4282,7 @@ select option {
   text-align: center;
   font-size: 10.5px;
   font-weight: 900;
-  color: var(--text-muted);
+  color: #475569;
   text-transform: uppercase;
   margin-bottom: 6px;
   letter-spacing: 0.5px;
@@ -4300,9 +4300,9 @@ select option {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
   cursor: pointer;
   transition: all 0.16s ease;
   position: relative;
@@ -4310,8 +4310,8 @@ select option {
 }
 
 .daywise-cal-day:hover:not(.empty) {
-  background: rgba(245, 158, 11, 0.14);
-  color: #d97706;
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
   font-weight: 900;
   transform: scale(1.08);
 }
@@ -4325,32 +4325,33 @@ select option {
 
 .daywise-cal-day.is-today:not(.is-selected) {
   border: 1.5px solid #d97706;
-  color: #d97706;
+  color: #b45309;
   font-weight: 900;
-  background: rgba(245, 158, 11, 0.06);
+  background: rgba(245, 158, 11, 0.10);
 }
 
 .daywise-cal-day.other-month {
-  opacity: 0.35;
-  color: var(--text-muted);
+  opacity: 0.28;
+  color: #94a3b8;
 }
 
 .daywise-cal-day.has-data:not(.is-selected)::after {
   content: '';
   position: absolute;
   bottom: 3px;
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.6);
 }
 
 .daywise-cal-day.is-selected.has-data::after {
   content: '';
   position: absolute;
   bottom: 3px;
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #ffffff;
 }
@@ -4576,16 +4577,16 @@ select option {
 }
 
 .absenty-table thead tr {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: #f8fafc;
+  color: #334155;
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  border-bottom: 2px solid #cbd5e1;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .absenty-table thead th {
-  padding: 12px 16px;
+  padding: 13px 18px;
   text-align: left;
   font-weight: 900;
   white-space: nowrap;
@@ -4593,39 +4594,93 @@ select option {
 
 .absenty-table tbody tr {
   border-bottom: 1px solid #f1f5f9;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
 }
 .absenty-table tbody tr:hover {
   background: #f8fafc;
 }
 
 .absenty-table tbody td {
-  padding: 12px 16px;
+  padding: 12px 18px;
   vertical-align: middle;
+}
+
+.absenty-roll-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.09);
+  color: #4338ca;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.absenty-student-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #f43f5e);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.28);
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+.absenty-student-name {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: #0f172a;
+  letter-spacing: -0.1px;
+}
+
+.absenty-batch-pill {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .absenty-subject-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 13px;
   border-radius: 10px;
   font-size: 12px;
   font-weight: 800;
   margin: 3px 6px 3px 0;
   line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease;
+}
+.absenty-subject-pill:hover {
+  transform: translateY(-1px);
 }
 
 .absenty-subject-pill.theory {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
 }
 
 .absenty-subject-pill.practical {
-  background: #fce7f3;
-  color: #831843;
-  border: 1px solid #f472b6;
+  background: #fdf4ff;
+  color: #86198f;
+  border: 1px solid #f5d0fe;
 }
 
 @media (max-width: 640px) {
