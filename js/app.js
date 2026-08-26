@@ -5502,17 +5502,22 @@ Generated: ${formatDisplayDate(new Date())}
 
     // Indicator dots for days with data
     const datesWithData = {};
-    if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
-      const records = SessionCache.data.attendance.records;
+    try {
+      const records = (typeof API !== 'undefined' && API.getSessionAttendanceRecords ? API.getSessionAttendanceRecords() : []) ||
+                      (state.allData && state.allData.attendance && state.allData.attendance.records) || [];
       const targetClass = state.activeDaywiseYear || '';
-      records.forEach(r => {
-        if (!r.date || !r.code) return;
-        if (!isSubjectMatchingClass(r.code, targetClass)) return;
-        const parsed = parseToDate(r.date);
-        if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
-          datesWithData[parsed.getDate()] = true;
-        }
-      });
+      if (Array.isArray(records)) {
+        records.forEach(r => {
+          if (!r || !r.date || !r.code) return;
+          if (typeof isSubjectMatchingClass === 'function' && !isSubjectMatchingClass(r.code, targetClass)) return;
+          const parsed = parseToDate(r.date);
+          if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
+            datesWithData[parsed.getDate()] = true;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error calculating daywise dates with data:', e);
     }
 
     const firstDayIndex = new Date(year, month, 1).getDay();
@@ -5689,13 +5694,13 @@ Generated: ${formatDisplayDate(new Date())}
             <div class="daywise-calendar-container">
               <div class="daywise-cal-header">
                 <button type="button" class="daywise-cal-nav-btn" onclick="App.changeDaywiseCalendarMonth(-1)" title="Previous Month">
-                  <i class="ph ph-caret-left-bold"></i>
+                  <i class="ph ph-caret-left"></i>
                 </button>
                 <div class="daywise-cal-title" id="daywise-cal-title-text">
                   August 2026
                 </div>
                 <button type="button" class="daywise-cal-nav-btn" onclick="App.changeDaywiseCalendarMonth(1)" title="Next Month">
-                  <i class="ph ph-caret-right-bold"></i>
+                  <i class="ph ph-caret-right"></i>
                 </button>
               </div>
               <div class="daywise-cal-weekdays">
@@ -6371,7 +6376,7 @@ Generated: ${formatDisplayDate(new Date())}
     if (!modal) return;
 
     // Populate class dropdown
-    const data = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (SessionCache.data && SessionCache.data.dashboard) || {};
+    const data = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (typeof API !== 'undefined' && API.getSessionCacheData && API.getSessionCacheData() ? API.getSessionCacheData().dashboard : null) || {};
     const faculties = (data.faculties || []).filter(f => f.faculty && f.faculty.toLowerCase() !== 'unassigned');
 
     function extractLiveClassName(item) {
@@ -6533,17 +6538,22 @@ Generated: ${formatDisplayDate(new Date())}
 
     // Collect all dates that have attendance for this class in this month to show green indicator dots
     const datesWithData = {};
-    if (SessionCache && SessionCache.data && SessionCache.data.attendance && Array.isArray(SessionCache.data.attendance.records)) {
-      const records = SessionCache.data.attendance.records;
-      records.forEach(r => {
-        if (!r.date || !r.code) return;
-        if (!isSubjectMatchingClass(r.code, targetClass)) return;
-        const parsed = parseToDate(r.date);
-        if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
-          const dNum = parsed.getDate();
-          datesWithData[dNum] = true;
-        }
-      });
+    try {
+      const records = (typeof API !== 'undefined' && API.getSessionAttendanceRecords ? API.getSessionAttendanceRecords() : []) ||
+                      (state.allData && state.allData.attendance && state.allData.attendance.records) || [];
+      if (Array.isArray(records)) {
+        records.forEach(r => {
+          if (!r || !r.date || !r.code) return;
+          if (typeof isSubjectMatchingClass === 'function' && !isSubjectMatchingClass(r.code, targetClass)) return;
+          const parsed = parseToDate(r.date);
+          if (parsed && parsed.getFullYear() === year && parsed.getMonth() === month) {
+            const dNum = parsed.getDate();
+            datesWithData[dNum] = true;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error calculating absenty dates with data:', e);
     }
 
     const firstDayIndex = new Date(year, month, 1).getDay();
@@ -6622,24 +6632,25 @@ Generated: ${formatDisplayDate(new Date())}
       const rawStudents = (studResult && studResult.success && Array.isArray(studResult.students)) ? studResult.students : [];
 
       // 2. Build class subjects list
-      const dashData = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (SessionCache.data && SessionCache.data.dashboard) || {};
+      const dashData = state.inchargeDashboard || (state.allData && state.allData.dashboard) || (typeof API !== 'undefined' && API.getSessionCacheData && API.getSessionCacheData() ? API.getSessionCacheData().dashboard : null) || {};
       const faculties = (dashData.faculties || []).filter(function(f) { return f.faculty && f.faculty.toLowerCase() !== 'unassigned'; });
 
       const classSubjects = [];
       faculties.forEach(function(f) {
         (f.subjects || []).forEach(function(s) {
           if (!s || !s.code) return;
-          if (isSubjectMatchingClass(s, className)) {
+          if (typeof isSubjectMatchingClass === 'function' && isSubjectMatchingClass(s, className)) {
             classSubjects.push({ ...s, faculty: f.faculty, facultyName: f.faculty });
           }
         });
       });
 
       if (classSubjects.length === 0) {
+        var apiCachedSubs = (typeof API !== 'undefined' && API.getSessionCacheData && API.getSessionCacheData() ? API.getSessionCacheData().subjects : []) || [];
         var allSubs = [
           ...((state.allData && state.allData.enrichedSubjects) || []),
           ...((state.allData && state.allData.subjects) || []),
-          ...((SessionCache.data && SessionCache.data.subjects) || [])
+          ...apiCachedSubs
         ];
         allSubs.forEach(function(s) {
           if (!s || !s.code) return;
@@ -7408,6 +7419,7 @@ Generated: ${formatDisplayDate(new Date())}
     toggleDaywiseDateDropdown,
     selectDaywiseDate,
     changeDaywiseCalendarMonth,
+    renderDaywiseCalendarGrid,
     downloadDaywiseReportDoc,
     openDaywiseAbsentyModal,
     closeDaywiseAbsentyModal,

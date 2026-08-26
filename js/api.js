@@ -396,6 +396,17 @@ const API = (() => {
     }
   }
 
+  function getSessionAttendanceRecords() {
+    if (SessionCache.loaded && SessionCache.data && SessionCache.data.attendance) {
+      return SessionCache.data.attendance.records || [];
+    }
+    return [];
+  }
+
+  function getSessionCacheData() {
+    return SessionCache.loaded ? SessionCache.data : null;
+  }
+
   // ═══════════════════════════════════════════════════════
   //  PUBLIC INTERFACE
   // ═══════════════════════════════════════════════════════
@@ -404,6 +415,8 @@ const API = (() => {
     // Session cache management
     initSessionCache,
     isSessionCacheLoaded,
+    getSessionAttendanceRecords,
+    getSessionCacheData,
 
     // Read APIs (cache-first)
     getAllData,
