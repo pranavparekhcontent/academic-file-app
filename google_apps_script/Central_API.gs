@@ -2112,12 +2112,16 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
       } catch(e) {}
     }
     var str = String(val).trim();
+    // Same-day split-batch sessions carry a lecture tag suffix (e.g. ' (L2)').
+    // Strip it for date matching only; when nothing parses, the raw string is
+    // still returned below so hand-typed notes stay intact.
+    var dateStr = str.replace(/\s*\([^)]*\)\s*$/, '').trim();
     var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (ymdRegex.test(str)) {
-      return str;
+    if (ymdRegex.test(dateStr)) {
+      return dateStr;
     }
     var slashRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/;
-    var match = str.match(slashRegex);
+    var match = dateStr.match(slashRegex);
     if (match) {
       var d = parseInt(match[1], 10);
       var m = parseInt(match[2], 10);
@@ -2132,12 +2136,24 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
         } catch(e) {}
       }
     }
-    var dmyRegex = /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/;
-    if (dmyRegex.test(str)) {
+    // 'dd-Mon-yy' / 'dd-Mon-yyyy' (e.g. 07-Sep-26, 29-May-2026): normalize to
+    // yyyy-MM-dd so planned/executed date comparisons work reliably instead of
+    // passing through the ambiguous raw string.
+    var dmyMatch = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+    if (dmyMatch) {
+      var mosArr = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      var mi = mosArr.indexOf(dmyMatch[2].toLowerCase());
+      var dy = parseInt(dmyMatch[3], 10); if (dy < 100) dy += 2000;
+      var ddy = parseInt(dmyMatch[1], 10);
+      if (mi >= 0 && ddy >= 1 && ddy <= 31) {
+        try {
+          return Utilities.formatDate(new Date(dy, mi, ddy), timeZone, 'yyyy-MM-dd');
+        } catch(e) {}
+      }
       return str;
     }
     try {
-      var parsed = new Date(str);
+      var parsed = new Date(dateStr);
       if (!isNaN(parsed.getTime())) {
         return Utilities.formatDate(parsed, timeZone, 'yyyy-MM-dd');
       }
@@ -2306,6 +2322,7 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
     if (colIdxRemark === -1) colIdxRemark = 5;
 
     var tz = tpSs.getSpreadsheetTimeZone();
+    var todayYmd = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
     for (var i = startRow; i < data.length; i++) {
       var row = data[i];
@@ -2396,8 +2413,14 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
             var dateCell = rawHeaders[c];
             if (dateCell !== undefined && dateCell !== null && String(dateCell).trim() !== '') {
               var dYmd = parseAndFormatDate(dateCell, tz);
-              var tVal = c < topicRow.length ? String(topicRow[c] || '').trim() : '';
-              conductedCols.push({ dateYmd: dYmd, topic: tVal });
+              // IMMUNITY GUARD: a column only counts as conducted if it resolves to
+              // a real, plausible, non-future date. Ghost artifacts (e.g. Sheets
+              // auto-converting yearless '07-Sep' with the injected CURRENT year),
+              // corrupt values and ambiguous text are ignored.
+              if (dYmd && dYmd.length === 10 && dYmd >= '2020-01-01' && dYmd <= todayYmd) {
+                var tVal = c < topicRow.length ? String(topicRow[c] || '').trim() : '';
+                conductedCols.push({ dateYmd: dYmd, topic: tVal });
+              }
             }
           }
 
@@ -2436,7 +2459,7 @@ function getTeachingPlan(code, teacher, sheetId, batchHint) {
                 }
               }
             }
-            if (matchedTopic !== -1 && cCol.dateYmd) {
+            if (matchedTopic !== -1 && cCol.dateYmd && cCol.dateYmd.length === 10 && cCol.dateYmd >= '2020-01-01' && cCol.dateYmd <= todayYmd) {
               assignedMap[matchedTopic] = true;
               topics[matchedTopic].executedDate = cCol.dateYmd;
             }
@@ -2536,6 +2559,7 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
     if (totalPCol === -1) totalPCol = rawHeaders.length;
 
     var tz = tpSs.getSpreadsheetTimeZone();
+    var todayYmd = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
     var topicRow = hdrIdx + 1 < outData.length ? outData[hdrIdx + 1] : [];
     var conductedColumns = [];
 
@@ -2547,7 +2571,8 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
           try { dateYmd = Utilities.formatDate(dateCell, tz, 'yyyy-MM-dd'); } catch(e) {}
         }
         if (!dateYmd) {
-          var str = String(dateCell).trim();
+          // Strip same-day lecture-tag suffixes (e.g. ' (L2)') before date matching
+          var str = String(dateCell).trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
           var ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
           if (ymdRegex.test(str)) {
             dateYmd = str;
@@ -2562,7 +2587,26 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
               }
             }
           }
+          if (!dateYmd) {
+            // Text headers 'dd-Mon-yy(yy)' (e.g. 29-May-2026 written by the
+            // attendance app as forced text) — normalize to yyyy-MM-dd
+            var dmyM = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+            if (dmyM) {
+              var mosArr = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+              var mi2 = mosArr.indexOf(dmyM[2].toLowerCase());
+              var y2 = parseInt(dmyM[3], 10); if (y2 < 100) y2 += 2000;
+              var d2 = parseInt(dmyM[1], 10);
+              if (mi2 >= 0 && d2 >= 1 && d2 <= 31) {
+                try { dateYmd = Utilities.formatDate(new Date(y2, mi2, d2), tz, 'yyyy-MM-dd'); } catch(e) {}
+              }
+            }
+          }
         }
+        // IMMUNITY GUARD: a column only counts as conducted if it resolves to a
+        // real, plausible, non-future date. Ghost artifacts (Sheets auto-converting
+        // yearless '07-Sep' with the injected CURRENT year) and ambiguous text are
+        // never counted as taught and never written back to the Teaching Plan.
+        if (!(dateYmd && dateYmd.length === 10 && dateYmd >= '2020-01-01' && dateYmd <= todayYmd)) continue;
         var dateDisplay = '';
         if (dateCell instanceof Date) {
           try { dateDisplay = Utilities.formatDate(dateCell, tz, 'dd/MM/yyyy'); } catch(e) {}
@@ -2637,7 +2681,7 @@ function syncTeachingPlan(code, teacher, sheetId, batchHint) {
       var tIdx = parseInt(tIdxStr);
       var topicObj = planResult.topics[tIdx];
       var colObj = matchedTopicIndices[tIdx];
-      if (topicObj && topicObj.rowIndex > 0 && colObj && colObj.dateDisplay) {
+      if (topicObj && topicObj.rowIndex > 0 && colObj && colObj.dateDisplay && colObj.dateYmd && colObj.dateYmd.length === 10 && colObj.dateYmd >= '2020-01-01' && colObj.dateYmd <= todayYmd) {
         tpWs.getRange(topicObj.rowIndex, colExecuted).setValue(colObj.dateDisplay);
         updatedCount++;
       }

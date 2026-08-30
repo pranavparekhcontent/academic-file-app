@@ -4474,6 +4474,20 @@ select option {
   border-color: #8b5cf6;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
 }
+/* Theme native dropdown options to match app palette */
+.absenty-filter-group select {
+  color-scheme: light;
+}
+.absenty-filter-group select option {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+}
+.absenty-filter-group select option:checked,
+.absenty-filter-group select option:hover {
+  background: #ede9fe;
+  color: #4c1d95;
+}
 
 .absenty-glass-trigger {
   display: flex;
