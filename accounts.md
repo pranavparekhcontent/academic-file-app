@@ -95,7 +95,8 @@ cmd /c "set CLOUDFLARE_API_KEY=%CLOUDFLARE_API_KEY% && set CLOUDFLARE_EMAIL=pran
 - **Web App URL:** `https://script.google.com/macros/s/AKfycbxH8oHwujYjOdZ8LwrbtTStHp0ziSISiRKHiPiMfzkc_jcHoyn55mnV-a3BjroM07jD1A/exec`
 - **Purpose:** Dedicated Standalone Backend API for Academic File PWA.
 - **Directory:** `academic file\google_apps_script`
-- **Update Command:** Run `npx @google/clasp push` and `npx @google/clasp deploy` inside `academic file\google_apps_script`.
+- **Active Deployment ID:** `AKfycbxH8oHwujYjOdZ8LwrbtTStHp0ziSISiRKHiPiMfzkc_jcHoyn55mnV-a3BjroM07jD1A` (the Web App URL above embeds this ID — keep it unchanged)
+- **Update Command (⚠️ push + redeploy ACTIVE — never plain `deploy`, it creates a brand-new unused URL and leaves the live endpoint on the old version):** Run `npx @google/clasp push -f && npx @google/clasp redeploy AKfycbxH8oHwujYjOdZ8LwrbtTStHp0ziSISiRKHiPiMfzkc_jcHoyn55mnV-a3BjroM07jD1A -d "Live update"` inside `academic file\google_apps_script`.
 
 ---
 
@@ -112,9 +113,11 @@ cmd /c "set CLOUDFLARE_API_KEY=%CLOUDFLARE_API_KEY% && set CLOUDFLARE_EMAIL=pran
 powershell -Command "git add .; git commit -m 'Update Academic File App'; git push origin main"
 ```
 
-### Push Academic File Central API to Google Apps Script:
+### Push Academic File Central API to Google Apps Script (redeploy ACTIVE endpoint — same URL):
 ```cmd
-cmd /c "cd /d \"e:\PRANAV\pwa apps\academic file\google_apps_script\" && npx @google/clasp push -f && npx @google/clasp deploy -d \"Live update\""
+cmd /c "cd /d \"e:\PRANAV\pwa apps\academic file\google_apps_script\" && npx @google/clasp push -f && npx @google/clasp redeploy AKfycbxH8oHwujYjOdZ8LwrbtTStHp0ziSISiRKHiPiMfzkc_jcHoyn55mnV-a3BjroM07jD1A -d \"Live update\""
 ```
+
+> ⚠️ **Deployment rule:** this PWA calls a FIXED web-app URL hardcoded in `appstart\config.js`. Plain `clasp deploy` creates a NEW deployment/URL — the live endpoint stays on the OLD code. Always finish backend updates with `clasp redeploy <active-deployment-id>`, then verify: `clasp deployments` should show the active ID at the newest `@version`.
 
 
